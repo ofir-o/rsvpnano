@@ -230,6 +230,28 @@ String versionDetail(const String &currentVersion, const String &latestVersion) 
   return currentVersion + " -> " + latestVersion;
 }
 
+bool assetNameLooksCompatibleWithBoard(const String &assetName, String &errorDetail) {
+  const String trimmed = trimCopy(assetName);
+  if (trimmed.isEmpty()) {
+    errorDetail = "Asset name missing";
+    return false;
+  }
+
+#if defined(RSVP_BOARD_WAVESHARE_ESP32S3_TOUCH_AMOLED_241)
+  if (trimmed == "rsvp-nano-ota.bin" || trimmed.indexOf("touch-lcd-3.49") >= 0) {
+    errorDetail = "Asset targets Touch LCD 3.49";
+    return false;
+  }
+#elif defined(RSVP_BOARD_WAVESHARE_ESP32S3_TOUCH_LCD_349)
+  if (trimmed.indexOf("touch-amoled-2.41") >= 0) {
+    errorDetail = "Asset targets Touch AMOLED 2.41";
+    return false;
+  }
+#endif
+
+  return true;
+}
+
 }  // namespace
 
 bool OtaUpdater::loadConfig(Config &config) const {
@@ -430,6 +452,14 @@ OtaUpdater::Result OtaUpdater::checkOnly(const Config &config, StatusCallback ca
   Result result;
   result.currentVersion = currentVersion();
 
+  String assetCompatibilityError;
+  if (!assetNameLooksCompatibleWithBoard(config.assetName, assetCompatibilityError)) {
+    result.code = ResultCode::AssetMismatch;
+    result.summary = "Wrong OTA asset";
+    result.detail = assetCompatibilityError;
+    return result;
+  }
+
   if (!isConfigured(config)) {
     result.code = ResultCode::NotConfigured;
     result.summary = "Wi-Fi not set";
@@ -481,6 +511,14 @@ OtaUpdater::Result OtaUpdater::checkAndInstall(const Config &config, StatusCallb
                                                void *context) const {
   Result result;
   result.currentVersion = currentVersion();
+
+  String assetCompatibilityError;
+  if (!assetNameLooksCompatibleWithBoard(config.assetName, assetCompatibilityError)) {
+    result.code = ResultCode::AssetMismatch;
+    result.summary = "Wrong OTA asset";
+    result.detail = assetCompatibilityError;
+    return result;
+  }
 
   if (!isConfigured(config)) {
     result.code = ResultCode::NotConfigured;

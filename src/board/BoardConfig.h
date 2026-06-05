@@ -7,8 +7,35 @@
 #error "Select only one RSVP board target."
 #endif
 
+#if defined(RSVP_BOARD_WAVESHARE_ESP32S3_TOUCH_LCD_349) && \
+    defined(RSVP_BOARD_WAVESHARE_ESP32S3_TOUCH_AMOLED_18)
+#error "Select only one RSVP board target."
+#endif
+
+#if defined(RSVP_BOARD_WAVESHARE_ESP32S3_TOUCH_LCD_349) && \
+    defined(RSVP_BOARD_WAVESHARE_ESP32S3_TOUCH_AMOLED_216)
+#error "Select only one RSVP board target."
+#endif
+
+#if defined(RSVP_BOARD_WAVESHARE_ESP32S3_TOUCH_AMOLED_241) && \
+    defined(RSVP_BOARD_WAVESHARE_ESP32S3_TOUCH_AMOLED_18)
+#error "Select only one RSVP board target."
+#endif
+
+#if defined(RSVP_BOARD_WAVESHARE_ESP32S3_TOUCH_AMOLED_241) && \
+    defined(RSVP_BOARD_WAVESHARE_ESP32S3_TOUCH_AMOLED_216)
+#error "Select only one RSVP board target."
+#endif
+
+#if defined(RSVP_BOARD_WAVESHARE_ESP32S3_TOUCH_AMOLED_18) && \
+    defined(RSVP_BOARD_WAVESHARE_ESP32S3_TOUCH_AMOLED_216)
+#error "Select only one RSVP board target."
+#endif
+
 #if !defined(RSVP_BOARD_WAVESHARE_ESP32S3_TOUCH_LCD_349) && \
-    !defined(RSVP_BOARD_WAVESHARE_ESP32S3_TOUCH_AMOLED_241)
+    !defined(RSVP_BOARD_WAVESHARE_ESP32S3_TOUCH_AMOLED_18) && \
+    !defined(RSVP_BOARD_WAVESHARE_ESP32S3_TOUCH_AMOLED_241) && \
+    !defined(RSVP_BOARD_WAVESHARE_ESP32S3_TOUCH_AMOLED_216)
 #define RSVP_BOARD_WAVESHARE_ESP32S3_TOUCH_LCD_349 1
 #endif
 
@@ -23,12 +50,15 @@ enum class UiOrientation : uint8_t {
 
 enum class DisplayDriverKind : uint8_t {
   Axs15231b = 0,
+  Sh8601,
   Rm690b0,
+  Co5300,
 };
 
 enum class TouchControllerKind : uint8_t {
   Axs15231b = 0,
   Ft6336,
+  Cst92xx,
 };
 
 enum class StorageBusKind : uint8_t {
@@ -42,7 +72,11 @@ enum class PowerManagerKind : uint8_t {
   DirectGpioBatteryHold,
 };
 
-#if defined(RSVP_BOARD_WAVESHARE_ESP32S3_TOUCH_AMOLED_241)
+#if defined(RSVP_BOARD_WAVESHARE_ESP32S3_TOUCH_AMOLED_216)
+#include "board/profiles/WaveshareEsp32S3TouchAmoled216Profile.h"
+#elif defined(RSVP_BOARD_WAVESHARE_ESP32S3_TOUCH_AMOLED_18)
+#include "board/profiles/WaveshareEsp32S3TouchAmoled18Profile.h"
+#elif defined(RSVP_BOARD_WAVESHARE_ESP32S3_TOUCH_AMOLED_241)
 #include "board/profiles/WaveshareEsp32S3TouchAmoled241Profile.h"
 #elif defined(RSVP_BOARD_WAVESHARE_ESP32S3_TOUCH_LCD_349)
 #include "board/profiles/WaveshareEsp32S3TouchLcd349Profile.h"
@@ -56,10 +90,26 @@ struct BatteryStatus {
   uint8_t percent = 0;
 };
 
+struct PowerDiagnosticSnapshot {
+  bool available = false;
+  bool externalPowerPresent = false;
+  uint8_t status1 = 0;
+  uint8_t status2 = 0;
+  uint8_t powerKeyIrqStatus = 0;
+};
+
 void begin();
 void lightSleepUntilBootButton();
 void holdBacklightOffForDeepSleep();
+void resetWakePeripherals();
+void resetTouchController();
 bool readBatteryStatus(BatteryStatus &status);
+PowerDiagnosticSnapshot powerDiagnosticSnapshot();
+bool externalPowerPresent();
 bool releaseBatteryPowerHold();
+bool readVirtualBootButtonHeld();
+bool readVirtualPowerButtonHeld();
+bool consumeVirtualPowerButtonShortPressEvent();
+bool consumeVirtualPowerButtonLongPressEvent();
 
 }  // namespace BoardConfig

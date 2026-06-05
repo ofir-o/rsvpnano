@@ -32,6 +32,7 @@ class TouchHandler {
   bool initialized_ = false;
   uint32_t lastPollMs_ = 0;
   uint32_t backoffUntilMs_ = 0;
+  uint32_t ignoreEventsUntilMs_ = 0;
   uint32_t lastTouchSampleMs_ = 0;
   uint8_t consecutiveReadFailures_ = 0;
   uint8_t emptyTouchSamples_ = 0;

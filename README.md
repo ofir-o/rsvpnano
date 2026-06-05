@@ -385,6 +385,8 @@ That writes:
 ```text
 web/firmware/rsvp-nano.bin
 web/firmware/rsvp-nano-ota.bin
+web/firmware/rsvp-nano-esp32-s3-touch-lcd-3.49-ota.bin
+web/firmware/rsvp-nano-esp32-s3-touch-amoled-2.41-ota.bin
 web/firmware/manifest.json
 ```
 

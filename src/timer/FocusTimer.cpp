@@ -7,7 +7,6 @@
 
 namespace {
 
-constexpr uint8_t kImuAddress = 0x6B;
 constexpr uint8_t kImuWhoAmIReg = 0x00;
 constexpr uint8_t kImuCtrl1Reg = 0x02;
 constexpr uint8_t kImuCtrl2Reg = 0x03;
@@ -32,6 +31,10 @@ constexpr uint32_t kBreakDurationMs = 5UL * 60UL * 1000UL;
 constexpr float kSideAxisThreshold = 0.78f;
 constexpr float kCrossAxisLimit = 0.42f;
 constexpr float kFlatAxisThreshold = 0.84f;
+
+TwoWire &imuWire() { return BoardConfig::IMU_USES_WIRE1 ? Wire1 : Wire; }
+
+const char *imuWireName() { return BoardConfig::IMU_USES_WIRE1 ? "Wire1" : "Wire"; }
 
 }  // namespace
 
@@ -252,18 +255,28 @@ const char *FocusTimer::genreLabel(Genre genre) {
 }
 
 bool FocusTimer::initImu() {
+  if (!BoardConfig::HAS_IMU) {
+    imuAvailable_ = false;
+    Serial.println("[timer] IMU unavailable for this board profile");
+    return false;
+  }
+
   if (imuAvailable_) {
     return true;
   }
 
-  Wire1.beginTransmission(kImuAddress);
-  if (Wire1.endTransmission(true) != 0) {
+  TwoWire &wire = imuWire();
+  wire.beginTransmission(BoardConfig::IMU_I2C_ADDRESS);
+  if (wire.endTransmission(true) != 0) {
     imuAvailable_ = false;
+    Serial.printf("[timer] QMI8658 not responding addr=0x%02X bus=%s\n",
+                  BoardConfig::IMU_I2C_ADDRESS, imuWireName());
     return false;
   }
 
   if (!writeRegister(kImuResetReg, kImuResetValue)) {
     imuAvailable_ = false;
+    Serial.println("[timer] QMI8658 reset command failed");
     return false;
   }
 
@@ -281,12 +294,15 @@ bool FocusTimer::initImu() {
 
   if (!resetReady) {
     imuAvailable_ = false;
+    Serial.println("[timer] QMI8658 reset timeout");
     return false;
   }
 
   uint8_t whoAmI = 0;
   if (!readRegister(kImuWhoAmIReg, whoAmI) || whoAmI != kImuWhoAmIValue) {
     imuAvailable_ = false;
+    Serial.printf("[timer] QMI8658 WHOAMI mismatch got=0x%02X expected=0x%02X\n", whoAmI,
+                  kImuWhoAmIValue);
     return false;
   }
 
@@ -296,35 +312,40 @@ bool FocusTimer::initImu() {
       !updateRegister(kImuCtrl5Reg, 0x07, 0x07) ||
       !updateRegister(kImuCtrl7Reg, 0x01, 0x01)) {
     imuAvailable_ = false;
+    Serial.println("[timer] QMI8658 configuration failed");
     return false;
   }
 
   accelScale_ = 4.0f / 32768.0f;
   resetOrientationStability();
   imuAvailable_ = true;
+  Serial.printf("[timer] QMI8658 initialized addr=0x%02X bus=%s\n",
+                BoardConfig::IMU_I2C_ADDRESS, imuWireName());
   return true;
 }
 
 bool FocusTimer::readRegister(uint8_t reg, uint8_t &value) {
-  Wire1.beginTransmission(kImuAddress);
-  Wire1.write(reg);
-  if (Wire1.endTransmission(false) != 0) {
+  TwoWire &wire = imuWire();
+  wire.beginTransmission(BoardConfig::IMU_I2C_ADDRESS);
+  wire.write(reg);
+  if (wire.endTransmission(false) != 0) {
     return false;
   }
 
-  if (Wire1.requestFrom(static_cast<int>(kImuAddress), 1, 1) != 1) {
+  if (wire.requestFrom(static_cast<int>(BoardConfig::IMU_I2C_ADDRESS), 1, 1) != 1) {
     return false;
   }
 
-  value = Wire1.read();
+  value = wire.read();
   return true;
 }
 
 bool FocusTimer::writeRegister(uint8_t reg, uint8_t value) {
-  Wire1.beginTransmission(kImuAddress);
-  Wire1.write(reg);
-  Wire1.write(value);
-  return Wire1.endTransmission(true) == 0;
+  TwoWire &wire = imuWire();
+  wire.beginTransmission(BoardConfig::IMU_I2C_ADDRESS);
+  wire.write(reg);
+  wire.write(value);
+  return wire.endTransmission(true) == 0;
 }
 
 bool FocusTimer::readRegisters(uint8_t startReg, uint8_t *buffer, size_t len) {
@@ -332,19 +353,20 @@ bool FocusTimer::readRegisters(uint8_t startReg, uint8_t *buffer, size_t len) {
     return false;
   }
 
-  Wire1.beginTransmission(kImuAddress);
-  Wire1.write(startReg);
-  if (Wire1.endTransmission(false) != 0) {
+  TwoWire &wire = imuWire();
+  wire.beginTransmission(BoardConfig::IMU_I2C_ADDRESS);
+  wire.write(startReg);
+  if (wire.endTransmission(false) != 0) {
     return false;
   }
 
-  if (Wire1.requestFrom(static_cast<int>(kImuAddress), static_cast<int>(len), 1) !=
+  if (wire.requestFrom(static_cast<int>(BoardConfig::IMU_I2C_ADDRESS), static_cast<int>(len), 1) !=
       static_cast<int>(len)) {
     return false;
   }
 
   for (size_t i = 0; i < len; ++i) {
-    buffer[i] = Wire1.read();
+    buffer[i] = wire.read();
   }
   return true;
 }

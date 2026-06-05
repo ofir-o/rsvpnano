@@ -14,14 +14,32 @@ ROOT = Path(__file__).resolve().parents[1]
 WEB_FIRMWARE_DIR = ROOT / "web" / "firmware"
 BOOT_APP0_GLOB = "framework-arduinoespressif32*/tools/partitions/boot_app0.bin"
 
-EXPORTS = {
-    "waveshare_esp32s3_usb_msc": {
+FLASH_EXPORTS = (
+    {
+        "env": "waveshare_esp32s3_usb_msc",
         "binary": "rsvp-nano.bin",
-        "ota_binary": "rsvp-nano-ota.bin",
         "manifest": "manifest.json",
         "label": "RSVP Nano firmware",
     },
-}
+)
+
+OTA_EXPORTS = (
+    {
+        "env": "waveshare_esp32s3_usb_msc",
+        "binary": "rsvp-nano-ota.bin",
+        "label": "RSVP Nano Touch LCD 3.49 OTA firmware (legacy asset)",
+    },
+    {
+        "env": "waveshare_esp32s3_usb_msc",
+        "binary": "rsvp-nano-esp32-s3-touch-lcd-3.49-ota.bin",
+        "label": "RSVP Nano Touch LCD 3.49 OTA firmware",
+    },
+    {
+        "env": "waveshare_esp32s3_touch_amoled_241",
+        "binary": "rsvp-nano-esp32-s3-touch-amoled-2.41-ota.bin",
+        "label": "RSVP Nano Touch AMOLED 2.41 OTA firmware",
+    },
+)
 
 
 def run(command: list[str], version: str | None = None) -> None:
@@ -133,17 +151,30 @@ def main() -> int:
     pio = pio_command()
     WEB_FIRMWARE_DIR.mkdir(parents=True, exist_ok=True)
 
-    for env, export in EXPORTS.items():
-        if not args.skip_build:
+    if not args.skip_build:
+        required_envs = sorted(
+            {
+                export["env"]
+                for export in FLASH_EXPORTS
+            }
+            | {
+                export["env"]
+                for export in OTA_EXPORTS
+            }
+        )
+        for env in required_envs:
             run([pio, "run", "-e", env], args.version)
 
+    for export in FLASH_EXPORTS:
         output = WEB_FIRMWARE_DIR / export["binary"]
         print(f"Exporting {export['label']} -> {output}")
-        merge_firmware(env, output)
-        ota_output = WEB_FIRMWARE_DIR / export["ota_binary"]
-        print(f"Exporting OTA app -> {ota_output}")
-        export_ota_binary(env, ota_output)
+        merge_firmware(export["env"], output)
         update_manifest(WEB_FIRMWARE_DIR / export["manifest"], args.version)
+
+    for export in OTA_EXPORTS:
+        ota_output = WEB_FIRMWARE_DIR / export["binary"]
+        print(f"Exporting {export['label']} -> {ota_output}")
+        export_ota_binary(export["env"], ota_output)
 
     print(f"Web firmware exported to {WEB_FIRMWARE_DIR}")
     return 0

@@ -27,6 +27,7 @@ What is working on the `2.41` board now:
 - Battery hold and battery ADC path are wired for this board
 - SD card loading works on the `2.41`, including with the original device's SD card
 - Shared dual-target repo structure is in place
+- Deep-sleep power path now keeps the battery-hold GPIO latched instead of dropping board power
 
 What is not yet considered safe or complete:
 
@@ -140,38 +141,35 @@ Lesson:
 - If artifacts stay fixed while content scrolls, investigate transport chunking before deeper UI
   logic
 
-## OTA Warning
+## OTA Separation
 
-Current OTA is not safe for mixed-board deployment.
+OTA defaults are now split by board so the `3.49` and `2.41` do not pull the same release asset.
 
-Right now:
+Current behavior:
 
-- OTA uses one fixed asset name: `rsvp-nano-ota.bin`
-- OTA does not verify `BoardConfig::BOARD_ID`
-- A `2.41` device could download firmware built for the `3.49`, or vice versa
+- The `3.49` keeps using the legacy OTA asset name `rsvp-nano-ota.bin`
+- The `2.41` uses its own OTA asset name
+  `rsvp-nano-esp32-s3-touch-amoled-2.41-ota.bin`
+- The release workflow publishes both OTA binaries from fixed build environments
+- The updater now rejects obvious cross-board overrides such as pointing a `2.41` at the legacy
+  `3.49` OTA asset name
 
-Implication:
+Current limitation:
 
-- Manual USB flashing of the correct target is safe
-- On-device OTA should be avoided on the `2.41` until board-specific assets or a board-aware
-  manifest are implemented
-
-Recommended future fix:
-
-- Publish one release asset per board
-- Select the asset by `BOARD_ID`
-- Optionally add a manifest that includes board compatibility metadata
+- The updater still trusts the asset naming convention rather than verifying embedded board metadata
+- A deliberately custom `asset_name` that does not match the known board patterns could still bypass
+  this guard
 
 ## Recommended Next Steps
 
-1. Make OTA board-aware before enabling updates on multiple device families.
-2. Run broader hardware QA on the `2.41`:
-   - sleep and wake
+1. Run broader hardware QA on the `2.41`:
+   - sleep and wake on battery
    - SD load behavior
    - battery reporting
    - long reading session stability
    - brightness and dark-mode behavior
-3. Validate whether USB transfer mode needs any `2.41`-specific handling.
+2. Validate whether USB transfer mode needs any `2.41`-specific handling.
+3. Consider adding board metadata verification to OTA as a second safety layer.
 
 ## Build Targets
 

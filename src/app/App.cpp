@@ -26,6 +26,10 @@ constexpr uint32_t kBootSplashMs = 750;
 constexpr uint32_t kWpmFeedbackMs = 900;
 constexpr uint32_t kPowerOffHoldMs = 1600;
 constexpr uint32_t kPowerOffReleaseWaitMs = 4000;
+constexpr uint32_t kSoftOffReleaseWaitMs = 1200;
+constexpr uint32_t kSoftOffWakePollMs = 15;
+constexpr uint32_t kSoftOffArmQuietMs = 250;
+constexpr uint32_t kSoftOffWakeConfirmMs = BoardConfig::SOFT_OFF_WAKE_CONFIRM_MS;
 constexpr uint32_t kBatterySampleIntervalMs = 180000;
 constexpr uint32_t kTouchPlayHoldMs = 420;
 constexpr uint32_t kPreviewBrowseHoldMs = 240;
@@ -42,6 +46,14 @@ constexpr uint16_t kFooterMetricTapWidthPx = 220;
 constexpr uint16_t kFooterMetricTapHeightPx = 32;
 constexpr uint16_t kBatteryBadgeTapWidthPx = 160;
 constexpr uint16_t kBatteryBadgeTapHeightPx = 40;
+constexpr uint16_t kReaderChromeMarginXPx = BoardConfig::READER_CHROME_MARGIN_X;
+constexpr uint16_t kReaderChromeTopMarginPx = BoardConfig::READER_CHROME_MARGIN_TOP;
+constexpr uint16_t kReaderChromeBottomMarginPx = BoardConfig::READER_CHROME_MARGIN_BOTTOM;
+constexpr uint16_t kReaderBatteryMarginXPx = BoardConfig::READER_BATTERY_MARGIN_X;
+constexpr uint16_t kReaderBatteryTopMarginPx = BoardConfig::READER_BATTERY_MARGIN_TOP;
+constexpr uint16_t kMenuSwipeTopZonePx =
+    kReaderChromeTopMarginPx + (BoardConfig::ENABLE_TOP_EDGE_MENU_SWIPE ? 64 : 0);
+constexpr uint16_t kMenuSwipeTriggerPx = 72;
 constexpr uint16_t kScrubStepPx = 22;
 constexpr uint16_t kBrowseNeutralZonePx = 14;
 constexpr uint16_t kFocusTimerCancelHoldMaxDriftPx = 20;
@@ -600,18 +612,153 @@ uint16_t loadPacingDelayMs(Preferences &preferences, const char *key, const char
   return kDefaultPacingDelayMs;
 }
 
+bool readActiveLowButton(int pin) {
+  return pin >= 0 ? !digitalRead(pin) : false;
+}
+
+bool readLogicalBootButtonHeld() {
+  if (BoardConfig::SWAP_APP_BOOT_AND_POWER_BUTTONS) {
+    return BoardConfig::readVirtualPowerButtonHeld();
+  }
+
+  if (BoardConfig::PIN_BOOT_BUTTON >= 0) {
+    return readActiveLowButton(BoardConfig::PIN_BOOT_BUTTON);
+  }
+
+  return BoardConfig::readVirtualBootButtonHeld();
+}
+
+bool readLogicalPowerButtonHeld() {
+  if (BoardConfig::SWAP_APP_BOOT_AND_POWER_BUTTONS) {
+    return readActiveLowButton(BoardConfig::PIN_BOOT_BUTTON);
+  }
+
+  if (BoardConfig::PIN_PWR_BUTTON >= 0) {
+    return readActiveLowButton(BoardConfig::PIN_PWR_BUTTON);
+  }
+
+  return BoardConfig::readVirtualPowerButtonHeld();
+}
+
+bool logicalPowerButtonUsesVirtualState() {
+  return !BoardConfig::SWAP_APP_BOOT_AND_POWER_BUTTONS && BoardConfig::PIN_PWR_BUTTON < 0;
+}
+
+enum class SoftOffWakeSource : uint8_t {
+  None = 0,
+  Power,
+  Boot,
+  PowerAndBoot,
+};
+
+const char *softOffWakeSourceName(SoftOffWakeSource source) {
+  switch (source) {
+    case SoftOffWakeSource::Power:
+      return "power";
+    case SoftOffWakeSource::Boot:
+      return "boot";
+    case SoftOffWakeSource::PowerAndBoot:
+      return "power+boot";
+    case SoftOffWakeSource::None:
+    default:
+      return "none";
+  }
+}
+
+SoftOffWakeSource waitForRecoverableSoftOffWake(bool allowPowerWake, bool allowBootWake) {
+  Serial.println("[app] soft-off settling wake buttons");
+  uint32_t allReleasedSinceMs = 0;
+  while (true) {
+    const bool powerHeld = allowPowerWake && readLogicalPowerButtonHeld();
+    const bool bootHeld = allowBootWake && readLogicalBootButtonHeld();
+    if ((!allowPowerWake || !powerHeld) && (!allowBootWake || !bootHeld)) {
+      if (allReleasedSinceMs == 0) {
+        allReleasedSinceMs = millis();
+      }
+      if (millis() - allReleasedSinceMs >= kSoftOffArmQuietMs) {
+        break;
+      }
+    } else {
+      allReleasedSinceMs = 0;
+    }
+    delay(kSoftOffWakePollMs);
+  }
+
+  if (allowPowerWake && allowBootWake) {
+    Serial.println("[app] soft-off armed; press PWR or BOOT to wake");
+  } else if (allowPowerWake) {
+    Serial.println("[app] soft-off armed; press PWR to wake");
+  } else {
+    Serial.println("[app] soft-off armed; press BOOT to wake");
+  }
+  bool candidatePowerHeld = false;
+  bool candidateBootHeld = false;
+  uint32_t candidateStartedMs = 0;
+  SoftOffWakeSource wakeSource = SoftOffWakeSource::None;
+
+  while (true) {
+    const bool powerHeld = allowPowerWake && readLogicalPowerButtonHeld();
+    const bool bootHeld = allowBootWake && readLogicalBootButtonHeld();
+    if (powerHeld || bootHeld) {
+      if (powerHeld != candidatePowerHeld || bootHeld != candidateBootHeld) {
+        candidatePowerHeld = powerHeld;
+        candidateBootHeld = bootHeld;
+        candidateStartedMs = millis();
+      } else if (millis() - candidateStartedMs >= kSoftOffWakeConfirmMs) {
+        if (candidatePowerHeld && candidateBootHeld) {
+          wakeSource = SoftOffWakeSource::PowerAndBoot;
+        } else if (candidatePowerHeld) {
+          wakeSource = SoftOffWakeSource::Power;
+        } else {
+          wakeSource = SoftOffWakeSource::Boot;
+        }
+        break;
+      }
+    } else {
+      candidatePowerHeld = false;
+      candidateBootHeld = false;
+      candidateStartedMs = 0;
+    }
+    delay(kSoftOffWakePollMs);
+  }
+
+  const uint32_t waitStartMs = millis();
+  while (((allowPowerWake && readLogicalPowerButtonHeld()) ||
+          (allowBootWake && readLogicalBootButtonHeld())) &&
+         millis() - waitStartMs < kSoftOffReleaseWaitMs) {
+    delay(10);
+  }
+
+  return wakeSource;
+}
+
 }  // namespace
 
-App::App() : button_(BoardConfig::PIN_BOOT_BUTTON), powerButton_(BoardConfig::PIN_PWR_BUTTON) {}
+App::App()
+    : button_(BoardConfig::PIN_BOOT_BUTTON),
+      powerButton_(BoardConfig::PIN_PWR_BUTTON),
+      keyButton_(BoardConfig::PIN_KEY_BUTTON) {}
 
 void App::begin() {
   BoardConfig::begin();
-  button_.begin();
-  powerButton_.begin();
+  button_.beginWithState(readLogicalBootButtonHeld());
+  powerButton_.beginWithState(readLogicalPowerButtonHeld());
+  if (BoardConfig::PIN_PWR_BUTTON < 0 || BoardConfig::SWAP_APP_BOOT_AND_POWER_BUTTONS) {
+    BoardConfig::consumeVirtualPowerButtonShortPressEvent();
+    BoardConfig::consumeVirtualPowerButtonLongPressEvent();
+  }
+  keyButton_.begin();
   bootButtonReleasedSinceBoot_ = !button_.isHeld();
   bootButtonLongPressHandled_ = false;
-  powerButtonReleasedSinceBoot_ = !powerButton_.isHeld();
+  powerButtonReleasedSinceBoot_ =
+      logicalPowerButtonUsesVirtualState() ? false : !powerButton_.isHeld();
   powerButtonLongPressHandled_ = false;
+  powerButtonEventArmMs_ = BoardConfig::APP_POWER_BUTTON_USES_PMU_EVENTS
+                               ? millis() + BoardConfig::PMU_BOOT_BUTTON_IGNORE_MS
+                               : 0;
+  keyButtonReleasedSinceBoot_ = !keyButton_.isHeld();
+  keyButtonLongPressHandled_ = false;
+  keyButtonTapArmed_ = false;
   storage_.setStatusCallback(&App::handleStorageStatus, this);
   preferences_.begin(kPrefsNamespace, false);
   brightnessLevelIndex_ = preferences_.getUChar(kPrefBrightness, brightnessLevelIndex_);
@@ -776,12 +923,14 @@ void App::begin() {
 }
 
 void App::update(uint32_t nowMs) {
-  button_.update(nowMs);
-  powerButton_.update(nowMs);
+  button_.updateFromState(readLogicalBootButtonHeld(), nowMs);
+  powerButton_.updateFromState(readLogicalPowerButtonHeld(), nowMs);
+  keyButton_.update(nowMs);
   const bool standbyComboConsumed = handleStandbyCombo(nowMs);
   if (!standbyComboConsumed) {
     handleBootButton(nowMs);
     handlePowerButton(nowMs);
+    handleKeyButton(nowMs);
   }
   if (powerOffStarted_) {
     return;
@@ -1031,6 +1180,10 @@ void App::maybeSaveReadingPosition(uint32_t nowMs) {
 }
 
 bool App::handleStandbyCombo(uint32_t nowMs) {
+  if (!BoardConfig::ENABLE_STANDBY_BUTTON_COMBO) {
+    return false;
+  }
+
   if (state_ == AppState::Booting || state_ == AppState::UsbTransfer ||
       state_ == AppState::CompanionSync ||
       state_ == AppState::Sleeping || powerOffStarted_ || !bootButtonReleasedSinceBoot_ ||
@@ -1090,6 +1243,10 @@ bool App::handleStandbyCombo(uint32_t nowMs) {
 
 void App::handleBootButton(uint32_t nowMs) {
   if (state_ == AppState::Standby) {
+    if (!BoardConfig::BOOT_BUTTON_WAKES_STANDBY) {
+      return;
+    }
+
     if (!standbyButtonsReleased_ && !button_.isHeld() && !powerButton_.isHeld() &&
         nowMs - standbyEnteredMs_ >= kStandbyWakeGraceMs) {
       standbyButtonsReleased_ = true;
@@ -1136,10 +1293,58 @@ void App::handleBootButton(uint32_t nowMs) {
 }
 
 void App::handlePowerButton(uint32_t nowMs) {
+  if (BoardConfig::APP_POWER_BUTTON_USES_PMU_EVENTS && nowMs < powerButtonEventArmMs_) {
+    const bool ignoredShort = BoardConfig::consumeVirtualPowerButtonShortPressEvent();
+    const bool ignoredLong = BoardConfig::consumeVirtualPowerButtonLongPressEvent();
+    if (ignoredShort || ignoredLong || powerButton_.isHeld()) {
+      powerButtonEventArmMs_ = nowMs + BoardConfig::PMU_BOOT_BUTTON_IGNORE_MS;
+    }
+    return;
+  }
+
   if (!powerButtonReleasedSinceBoot_) {
+    if (logicalPowerButtonUsesVirtualState()) {
+      BoardConfig::consumeVirtualPowerButtonShortPressEvent();
+      BoardConfig::consumeVirtualPowerButtonLongPressEvent();
+    }
     if (!powerButton_.isHeld()) {
       powerButtonReleasedSinceBoot_ = true;
     }
+    return;
+  }
+
+  if (BoardConfig::APP_POWER_BUTTON_USES_PMU_EVENTS) {
+    if (state_ == AppState::UsbTransfer || state_ == AppState::CompanionSync || powerOffStarted_) {
+      return;
+    }
+
+    if (powerButtonLongPressHandled_ && powerButton_.isHeld()) {
+      return;
+    }
+
+    if (powerButton_.isHeld() && powerButton_.heldDurationMs(nowMs) >= kPowerOffHoldMs) {
+      powerButtonLongPressHandled_ = true;
+      enterPowerOff(nowMs);
+      return;
+    }
+
+    if (!powerButton_.wasReleasedEvent()) {
+      return;
+    }
+
+    if (powerButtonLongPressHandled_) {
+      powerButtonLongPressHandled_ = false;
+      return;
+    }
+
+    if (powerButton_.lastHoldDurationMs() < kPowerOffHoldMs) {
+      if (state_ == AppState::Standby) {
+        exitStandby(nowMs);
+      } else if (state_ != AppState::Booting && state_ != AppState::Sleeping) {
+        enterStandby(nowMs);
+      }
+    }
+
     return;
   }
 
@@ -1149,13 +1354,24 @@ void App::handlePowerButton(uint32_t nowMs) {
       standbyButtonsReleased_ = true;
     }
     if (standbyButtonsReleased_ && powerButton_.wasPressedEvent()) {
-      powerButtonLongPressHandled_ = true;
+      powerButtonReleasedSinceBoot_ = false;
+      powerButtonLongPressHandled_ = false;
       exitStandby(nowMs);
     }
     return;
   }
 
   if (state_ == AppState::UsbTransfer || state_ == AppState::CompanionSync || powerOffStarted_) {
+    return;
+  }
+
+  if (logicalPowerButtonUsesVirtualState() && BoardConfig::consumeVirtualPowerButtonLongPressEvent()) {
+    powerButtonLongPressHandled_ = true;
+    if (BoardConfig::SUPPORTS_SOFTWARE_POWEROFF) {
+      enterPowerOff(nowMs);
+    } else {
+      enterStandby(nowMs);
+    }
     return;
   }
 
@@ -1174,7 +1390,11 @@ void App::handlePowerButton(uint32_t nowMs) {
 
   if (powerButton_.isHeld() && nowMs - powerButton_.lastEdgeMs() >= kPowerOffHoldMs) {
     powerButtonLongPressHandled_ = true;
-    enterPowerOff(nowMs);
+    if (BoardConfig::SUPPORTS_SOFTWARE_POWEROFF) {
+      enterPowerOff(nowMs);
+    } else {
+      enterStandby(nowMs);
+    }
     return;
   }
 
@@ -1187,7 +1407,57 @@ void App::handlePowerButton(uint32_t nowMs) {
     return;
   }
 
+  if (BoardConfig::POWER_BUTTON_SHORT_TOGGLES_STANDBY) {
+    if (state_ != AppState::Booting && state_ != AppState::Sleeping) {
+      enterStandby(nowMs);
+    }
+    return;
+  }
+
   toggleMenuFromPowerButton(nowMs);
+}
+
+void App::handleKeyButton(uint32_t nowMs) {
+  if (!keyButtonReleasedSinceBoot_) {
+    if (!keyButton_.isHeld()) {
+      keyButtonReleasedSinceBoot_ = true;
+    }
+    return;
+  }
+
+  if (state_ == AppState::Standby) {
+    if (!standbyButtonsReleased_ && !button_.isHeld() && !powerButton_.isHeld() &&
+        !keyButton_.isHeld() && nowMs - standbyEnteredMs_ >= kStandbyWakeGraceMs) {
+      standbyButtonsReleased_ = true;
+    }
+    if (standbyButtonsReleased_ && keyButton_.wasPressedEvent()) {
+      keyButtonLongPressHandled_ = true;
+      exitStandby(nowMs);
+    }
+    return;
+  }
+
+  if (state_ == AppState::Booting || state_ == AppState::UsbTransfer ||
+      state_ == AppState::CompanionSync ||
+      state_ == AppState::Sleeping || powerOffStarted_) {
+    return;
+  }
+
+  if (!keyButton_.wasReleasedEvent()) {
+    return;
+  }
+
+  if (state_ == AppState::Playing) {
+    pauseAtSentenceEndRequested_ = false;
+    playLocked_ = false;
+    touchPlayHeld_ = false;
+    setState(AppState::Paused, nowMs);
+    return;
+  }
+
+  if (state_ == AppState::Paused) {
+    toggleReaderPlaybackFromShortcut(nowMs);
+  }
 }
 
 void App::toggleMenuFromPowerButton(uint32_t nowMs) {
@@ -1685,17 +1955,18 @@ void App::updateWpmFeedback(uint32_t nowMs) {
 void App::resetReaderTapTracking() { lastReaderTapValid_ = false; }
 
 bool App::isFooterMetricTap(uint16_t x, uint16_t y) const {
-  return x >= BoardConfig::DISPLAY_WIDTH - kFooterMetricTapWidthPx &&
-         y >= BoardConfig::DISPLAY_HEIGHT - kFooterMetricTapHeightPx;
+  return x >= BoardConfig::DISPLAY_WIDTH - kReaderChromeMarginXPx - kFooterMetricTapWidthPx &&
+         y >= BoardConfig::DISPLAY_HEIGHT - kReaderChromeBottomMarginPx - kFooterMetricTapHeightPx;
 }
 
 bool App::isBatteryBadgeTap(uint16_t x, uint16_t y) const {
-  return x >= BoardConfig::DISPLAY_WIDTH - kBatteryBadgeTapWidthPx &&
-         y <= kBatteryBadgeTapHeightPx;
+  return x >= BoardConfig::DISPLAY_WIDTH - kReaderBatteryMarginXPx - kBatteryBadgeTapWidthPx &&
+         y <= kReaderBatteryTopMarginPx + kBatteryBadgeTapHeightPx;
 }
 
 bool App::isPreviousSentenceTap(uint16_t x, uint16_t y) const {
-  return x < kPreviousSentenceTapWidthPx && y < kPreviousSentenceTapHeightPx;
+  return x <= kReaderChromeMarginXPx + kPreviousSentenceTapWidthPx &&
+         y <= kReaderChromeTopMarginPx + kPreviousSentenceTapHeightPx;
 }
 
 bool App::isActivelyReading() const { return state_ == AppState::Playing; }
@@ -1831,15 +2102,7 @@ void App::handleReaderTap(uint16_t x, uint16_t y, uint32_t nowMs) {
 
   if (sameRegion) {
     resetReaderTapTracking();
-
-    if (state_ == AppState::Playing) {
-      requestReaderPauseAtSentenceEnd(nowMs);
-    } else if (state_ == AppState::Paused) {
-      playLocked_ = true;
-      pauseAtSentenceEndRequested_ = false;
-      wpmFeedbackVisible_ = false;
-      setState(AppState::Playing, nowMs);
-    }
+    toggleReaderPlaybackFromShortcut(nowMs);
     Serial.printf("[touch] reader double tap state=%s\n", stateName(state_));
     return;
   }
@@ -1877,6 +2140,20 @@ void App::requestReaderPauseAtSentenceEnd(uint32_t nowMs) {
 
   if (shouldFinalizeReaderPause(nowMs)) {
     finalizeReaderPause(nowMs);
+  }
+}
+
+void App::toggleReaderPlaybackFromShortcut(uint32_t nowMs) {
+  if (state_ == AppState::Playing) {
+    requestReaderPauseAtSentenceEnd(nowMs);
+    return;
+  }
+
+  if (state_ == AppState::Paused) {
+    playLocked_ = true;
+    pauseAtSentenceEndRequested_ = false;
+    wpmFeedbackVisible_ = false;
+    setState(AppState::Playing, nowMs);
   }
 }
 
@@ -1982,7 +2259,20 @@ void App::applyPausedTouchGesture(const TouchEvent &event, uint32_t nowMs) {
                        absDeltaY <= static_cast<int>(kTapSlopPx);
   const bool previewBrowseMode = contextViewVisible_ && !scrollModeEnabled();
 
+  if (handleTopEdgeMenuSwipe(event, nowMs, deltaX, deltaY, ended)) {
+    return;
+  }
+
   if (state_ == AppState::Playing) {
+    if (tapLike && pressDurationMs >= kTouchPlayHoldMs) {
+      resetReaderTapTracking();
+      pausedTouch_.active = false;
+      pausedTouchIntent_ = TouchIntent::None;
+      requestReaderPauseAtSentenceEnd(nowMs);
+      Serial.println("[touch] reader hold pause");
+      return;
+    }
+
     if (ended) {
       pausedTouch_.active = false;
       pausedTouchIntent_ = TouchIntent::None;
@@ -1996,7 +2286,8 @@ void App::applyPausedTouchGesture(const TouchEvent &event, uint32_t nowMs) {
         if (handlePreviousSentenceTap(event.x, event.y, nowMs)) {
           return;
         }
-        if (playLocked_ || pauseAtSentenceEndRequested_) {
+        if (BoardConfig::READER_SINGLE_TAP_PAUSES_WHILE_LOCKED &&
+            (playLocked_ || pauseAtSentenceEndRequested_)) {
           resetReaderTapTracking();
           requestReaderPauseAtSentenceEnd(nowMs);
         } else {
@@ -2093,6 +2384,32 @@ void App::applyPausedTouchGesture(const TouchEvent &event, uint32_t nowMs) {
       resetReaderTapTracking();
     }
   }
+}
+
+bool App::handleTopEdgeMenuSwipe(const TouchEvent &event, uint32_t nowMs, int deltaX, int deltaY,
+                                 bool ended) {
+  if (!BoardConfig::ENABLE_TOP_EDGE_MENU_SWIPE || !ended || state_ == AppState::Menu ||
+      state_ == AppState::Standby || state_ == AppState::Sleeping) {
+    return false;
+  }
+
+  const int absDeltaX = abs(deltaX);
+  const int absDeltaY = abs(deltaY);
+  const bool startsNearTop = pausedTouch_.startY <= kMenuSwipeTopZonePx;
+  const bool verticalDownSwipe =
+      deltaY >= static_cast<int>(kMenuSwipeTriggerPx) &&
+      absDeltaY > absDeltaX + static_cast<int>(kAxisBiasPx);
+  if (!startsNearTop || !verticalDownSwipe) {
+    return false;
+  }
+
+  pausedTouch_.active = false;
+  pausedTouchIntent_ = TouchIntent::None;
+  touchPlayHeld_ = false;
+  resetReaderTapTracking();
+  openMainMenu(nowMs);
+  Serial.printf("[touch] top-edge menu swipe x=%u y=%u dy=%d\n", event.x, event.y, deltaY);
+  return true;
 }
 
 int App::scrubStepsForDrag(int deltaX) const {
@@ -4692,26 +5009,112 @@ void App::enterPowerOff(uint32_t nowMs) {
   menuScreen_ = MenuScreen::Main;
   state_ = AppState::Sleeping;
 
-  display_.renderStatus("OFF", "Release PWR", "Hold PWR to start");
+  const int wakePin = BoardConfig::PIN_DEEP_SLEEP_WAKE;
+  const bool pmuPowerOffOwnsWake =
+      BoardConfig::REQUEST_PMU_SHUTDOWN_ON_POWEROFF &&
+      BoardConfig::POWER_MANAGER == BoardConfig::PowerManagerKind::Axp2101;
+#if defined(RSVP_BOARD_WAVESHARE_ESP32S3_TOUCH_AMOLED_18) || \
+    defined(RSVP_BOARD_WAVESHARE_ESP32S3_TOUCH_AMOLED_216)
+  const bool useRecoverableSoftOff = BoardConfig::SOFTWARE_POWEROFF_USES_SOFT_LOOP;
+  const bool allowSoftOffPowerWake = BoardConfig::SOFT_OFF_WAKE_USES_POWER_BUTTON;
+  const bool allowSoftOffBootWake = BoardConfig::SOFT_OFF_WAKE_USES_BOOT_BUTTON;
+#else
+  const bool useRecoverableSoftOff = false;
+  const bool allowSoftOffPowerWake = false;
+  const bool allowSoftOffBootWake = false;
+#endif
+  const bool externalPowerPresent = pmuPowerOffOwnsWake && BoardConfig::externalPowerPresent();
+  const bool pmuWakeUsesPowerButton = pmuPowerOffOwnsWake || useRecoverableSoftOff;
+  const bool appPowerUsesBootButton = BoardConfig::SWAP_APP_BOOT_AND_POWER_BUTTONS;
+  const char *wakeLabel = useRecoverableSoftOff && allowSoftOffPowerWake && allowSoftOffBootWake
+                              ? "Press PWR/BOOT to wake"
+                          : useRecoverableSoftOff && allowSoftOffPowerWake
+                              ? "Press PWR to wake"
+                          : useRecoverableSoftOff && allowSoftOffBootWake
+                              ? "Press BOOT to wake"
+                          : pmuWakeUsesPowerButton
+                              ? (externalPowerPresent ? "Press PWR to wake" : "Press PWR to start")
+                          : wakePin >= 0 && wakePin == BoardConfig::PIN_BOOT_BUTTON
+                              ? "Press BOOT to start"
+                          : wakePin >= 0 && wakePin == BoardConfig::PIN_PWR_BUTTON
+                              ? "Hold PWR to start"
+                              : "Press wake to start";
+  display_.renderStatus("OFF", appPowerUsesBootButton ? "Release BOOT" : "Release PWR",
+                        wakeLabel);
   delay(300);
+
+  if (pmuPowerOffOwnsWake || BoardConfig::APP_POWER_BUTTON_USES_PMU_EVENTS) {
+    const uint32_t waitStartMs = millis();
+    const uint32_t releaseWaitMs =
+        useRecoverableSoftOff ? kSoftOffReleaseWaitMs : kPowerOffReleaseWaitMs;
+    while (((allowSoftOffPowerWake || !useRecoverableSoftOff) && readLogicalPowerButtonHeld()) &&
+           millis() - waitStartMs < releaseWaitMs) {
+      delay(10);
+    }
+  }
+
   display_.prepareForSleep();
 
   activeBookStore_.close();
   storage_.end();
   touch_.end();
   touchInitialized_ = false;
-  Serial.flush();
-
-  BoardConfig::holdBacklightOffForDeepSleep();
-  BoardConfig::releaseBatteryPowerHold();
-
-  const uint32_t waitStartMs = millis();
-  while (powerButton_.isHeld() && millis() - waitStartMs < kPowerOffReleaseWaitMs) {
-    powerButton_.update(millis());
-    delay(10);
+  if (!useRecoverableSoftOff) {
+    Serial.flush();
   }
 
-  esp_sleep_enable_ext0_wakeup(static_cast<gpio_num_t>(BoardConfig::PIN_PWR_BUTTON), 0);
+  BoardConfig::holdBacklightOffForDeepSleep();
+  const bool requestPmuShutdown =
+      BoardConfig::REQUEST_PMU_SHUTDOWN_ON_POWEROFF && !externalPowerPresent &&
+      !useRecoverableSoftOff;
+  if (requestPmuShutdown || BoardConfig::RELEASE_BATTERY_HOLD_BEFORE_DEEP_SLEEP) {
+    BoardConfig::releaseBatteryPowerHold();
+  } else if (useRecoverableSoftOff) {
+    Serial.println("[app] recoverable soft-off; PMU shutdown skipped");
+  } else if (pmuPowerOffOwnsWake && externalPowerPresent) {
+    Serial.println("[app] USB power present; using recoverable soft-off");
+  }
+
+  if (pmuPowerOffOwnsWake || useRecoverableSoftOff) {
+    if (requestPmuShutdown) {
+      Serial.println("[app] waiting for PMU power cut");
+      Serial.flush();
+      delay(1500);
+      Serial.println("[app] PMU power cut not observed; using soft-off fallback");
+    }
+
+    // With USB attached the PMU may keep VSYS alive. Stay recoverable instead of leaving the
+    // reader black in an infinite loop that can only be fixed with reset/reflash.
+    Serial.println("[app] soft-off; arming wake buttons");
+    if (!useRecoverableSoftOff) {
+      Serial.flush();
+    }
+    const SoftOffWakeSource wakeSource =
+        waitForRecoverableSoftOffWake(allowSoftOffPowerWake, allowSoftOffBootWake);
+    Serial.printf("[diag] soft_off_wake=%s\n", softOffWakeSourceName(wakeSource));
+    wakeFromSleep(true);
+    return;
+  }
+
+  if (BoardConfig::REQUEST_PMU_SHUTDOWN_ON_POWEROFF) {
+    delay(60);
+  }
+
+  const bool wakeUsesPowerButton = wakePin >= 0 && wakePin == BoardConfig::PIN_PWR_BUTTON;
+  const bool wakeUsesSwappedBootButton =
+      BoardConfig::SWAP_APP_BOOT_AND_POWER_BUTTONS &&
+      wakePin >= 0 && wakePin == BoardConfig::PIN_BOOT_BUTTON;
+  if (wakeUsesPowerButton || wakeUsesSwappedBootButton) {
+    const uint32_t waitStartMs = millis();
+    while (readActiveLowButton(wakePin) && millis() - waitStartMs < kPowerOffReleaseWaitMs) {
+      delay(10);
+    }
+  }
+
+  if (wakePin >= 0) {
+    pinMode(wakePin, INPUT_PULLUP);
+    esp_sleep_enable_ext0_wakeup(static_cast<gpio_num_t>(wakePin), 0);
+  }
   esp_deep_sleep_start();
 }
 
@@ -4732,17 +5135,32 @@ void App::enterSleep(uint32_t nowMs) {
   wakeFromSleep();
 }
 
-void App::wakeFromSleep() {
+void App::wakeFromSleep(bool fullPeripheralReset) {
   const uint32_t nowMs = millis();
-  Serial.println("[app] woke from light sleep");
+  Serial.println(fullPeripheralReset ? "[app] woke from soft-off" : "[app] woke from light sleep");
 
   BoardConfig::begin();
-  button_.begin();
-  powerButton_.begin();
+  if (fullPeripheralReset) {
+    BoardConfig::resetWakePeripherals();
+  }
+  button_.beginWithState(readLogicalBootButtonHeld());
+  powerButton_.beginWithState(readLogicalPowerButtonHeld());
+  if (BoardConfig::PIN_PWR_BUTTON < 0 || BoardConfig::SWAP_APP_BOOT_AND_POWER_BUTTONS) {
+    BoardConfig::consumeVirtualPowerButtonShortPressEvent();
+    BoardConfig::consumeVirtualPowerButtonLongPressEvent();
+  }
+  keyButton_.begin();
   bootButtonReleasedSinceBoot_ = !button_.isHeld();
   bootButtonLongPressHandled_ = false;
-  powerButtonReleasedSinceBoot_ = !powerButton_.isHeld();
+  powerButtonReleasedSinceBoot_ =
+      logicalPowerButtonUsesVirtualState() ? false : !powerButton_.isHeld();
   powerButtonLongPressHandled_ = false;
+  powerButtonEventArmMs_ = BoardConfig::APP_POWER_BUTTON_USES_PMU_EVENTS
+                               ? millis() + BoardConfig::PMU_BOOT_BUTTON_IGNORE_MS
+                               : 0;
+  keyButtonReleasedSinceBoot_ = !keyButton_.isHeld();
+  keyButtonLongPressHandled_ = false;
+  keyButtonTapArmed_ = false;
   powerOffStarted_ = false;
   updateBatteryStatus(nowMs, true);
   storage_.setStatusCallback(&App::handleStorageStatus, this);
@@ -4753,7 +5171,7 @@ void App::wakeFromSleep() {
   lastStateLogMs_ = nowMs;
   state_ = AppState::Paused;
 
-  const bool displayReady = display_.wakeFromSleep();
+  const bool displayReady = fullPeripheralReset ? display_.begin() : display_.wakeFromSleep();
   touchInitialized_ = touch_.begin();
   storageReady_ = storage_.begin();
 

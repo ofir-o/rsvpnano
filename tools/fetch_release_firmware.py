@@ -14,7 +14,12 @@ ROOT = Path(__file__).resolve().parents[1]
 WEB_FIRMWARE_DIR = ROOT / "web" / "firmware"
 MANIFEST_PATH = WEB_FIRMWARE_DIR / "manifest.json"
 DEFAULT_REPO = "ionutdecebal/rsvpnano"
-DEFAULT_ASSETS = ("rsvp-nano.bin", "rsvp-nano-ota.bin")
+DEFAULT_ASSETS = (
+    "rsvp-nano.bin",
+    "rsvp-nano-ota.bin",
+    "rsvp-nano-esp32-s3-touch-lcd-3.49-ota.bin",
+    "rsvp-nano-esp32-s3-touch-amoled-2.41-ota.bin",
+)
 DEFAULT_MANIFEST = {
     "name": "RSVP Nano",
     "version": "dev",

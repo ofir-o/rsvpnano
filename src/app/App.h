@@ -178,8 +178,10 @@ class App {
   void maybeSaveReadingPosition(uint32_t nowMs);
   void handleBootButton(uint32_t nowMs);
   void handlePowerButton(uint32_t nowMs);
+  void handleKeyButton(uint32_t nowMs);
   bool handleStandbyCombo(uint32_t nowMs);
   void toggleMenuFromPowerButton(uint32_t nowMs);
+  void toggleReaderPlaybackFromShortcut(uint32_t nowMs);
   void openMainMenu(uint32_t nowMs);
   void cycleBrightness();
   void cycleThemeMode(uint32_t nowMs);
@@ -198,6 +200,8 @@ class App {
   void updateBatteryWarningOverlay(uint32_t nowMs);
   void handleTouch(uint32_t nowMs);
   void applyPausedTouchGesture(const TouchEvent &event, uint32_t nowMs);
+  bool handleTopEdgeMenuSwipe(const TouchEvent &event, uint32_t nowMs, int deltaX, int deltaY,
+                              bool ended);
   void handleReaderTap(uint16_t x, uint16_t y, uint32_t nowMs);
   bool handleFooterMetricTap(uint16_t x, uint16_t y, uint32_t nowMs);
   bool handleBatteryBadgeTap(uint16_t x, uint16_t y, uint32_t nowMs);
@@ -309,7 +313,7 @@ class App {
   void updateStandbyScreensaver(uint32_t nowMs, bool force = false);
   void enterPowerOff(uint32_t nowMs);
   void enterSleep(uint32_t nowMs);
-  void wakeFromSleep();
+  void wakeFromSleep(bool fullPeripheralReset = false);
   bool restoreSavedBook(uint32_t nowMs);
   bool prepareBootBookLoad();
   void loadPendingBootBook(uint32_t nowMs);
@@ -410,6 +414,7 @@ class App {
   ReadingLoop reader_;
   ButtonHandler button_;
   ButtonHandler powerButton_;
+  ButtonHandler keyButton_;
   TouchHandler touch_;
   StorageManager storage_;
   IndexedBookStore activeBookStore_;
@@ -423,6 +428,7 @@ class App {
 
   uint32_t bootStartedMs_ = 0;
   uint32_t lastStateLogMs_ = 0;
+  uint32_t powerButtonEventArmMs_ = 0;
   uint32_t wpmFeedbackUntilMs_ = 0;
   uint32_t lastProgressSaveMs_ = 0;
   uint32_t lastBatterySampleMs_ = 0;
@@ -433,6 +439,7 @@ class App {
   uint32_t standbyComboStartedMs_ = 0;
   uint32_t standbyEnteredMs_ = 0;
   uint32_t lastStandbyFrameMs_ = 0;
+  uint32_t lastKeyButtonTapMs_ = 0;
   uint32_t standbyLifeGeneration_ = 0;
   uint32_t standbyScreensaverRng_ = 1;
   uint32_t chapterTransitionUntilMs_ = 0;
@@ -517,6 +524,9 @@ class App {
   bool bootButtonLongPressHandled_ = false;
   bool powerButtonReleasedSinceBoot_ = false;
   bool powerButtonLongPressHandled_ = false;
+  bool keyButtonReleasedSinceBoot_ = false;
+  bool keyButtonLongPressHandled_ = false;
+  bool keyButtonTapArmed_ = false;
   bool powerOffStarted_ = false;
   bool standbyComboActive_ = false;
   bool standbyComboHandled_ = false;

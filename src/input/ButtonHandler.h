@@ -7,7 +7,9 @@ class ButtonHandler {
   explicit ButtonHandler(int pin);
 
   void begin();
+  void beginWithState(bool held);
   void update(uint32_t nowMs);
+  void updateFromState(bool currentHeld, uint32_t nowMs);
 
   bool isHeld() const;
   bool wasPressedEvent() const;
@@ -24,4 +26,6 @@ class ButtonHandler {
   uint32_t lastEdgeMs_ = 0;
   uint32_t pressStartedMs_ = 0;
   uint32_t lastHoldDurationMs_ = 0;
+
+  void resetState(bool held, uint32_t nowMs);
 };

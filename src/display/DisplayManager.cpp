@@ -48,8 +48,11 @@ constexpr int kTinyGlyphWidth = 5;
 constexpr int kTinyGlyphHeight = 7;
 constexpr int kTinyGlyphSpacing = 1;
 constexpr int kTinyScale = 2;
-constexpr int kFooterMarginX = 12;
-constexpr int kFooterMarginBottom = 8;
+constexpr int kReaderChromeMarginX = BoardConfig::READER_CHROME_MARGIN_X;
+constexpr int kReaderChromeMarginTop = BoardConfig::READER_CHROME_MARGIN_TOP;
+constexpr int kReaderChromeMarginBottom = BoardConfig::READER_CHROME_MARGIN_BOTTOM;
+constexpr int kReaderBatteryMarginX = BoardConfig::READER_BATTERY_MARGIN_X;
+constexpr int kReaderBatteryMarginTop = BoardConfig::READER_BATTERY_MARGIN_TOP;
 constexpr int kCompactMenuRowHeight = 22;
 constexpr int kCompactMenuX = 28;
 constexpr int kLibraryRowHeight = 38;
@@ -1576,13 +1579,14 @@ void DisplayManager::drawBatteryBadge(int logicalWidth, int logicalHeight) {
   }
 
   const int width = measureTinyTextWidth(batteryLabel_, kTinyScale);
-  const int x = std::max(kFooterMarginX, logicalWidth - kFooterMarginX - width);
-  const int y = logicalHeight > (kDisplayHeight * 2) ? kFooterMarginBottom + 8 : kFooterMarginBottom;
+  const int x = std::max(kReaderBatteryMarginX, logicalWidth - kReaderBatteryMarginX - width);
+  const int y = logicalHeight > (kDisplayHeight * 2) ? kReaderBatteryMarginTop + 8
+                                                      : kReaderBatteryMarginTop;
   drawTinyTextAt(batteryLabel_, x, y, footerColor(), kTinyScale);
 }
 
 void DisplayManager::drawPreviousSentenceHint() {
-  drawTinyTextAt("<<", kFooterMarginX, kFooterMarginBottom, footerColor(), kTinyScale);
+  drawTinyTextAt("<<", kReaderChromeMarginX, kReaderChromeMarginTop, footerColor(), kTinyScale);
 }
 
 void DisplayManager::drawFooter(const String &chapterLabel, const String &statusLabel,
@@ -1591,21 +1595,22 @@ void DisplayManager::drawFooter(const String &chapterLabel, const String &status
     return;
   }
 
-  const int y = kDisplayHeight - kTinyGlyphHeight * kTinyScale - kFooterMarginBottom;
-  int maxChapterWidth = kDisplayWidth - (kFooterMarginX * 2);
+  const int y = kDisplayHeight - kTinyGlyphHeight * kTinyScale - kReaderChromeMarginBottom;
+  int maxChapterWidth = kDisplayWidth - (kReaderChromeMarginX * 2);
 
   if (chrome.showProgress) {
     const String status = statusLabel.isEmpty() ? "0%" : statusLabel;
     const int statusWidth = measureTinyTextWidth(status, kTinyScale);
-    const int rightX = std::max(kFooterMarginX, kDisplayWidth - kFooterMarginX - statusWidth);
-    maxChapterWidth = std::max(0, rightX - kFooterMarginX - 18);
+    const int rightX =
+        std::max(kReaderChromeMarginX, kDisplayWidth - kReaderChromeMarginX - statusWidth);
+    maxChapterWidth = std::max(0, rightX - kReaderChromeMarginX - 18);
     drawTinyTextAt(status, rightX, y, footerColor(), kTinyScale);
   }
 
   if (chrome.showChapter) {
     const String chapter = fitTinyText(chapterLabel.isEmpty() ? "START" : chapterLabel,
                                       maxChapterWidth, kTinyScale);
-    drawTinyTextAt(chapter, kFooterMarginX, y, footerColor(), kTinyScale);
+    drawTinyTextAt(chapter, kReaderChromeMarginX, y, footerColor(), kTinyScale);
   }
 }
 
@@ -2478,7 +2483,7 @@ void DisplayManager::renderScrollView(const std::vector<ContextWord> &words, uin
   const int overlayReserve = overlayText.isEmpty() ? 0 : (kTinyGlyphHeight * kTinyScale + 6);
   const bool showFooterRow = chrome.showChapter || chrome.showProgress;
   const int footerReserve =
-      showFooterRow ? (kTinyGlyphHeight * kTinyScale + kFooterMarginBottom + 6) : 6;
+      showFooterRow ? (kTinyGlyphHeight * kTinyScale + kReaderChromeMarginBottom + 6) : 6;
   const int textTop = kScrollTop;
   const int textBottom = virtualHeight - footerReserve - overlayReserve;
   const ReaderTypeface contextTypeface = currentReaderTypeface();
