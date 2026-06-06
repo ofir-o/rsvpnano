@@ -352,6 +352,8 @@ class App {
   String footerMetricModeLabel() const;
   String batteryLabelModeLabel() const;
   String screensaverModeLabel() const;
+  String standbyTimerLabel() const;
+  uint32_t standbyTimerMs() const;
   String batteryTimeRemainingLabel() const;
   String batteryVoltageLabel() const;
   String formatBatteryTimeRemaining(uint32_t minutes) const;
@@ -422,6 +424,7 @@ class App {
   TouchIntent pausedTouchIntent_ = TouchIntent::None;
 
   uint32_t bootStartedMs_ = 0;
+  uint32_t lastActivityMs_ = 0;
   uint32_t lastStateLogMs_ = 0;
   uint32_t wpmFeedbackUntilMs_ = 0;
   uint32_t lastProgressSaveMs_ = 0;
@@ -453,6 +456,7 @@ class App {
   size_t sdCardRepairConfirmSelectedIndex_ = 0;
   size_t updateConfirmSelectedIndex_ = 0;
   size_t focusTimerGenreSelectedIndex_ = 0;
+  uint8_t standbyTimerIndex_ = 0;
   uint8_t brightnessLevelIndex_ = 4;
   uint8_t readerFontSizeIndex_ = 0;
   uint16_t pacingLongWordDelayMs_ = 200;
