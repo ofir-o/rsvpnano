@@ -57,6 +57,19 @@ jobs:
           NOTES
           fi
 
+      - name: Verify release tag target
+        env:
+          RELEASE_TAG: ${{ steps.version.outputs.value }}
+        run: |
+          if git rev-parse -q --verify "refs/tags/${RELEASE_TAG}" >/dev/null; then
+            TAG_SHA="$(git rev-list -n 1 "${RELEASE_TAG}")"
+            if [ "$TAG_SHA" != "$GITHUB_SHA" ]; then
+              echo "::error::${RELEASE_TAG} points at ${TAG_SHA}, but this workflow checked out ${GITHUB_SHA}."
+              echo "::error::Use a fresh tag name or run the workflow from the branch that owns the existing tag."
+              exit 1
+            fi
+          fi
+
       - name: Publish GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -72,7 +85,8 @@ jobs:
               web/firmware/rsvp-nano.bin \
               web/firmware/rsvp-nano-ota.bin \
               --title "$RELEASE_TAG" \
-              --notes-file release-notes.md
+              --notes-file release-notes.md \
+              --target "$GITHUB_SHA"
           fi
 
       - name: Configure GitHub Pages
