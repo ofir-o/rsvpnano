@@ -1674,9 +1674,72 @@ String indexedDataPathFor(const String &path) { return path + ".rdat"; }
 
 String indexedTempPathFor(const String &path) { return path + ".tmp"; }
 
-bool writeExact(File &file, const void *data, size_t bytes) {
-  return file.write(reinterpret_cast<const uint8_t *>(data), bytes) == bytes;
-}
+class BufferedWriter {
+ public:
+  explicit BufferedWriter(File &file, size_t capacity = 4096) : file_(file) {
+    buffer_.reserve(capacity);
+  }
+
+  ~BufferedWriter() { flush(); }
+
+  bool write(const void *data, size_t len) {
+    if (failed_) {
+      return false;
+    }
+
+    const uint8_t *bytes = static_cast<const uint8_t *>(data);
+    const size_t capacity = buffer_.capacity();
+    if (capacity == 0) {
+      if (file_.write(bytes, len) != len) {
+        failed_ = true;
+      }
+      return !failed_;
+    }
+
+    if (buffer_.size() + len > capacity) {
+      if (!flush()) {
+        return false;
+      }
+      if (len >= capacity) {
+        if (file_.write(bytes, len) != len) {
+          failed_ = true;
+        }
+        return !failed_;
+      }
+    }
+
+    buffer_.insert(buffer_.end(), bytes, bytes + len);
+    return true;
+  }
+
+  bool flush() {
+    if (failed_) {
+      return false;
+    }
+    if (buffer_.empty()) {
+      return true;
+    }
+    const bool ok = file_.write(buffer_.data(), buffer_.size()) == buffer_.size();
+    buffer_.clear();
+    if (!ok) {
+      failed_ = true;
+      return false;
+    }
+    return ok;
+  }
+
+  bool seek(uint32_t position) { return flush() && file_.seek(position); }
+
+  void discard() {
+    buffer_.clear();
+    failed_ = true;
+  }
+
+ private:
+  File &file_;
+  std::vector<uint8_t> buffer_;
+  bool failed_ = false;
+};
 
 bool readExact(File &file, void *data, size_t bytes) {
   return file.read(reinterpret_cast<uint8_t *>(data), bytes) == bytes;
@@ -1754,8 +1817,8 @@ bool readIndexHeader(const String &path, IndexedBookStore::Header &header) {
 }
 
 struct IndexedBuildContext {
-  File *indexFile = nullptr;
-  File *dataFile = nullptr;
+  BufferedWriter *indexWriter = nullptr;
+  BufferedWriter *dataWriter = nullptr;
   BookMetadata *metadata = nullptr;
   uint32_t wordCount = 0;
   uint32_t dataSize = 0;
@@ -1832,8 +1895,8 @@ bool pushIndexedWord(String token, IndexedBuildContext &context, ParseStats *sta
   record.length = static_cast<uint16_t>(token.length());
   record.flags = 0;
 
-  if (!writeExact(*context.dataFile, token.c_str(), token.length()) ||
-      !writeExact(*context.indexFile, &record, sizeof(record))) {
+  if (!context.dataWriter->write(token.c_str(), token.length()) ||
+      !context.indexWriter->write(&record, sizeof(record))) {
     context.failed = true;
     context.failure = "SD write failed";
     return false;
@@ -2413,7 +2476,12 @@ bool StorageManager::buildIndexedBook(const String &path, BookMetadata &metadata
   }
 
   IndexedBookStore::Header header;
-  if (!writeExact(indexFile, &header, sizeof(header))) {
+  BufferedWriter indexWriter(indexFile);
+  BufferedWriter dataWriter(dataFile);
+
+  if (!indexWriter.write(&header, sizeof(header))) {
+    indexWriter.discard();
+    dataWriter.discard();
     indexFile.close();
     dataFile.close();
     source.close();
@@ -2424,8 +2492,8 @@ bool StorageManager::buildIndexedBook(const String &path, BookMetadata &metadata
   }
 
   IndexedBuildContext context;
-  context.indexFile = &indexFile;
-  context.dataFile = &dataFile;
+  context.indexWriter = &indexWriter;
+  context.dataWriter = &dataWriter;
   context.metadata = &metadata;
 
   String line;
@@ -2508,6 +2576,8 @@ bool StorageManager::buildIndexedBook(const String &path, BookMetadata &metadata
 
   if (parseFailed || context.wordCount == 0) {
     const char *detail = context.failure[0] == '\0' ? "No readable words" : context.failure;
+    indexWriter.discard();
+    dataWriter.discard();
     indexFile.close();
     dataFile.close();
     source.close();
@@ -2540,16 +2610,16 @@ bool StorageManager::buildIndexedBook(const String &path, BookMetadata &metadata
   header.chaptersOffset = header.paragraphsOffset + header.paragraphCount * sizeof(uint32_t);
   header.dataSize = context.dataSize;
 
-  if (!indexFile.seek(header.paragraphsOffset)) {
+  if (!dataWriter.flush() || !indexWriter.seek(header.paragraphsOffset)) {
     parseFailed = true;
   }
 
   for (size_t i = 0; !parseFailed && i < metadata.paragraphStarts.size(); ++i) {
     const uint32_t wordIndex = static_cast<uint32_t>(metadata.paragraphStarts[i]);
-    parseFailed = !writeExact(indexFile, &wordIndex, sizeof(wordIndex));
+    parseFailed = !indexWriter.write(&wordIndex, sizeof(wordIndex));
   }
 
-  if (!parseFailed && !indexFile.seek(header.chaptersOffset)) {
+  if (!parseFailed && !indexWriter.seek(header.chaptersOffset)) {
     parseFailed = true;
   }
 
@@ -2561,10 +2631,12 @@ bool StorageManager::buildIndexedBook(const String &path, BookMetadata &metadata
     for (uint32_t j = 0; j < record.titleLength; ++j) {
       record.title[j] = title[j];
     }
-    parseFailed = !writeExact(indexFile, &record, sizeof(record));
+    parseFailed = !indexWriter.write(&record, sizeof(record));
   }
 
-  if (!parseFailed && (!indexFile.seek(0) || !writeExact(indexFile, &header, sizeof(header)))) {
+  if (!parseFailed &&
+      (!indexWriter.seek(0) || !indexWriter.write(&header, sizeof(header)) ||
+       !indexWriter.flush() || !dataWriter.flush())) {
     parseFailed = true;
   }
 
@@ -2573,6 +2645,8 @@ bool StorageManager::buildIndexedBook(const String &path, BookMetadata &metadata
   source.close();
 
   if (parseFailed) {
+    indexWriter.discard();
+    dataWriter.discard();
     SD_MMC.remove(tmpIndexPath);
     SD_MMC.remove(tmpDataPath);
     metadata.clear();
