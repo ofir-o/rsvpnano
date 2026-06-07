@@ -7,7 +7,13 @@
 #include <cstdio>
 #include <vector>
 
+#include "settings/PreferenceKeys.h"
+
 namespace {
+
+// Preference keys + NVS namespace are defined once in settings/PreferenceKeys.h
+// and shared with the device UI; pull them in so call sites are unchanged.
+using namespace settings;
 
 constexpr const char *kMdnsName = "rsvp-nano";
 constexpr const char *kBooksPath = "/books";
@@ -15,38 +21,10 @@ constexpr const char *kBookFilesPath = "/books/books";
 constexpr const char *kArticleFilesPath = "/books/articles";
 constexpr const char *kConfigPath = "/config";
 constexpr const char *kRssConfigPath = "/config/rss.conf";
-constexpr const char *kPrefsNamespace = "rsvp";
 constexpr size_t kMaxMetadataLineChars = 160;
 constexpr size_t kMaxSettingsPatchBytes = 2048;
 constexpr size_t kMaxRssFeedsPatchBytes = 4096;
 constexpr size_t kMaxRssFeeds = 24;
-constexpr const char *kPrefWpm = "wpm";
-constexpr const char *kPrefBrightness = "bright";
-constexpr const char *kPrefDarkMode = "dark";
-constexpr const char *kPrefNightMode = "night";
-constexpr const char *kPrefUiLanguage = "ui_lang";
-constexpr const char *kPrefReaderMode = "read_mode";
-constexpr const char *kPrefHandedness = "handed";
-constexpr const char *kPrefPhantomWords = "phantom_on";
-constexpr const char *kPrefFooterMetricMode = "prog_md";
-constexpr const char *kPrefBatteryLabelMode = "bat_md";
-constexpr const char *kPrefReaderBatteryVisible = "read_bat";
-constexpr const char *kPrefReaderChapterVisible = "read_ch";
-constexpr const char *kPrefReaderProgressVisible = "read_pct";
-constexpr const char *kPrefReaderFontSize = "font_size";
-constexpr const char *kPrefReaderTypeface = "typeface";
-constexpr const char *kPrefTypographyFocusHighlight = "type_hlt";
-constexpr const char *kPrefPacingLongMs = "pace_lms";
-constexpr const char *kPrefPacingComplexMs = "pace_cms";
-constexpr const char *kPrefPacingPunctuationMs = "pace_pms";
-constexpr const char *kPrefPauseMode = "pause_md";
-constexpr const char *kPrefAccurateTime = "time_est_a";
-constexpr const char *kPrefTypographyTracking = "type_trk";
-constexpr const char *kPrefTypographyAnchor = "type_anc";
-constexpr const char *kPrefTypographyGuideWidth = "type_wid";
-constexpr const char *kPrefTypographyGuideGap = "type_gap";
-constexpr const char *kPrefWifiSsid = "wifi_ssid";
-constexpr const char *kPrefWifiPass = "wifi_pass";
 constexpr uint16_t kDefaultWpm = 300;
 constexpr uint16_t kMinWpm = 10;
 constexpr uint16_t kMaxWpm = 1000;

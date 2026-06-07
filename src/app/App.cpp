@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "board/BoardConfig.h"
+#include "settings/PreferenceKeys.h"
 
 #ifndef RSVP_USB_TRANSFER_ENABLED
 #define RSVP_USB_TRANSFER_ENABLED 0
@@ -188,43 +189,9 @@ constexpr size_t kWifiNetworksBackIndex = 0;
 constexpr size_t kWifiNetworksFirstItemIndex = 1;
 constexpr size_t kFocusTimerGenreBackIndex = 0;
 constexpr size_t kFocusTimerGenreFirstIndex = 1;
-constexpr const char *kPrefsNamespace = "rsvp";
-constexpr const char *kPrefBookPath = "book";
-constexpr const char *kPrefLegacyWordIndex = "word";
-constexpr const char *kPrefWpm = "wpm";
-constexpr const char *kPrefBrightness = "bright";
-constexpr const char *kPrefDarkMode = "dark";
-constexpr const char *kPrefNightMode = "night";
-constexpr const char *kPrefUiLanguage = "ui_lang";
-constexpr const char *kPrefReaderMode = "read_mode";
-constexpr const char *kPrefHandedness = "handed";
-constexpr const char *kPrefPhantomWords = "phantom_on";
-constexpr const char *kPrefFooterMetricMode = "prog_md";
-constexpr const char *kPrefBatteryLabelMode = "bat_md";
-constexpr const char *kPrefScreensaverMode = "scrn_sv";
-constexpr const char *kPrefReaderBatteryVisible = "read_bat";
-constexpr const char *kPrefReaderChapterVisible = "read_ch";
-constexpr const char *kPrefReaderProgressVisible = "read_pct";
-constexpr const char *kPrefReaderFontSize = "font_size";
-constexpr const char *kPrefReaderTypeface = "typeface";
-constexpr const char *kPrefTypographyFocusHighlight = "type_hlt";
-constexpr const char *kPrefLegacyPacingLong = "pace_len";
-constexpr const char *kPrefLegacyPacingComplex = "pace_cpx";
-constexpr const char *kPrefLegacyPacingPunctuation = "pace_pnc";
-constexpr const char *kPrefPacingLongMs = "pace_lms";
-constexpr const char *kPrefPacingComplexMs = "pace_cms";
-constexpr const char *kPrefPacingPunctuationMs = "pace_pms";
-constexpr const char *kPrefPauseMode = "pause_md";
-constexpr const char *kPrefAccurateTime = "time_est_a";
-constexpr const char *kPrefTypographyTracking = "type_trk";
-constexpr const char *kPrefTypographyAnchor = "type_anc";
-constexpr const char *kPrefTypographyGuideWidth = "type_wid";
-constexpr const char *kPrefTypographyGuideGap = "type_gap";
-constexpr const char *kPrefRecentSeq = "seq";
-constexpr const char *kPrefWifiSsid = "wifi_ssid";
-constexpr const char *kPrefWifiPass = "wifi_pass";
-constexpr const char *kPrefOtaAuto = "ota_auto";
-constexpr const char *kPrefOtaOwner = "ota_owner";
+// Preference keys are defined once in settings/PreferenceKeys.h and shared with
+// the web companion; pull them into scope so existing call sites are unchanged.
+using namespace settings;
 constexpr size_t kReaderFontSizeCount = 3;
 constexpr size_t kPhantomBeforeCharTargets[] = {64, 96, 144};
 constexpr size_t kPhantomAfterCharTargets[] = {96, 144, 208};
