@@ -39,7 +39,7 @@ constexpr int PIN_TOUCH_SDA = 17;
 constexpr int PIN_TOUCH_SCL = 18;
 
 constexpr int TCA9554_ADDRESS = 0x20;
-constexpr uint8_t TCA9554_PIN_BATTERY_ADC_ENABLE = 1;
+constexpr uint8_t TCA9554_PIN_BACKLIGHT_ENABLE = 1;
 constexpr uint8_t TCA9554_PIN_SYS_EN = 6;
 constexpr uint8_t TCA9554_PIN_AUDIO_ENABLE = 7;
 
