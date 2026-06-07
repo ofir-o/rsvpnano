@@ -65,43 +65,8 @@ jobs:
       - name: Install PlatformIO
         run: pip install platformio
 
-      - name: Find firmware export tool
-        id: exporter
-        shell: bash
-        run: |
-          EXPORTER="$(find . -type f -name 'export_web_firmware.py' -not -path './.git/*' -print -quit)"
-
-          if [ -z "$EXPORTER" ]; then
-            echo "::error::Could not find export_web_firmware.py"
-            exit 1
-          fi
-
-          echo "path=$EXPORTER" >> "$GITHUB_OUTPUT"
-          echo "[preview] Using firmware export tool: $EXPORTER"
-
       - name: Export firmware assets
-        shell: bash
-        run: python3 "${{ steps.exporter.outputs.path }}" --version "${{ steps.preview.outputs.version }}"
-
-      - name: Find firmware assets
-        id: assets
-        shell: bash
-        run: |
-          FULL_BIN="$(find . -type f -name 'rsvp-nano.bin' -not -path './.git/*' -print -quit)"
-          OTA_BIN="$(find . -type f -name 'rsvp-nano-ota.bin' -not -path './.git/*' -print -quit)"
-
-          if [ -z "$FULL_BIN" ] || [ -z "$OTA_BIN" ]; then
-            echo "::error::Could not find firmware assets."
-            echo "FULL_BIN=$FULL_BIN"
-            echo "OTA_BIN=$OTA_BIN"
-            exit 1
-          fi
-
-          echo "full=$FULL_BIN" >> "$GITHUB_OUTPUT"
-          echo "ota=$OTA_BIN" >> "$GITHUB_OUTPUT"
-
-          echo "[preview] Full image: $FULL_BIN"
-          echo "[preview] OTA image: $OTA_BIN"
+        run: python3 tools/export_web_firmware.py --version "${{ steps.preview.outputs.version }}"
 
       - name: Write preview release notes
         run: |
@@ -135,8 +100,8 @@ jobs:
           RELEASE_TAG: ${{ steps.preview.outputs.channel }}
           RELEASE_TITLE: ${{ steps.preview.outputs.title }}
           BUILD_SHA: ${{ steps.preview.outputs.commit_sha }}
-          FULL_BIN: ${{ steps.assets.outputs.full }}
-          OTA_BIN: ${{ steps.assets.outputs.ota }}
+          FULL_BIN: web/firmware/rsvp-nano.bin
+          OTA_BIN: web/firmware/rsvp-nano-ota.bin
         run: |
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
             gh release edit "$RELEASE_TAG" \
