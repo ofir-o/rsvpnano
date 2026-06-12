@@ -10,11 +10,13 @@
 #include "app/AppState.h"
 #include "app/Localization.h"
 #include "audio/AudioManager.h"
+#include "book/BookMetadata.h"
 #include "display/DisplayManager.h"
 #include "input/ButtonHandler.h"
 #include "input/TouchHandler.h"
 #include "reader/ReadingLoop.h"
 #include "rss/RssFeedManager.h"
+#include "storage/index/IndexedBookStore.h"
 #include "storage/StorageManager.h"
 #include "sync/CompanionSyncManager.h"
 #include "timer/FocusTimer.h"
@@ -314,9 +316,20 @@ class App {
   bool prepareBootBookLoad();
   void loadPendingBootBook(uint32_t nowMs);
   void saveReadingPosition(bool force = false);
-  bool loadBookAtIndex(size_t index, uint32_t nowMs, bool allowLegacyPositionFallback = false,
-                       bool allowIndexBuild = true, bool allowEpubConversion = true,
-                       bool rebuildTimeEstimate = true);
+  struct BookOpenOptions {
+    BookOpenOptions()
+        : allowLegacyPositionFallback(false),
+          allowIndexBuild(true),
+          allowEpubConversion(true),
+          rebuildTimeEstimate(true) {}
+
+    bool allowLegacyPositionFallback;
+    bool allowIndexBuild;
+    bool allowEpubConversion;
+    bool rebuildTimeEstimate;
+  };
+  bool loadBookAtIndex(size_t index, uint32_t nowMs,
+                       const BookOpenOptions &options = BookOpenOptions());
   String bookPositionKey(const String &bookPath) const;
   String bookWordCountKey(const String &bookPath) const;
   String bookRecentKey(const String &bookPath) const;

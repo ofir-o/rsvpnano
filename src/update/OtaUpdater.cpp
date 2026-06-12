@@ -8,6 +8,8 @@
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 
+#include "text/AsciiText.h"
+
 #ifndef RSVP_FIRMWARE_VERSION
 #define RSVP_FIRMWARE_VERSION "dev"
 #endif
@@ -25,20 +27,6 @@ constexpr const char *kStatusTitle = "OTA";
 const char *kRedirectHeaderKeys[] = {
     "Location",
 };
-
-bool isAsciiWhitespace(char c) {
-  switch (c) {
-    case ' ':
-    case '\t':
-    case '\n':
-    case '\r':
-    case '\f':
-    case '\v':
-      return true;
-    default:
-      return false;
-  }
-}
 
 String trimCopy(String value) {
   value.trim();
@@ -140,7 +128,7 @@ bool extractJsonStringValue(const String &json, const char *key, size_t searchSt
   }
 
   int quoteIndex = colonIndex + 1;
-  while (static_cast<size_t>(quoteIndex) < json.length() && isAsciiWhitespace(json[quoteIndex])) {
+  while (static_cast<size_t>(quoteIndex) < json.length() && AsciiText::isWhitespace(json[quoteIndex])) {
     ++quoteIndex;
   }
   if (static_cast<size_t>(quoteIndex) >= json.length() || json[quoteIndex] != '"') {
