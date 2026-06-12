@@ -1,7 +1,6 @@
 #include "display/DisplayManager.h"
 
 #include <algorithm>
-#include <cctype>
 #include <cstring>
 
 #include <esp_heap_caps.h>
@@ -2045,11 +2044,26 @@ void DisplayManager::renderWordTickerView(const std::vector<ContextWord> &words,
 
   const bool canUseBandOnly = !showFooter && overlayText.isEmpty() &&
                               !chrome.showPreviousSentenceHint && tickerPlaybackFrameActive_;
-  String renderKey =
-      "ticker|" + String(fontSizeLevel) + "|i:" + String(currentWordIndex) + "|m:" +
-      String(motionPermille) + "|f:" + String(showFooter ? 1 : 0) + "|d:" +
-      String(darkMode_ ? 1 : 0) + "|n:" + String(nightMode_ ? 1 : 0) + "|wc:" +
-      String(words.size()) + "|rc:" + readerChromeKey(chrome);
+  const String chromeKey = readerChromeKey(chrome);
+  String renderKey;
+  renderKey.reserve(96 + chromeKey.length() + chapterLabel.length() + overlayText.length() +
+                    batteryLabel_.length());
+  renderKey += "ticker|";
+  renderKey += String(fontSizeLevel);
+  renderKey += "|i:";
+  renderKey += String(currentWordIndex);
+  renderKey += "|m:";
+  renderKey += String(motionPermille);
+  renderKey += "|f:";
+  renderKey += String(showFooter ? 1 : 0);
+  renderKey += "|d:";
+  renderKey += String(darkMode_ ? 1 : 0);
+  renderKey += "|n:";
+  renderKey += String(nightMode_ ? 1 : 0);
+  renderKey += "|wc:";
+  renderKey += String(words.size());
+  renderKey += "|rc:";
+  renderKey += chromeKey;
   if (!canUseBandOnly) {
     renderKey += "|c:";
     renderKey += chapterLabel;
@@ -2664,7 +2678,9 @@ void DisplayManager::renderMenu(const std::vector<String> &items, size_t selecte
     selectedIndex = items.size() - 1;
   }
 
-  String renderKey = "menuv|";
+  String renderKey;
+  renderKey.reserve(48 + batteryLabel_.length() + (items.size() * 16));
+  renderKey += "menuv|";
   renderKey += String(selectedIndex);
   renderKey += "|b:";
   renderKey += batteryLabel_;
@@ -2730,7 +2746,9 @@ void DisplayManager::renderLibrary(const std::vector<LibraryItem> &items, size_t
     selectedIndex = items.size() - 1;
   }
 
-  String renderKey = "library|";
+  String renderKey;
+  renderKey.reserve(48 + batteryLabel_.length() + (items.size() * 32));
+  renderKey += "library|";
   renderKey += String(selectedIndex);
   renderKey += "|b:";
   renderKey += batteryLabel_;
@@ -2802,7 +2820,10 @@ void DisplayManager::renderLibrary(const std::vector<LibraryItem> &items, size_t
 void DisplayManager::renderTextEntry(const String &title, const String &prompt, const String &value,
                                      const String &helperText,
                                      const std::vector<Button> &buttons) {
-  String renderKey = "text-entry|";
+  String renderKey;
+  renderKey.reserve(80 + title.length() + prompt.length() + value.length() + helperText.length() +
+                    batteryLabel_.length() + (buttons.size() * 28));
+  renderKey += "text-entry|";
   renderKey += title;
   renderKey += "|";
   renderKey += prompt;
@@ -3096,7 +3117,10 @@ void DisplayManager::renderFocusTimerScreen(const String &mode, const String &ge
   const bool portrait = isPortraitOrientation(uiOrientation_);
   const bool timerRunning = progressPercent >= 0;
 
-  String renderKey = "timer|";
+  String renderKey;
+  renderKey.reserve(80 + mode.length() + genre.length() + timer.length() + instruction.length() +
+                    footer.length() + batteryLabel_.length());
+  renderKey += "timer|";
   renderKey += mode;
   renderKey += "|";
   renderKey += genre;

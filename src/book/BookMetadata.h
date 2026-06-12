@@ -23,12 +23,3 @@ struct BookMetadata {
     paragraphStarts.clear();
   }
 };
-
-struct BookContent : BookMetadata {
-  std::vector<String> words;
-
-  void clear() {
-    BookMetadata::clear();
-    words.clear();
-  }
-};

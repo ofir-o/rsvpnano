@@ -1,11 +1,11 @@
 #include "app/App.h"
 
-#include <esp_sleep.h>
-#include <esp_log.h>
 #include <WiFi.h>
 #include <algorithm>
 #include <climits>
 #include <cstdio>
+#include <esp_sleep.h>
+#include <esp_log.h>
 #include <iterator>
 #include <utility>
 #include <vector>
@@ -4148,9 +4148,13 @@ void App::enterUsbTransfer(uint32_t nowMs) {
     storageReady_ = storage_.begin();
     if (storageReady_ && usingStorageBook_ && !currentBookPath_.isEmpty()) {
       const int refreshedBookIndex = findBookIndexByPath(currentBookPath_);
+      BookOpenOptions reloadOptions;
+      reloadOptions.allowIndexBuild = false;
+      reloadOptions.allowEpubConversion = false;
+      reloadOptions.rebuildTimeEstimate = false;
       if (refreshedBookIndex >= 0 &&
-          loadBookAtIndex(static_cast<size_t>(refreshedBookIndex), nowMs, false, false, false,
-                          false)) {
+          loadBookAtIndex(static_cast<size_t>(refreshedBookIndex), nowMs,
+                          reloadOptions)) {
         reader_.seekTo(resumeIndex);
       }
     }
@@ -4196,8 +4200,12 @@ void App::exitUsbTransfer(uint32_t nowMs) {
     const int refreshedBookIndex = findBookIndexByPath(currentBookPath_);
     if (refreshedBookIndex >= 0) {
       const size_t resumeIndex = reader_.currentIndex();
-      if (loadBookAtIndex(static_cast<size_t>(refreshedBookIndex), nowMs, false, false, false,
-                          false)) {
+      BookOpenOptions reloadOptions;
+      reloadOptions.allowIndexBuild = false;
+      reloadOptions.allowEpubConversion = false;
+      reloadOptions.rebuildTimeEstimate = false;
+      if (loadBookAtIndex(static_cast<size_t>(refreshedBookIndex), nowMs,
+                          reloadOptions)) {
         reader_.seekTo(resumeIndex);
       } else {
         Serial.println("[app] current indexed book unavailable after USB transfer");
@@ -4760,9 +4768,13 @@ void App::wakeFromSleep() {
   if (storageReady_ && usingStorageBook_ && !currentBookPath_.isEmpty()) {
     const size_t resumeIndex = reader_.currentIndex();
     const int refreshedBookIndex = findBookIndexByPath(currentBookPath_);
+    BookOpenOptions reloadOptions;
+    reloadOptions.allowIndexBuild = false;
+    reloadOptions.allowEpubConversion = false;
+    reloadOptions.rebuildTimeEstimate = false;
     if (refreshedBookIndex >= 0 &&
-        loadBookAtIndex(static_cast<size_t>(refreshedBookIndex), nowMs, false, false, false,
-                        false)) {
+        loadBookAtIndex(static_cast<size_t>(refreshedBookIndex), nowMs,
+                        reloadOptions)) {
       reader_.seekTo(resumeIndex);
     } else {
       Serial.println("[app] current indexed book unavailable after wake");
@@ -4791,7 +4803,12 @@ bool App::restoreSavedBook(uint32_t nowMs) {
     return false;
   }
 
-  if (!loadBookAtIndex(static_cast<size_t>(bookIndex), nowMs, true, false, false, false)) {
+  BookOpenOptions loadOptions;
+  loadOptions.allowLegacyPositionFallback = true;
+  loadOptions.allowIndexBuild = false;
+  loadOptions.allowEpubConversion = false;
+  loadOptions.rebuildTimeEstimate = false;
+  if (!loadBookAtIndex(static_cast<size_t>(bookIndex), nowMs, loadOptions)) {
     return false;
   }
 
@@ -4835,10 +4852,13 @@ void App::loadPendingBootBook(uint32_t nowMs) {
   pendingBootBookLoad_ = false;
   display_.renderStatus("Loading book", currentBookTitle_, "Please wait");
   const uint32_t startedMs = millis();
-  const bool allowIndexBuild = pendingBootBookLegacyFallback_;
-  const bool loaded = loadBookAtIndex(pendingBootBookIndex_, nowMs,
-                                      pendingBootBookLegacyFallback_, allowIndexBuild, false,
-                                      false);
+  BookOpenOptions loadOptions;
+  loadOptions.allowLegacyPositionFallback = pendingBootBookLegacyFallback_;
+  loadOptions.allowIndexBuild = pendingBootBookLegacyFallback_;
+  loadOptions.allowEpubConversion = false;
+  loadOptions.rebuildTimeEstimate = false;
+  const bool loaded =
+      loadBookAtIndex(pendingBootBookIndex_, nowMs, loadOptions);
   const uint32_t elapsedMs = millis() - startedMs;
   Serial.printf("[app] deferred book load %s in %lu ms\n", loaded ? "ok" : "failed",
                 static_cast<unsigned long>(elapsedMs));
@@ -4882,32 +4902,51 @@ void App::saveReadingPosition(bool force) {
                 currentBookPath_.c_str());
 }
 
-bool App::loadBookAtIndex(size_t index, uint32_t nowMs, bool allowLegacyPositionFallback,
-                          bool allowIndexBuild, bool allowEpubConversion,
-                          bool rebuildTimeEstimate) {
+bool App::loadBookAtIndex(size_t index, uint32_t nowMs,
+                          const BookOpenOptions &options) {
   BookMetadata book;
   String loadedPath;
   size_t loadedIndex = index;
-  const String initialLabel = storage_.bookDisplayName(index);
-  renderStorageStatus("Opening book", initialLabel.c_str(),
-                      allowIndexBuild ? "Checking index" : "Checking saved index", 5);
-  if (!storage_.loadIndexedBook(index, activeBookStore_, book, &loadedPath, &loadedIndex,
-                                allowIndexBuild, allowEpubConversion)) {
-    return false;
+
+  {
+    // Open or build the indexed backing store before attaching it to reader.
+    const String initialLabel = storage_.bookDisplayName(index);
+    renderStorageStatus(
+        "Opening book", initialLabel.c_str(),
+        options.allowIndexBuild ? "Checking index" : "Checking saved index", 5);
+
+    StorageManager::IndexedBookLoadOptions loadOptions;
+    loadOptions.loadedPath = &loadedPath;
+    loadOptions.loadedIndex = &loadedIndex;
+    loadOptions.allowIndexBuild = options.allowIndexBuild;
+    loadOptions.allowEpubConversion = options.allowEpubConversion;
+    if (!storage_.loadIndexedBook(index, activeBookStore_, book, loadOptions)) {
+      return false;
+    }
   }
 
-  const String loadedTitle = book.title.isEmpty() ? displayNameForPath(loadedPath) : book.title;
-  renderStorageStatus("Opening book", loadedTitle.c_str(), "Loading word cache", 70);
+  const String loadedTitle = [&]() {
+    if (!book.title.isEmpty()) {
+      return book.title;
+    }
+    return displayNameForPath(loadedPath);
+  }();
+  const bool keepingExistingTimeCache = !options.rebuildTimeEstimate &&
+                                        timeEstimateCacheValid_ &&
+                                        currentBookPath_ == loadedPath;
 
-  const bool keepingExistingTimeCache =
-      !rebuildTimeEstimate && timeEstimateCacheValid_ && currentBookPath_ == loadedPath;
-  reader_.setWordSource(&activeBookStore_, nowMs);
-  if (reader_.wordCount() == 0 || reader_.currentWord().isEmpty()) {
-    Serial.printf("[app] failed to read first indexed word from %s\n", loadedPath.c_str());
-    activeBookStore_.close();
-    reader_.clearLoadedBook(nowMs);
-    renderStorageStatus("Book open failed", loadedTitle.c_str(), "Word cache unreadable", 100);
-    return false;
+  {
+    // Attach the indexed store and force the first word read while errors are visible.
+    renderStorageStatus("Opening book", loadedTitle.c_str(),
+                        "Loading word cache", 70);
+    reader_.setWordSource(&activeBookStore_, nowMs);
+    if (reader_.wordCount() == 0 || reader_.currentWord().isEmpty()) {
+      Serial.printf("[app] failed to read first indexed word from %s\n", loadedPath.c_str());
+      activeBookStore_.close();
+      reader_.clearLoadedBook(nowMs);
+      renderStorageStatus("Book open failed", loadedTitle.c_str(), "Word cache unreadable", 100);
+      return false;
+    }
   }
 
   chapterMarkers_ = std::move(book.chapters);
@@ -4923,23 +4962,29 @@ bool App::loadBookAtIndex(size_t index, uint32_t nowMs, bool allowLegacyPosition
                        static_cast<uint32_t>(reader_.wordCount()));
   markBookRecent(currentBookPath_);
 
-  const uint32_t savedWordIndex =
-      savedWordIndexForBook(currentBookPath_, allowLegacyPositionFallback);
-  if (savedWordIndex != kNoSavedWordIndex) {
-    renderStorageStatus("Opening book", currentBookTitle_.c_str(), "Restoring position", 78);
-    reader_.seekTo(savedWordIndex);
-    lastSavedWordIndex_ = reader_.currentIndex();
-    Serial.printf("[app] restored book position word=%u key=%s\n",
-                  static_cast<unsigned int>(reader_.currentIndex()),
-                  bookPositionKey(currentBookPath_).c_str());
+  {
+    // Restore saved position after the active book identity has been committed.
+    const uint32_t savedWordIndex = savedWordIndexForBook(
+        currentBookPath_, options.allowLegacyPositionFallback);
+    if (savedWordIndex != kNoSavedWordIndex) {
+      renderStorageStatus("Opening book", currentBookTitle_.c_str(), "Restoring position", 78);
+      reader_.seekTo(savedWordIndex);
+      lastSavedWordIndex_ = reader_.currentIndex();
+      Serial.printf("[app] restored book position word=%u key=%s\n",
+                    static_cast<unsigned int>(reader_.currentIndex()),
+                    bookPositionKey(currentBookPath_).c_str());
+    }
   }
 
-  if (rebuildTimeEstimate) {
-    rebuildTimeEstimateCache();
-  } else if (!keepingExistingTimeCache) {
-    invalidateTimeEstimateCache();
-  } else {
-    renderStorageStatus("Opening book", currentBookTitle_.c_str(), "Using cached estimate", 92);
+  {
+    // Keep, rebuild, or invalidate the time estimate based on how the book was opened.
+    if (options.rebuildTimeEstimate) {
+      rebuildTimeEstimateCache();
+    } else if (!keepingExistingTimeCache) {
+      invalidateTimeEstimateCache();
+    } else {
+      renderStorageStatus("Opening book", currentBookTitle_.c_str(), "Using cached estimate", 92);
+    }
   }
 
   lastProgressSaveMs_ = nowMs;
@@ -5831,6 +5876,7 @@ String App::collectPhantomBeforeText(size_t currentIndex, size_t charTarget) con
   }
 
   String text;
+  text.reserve(totalChars);
   for (size_t index = startIndex; index < currentIndex; ++index) {
     if (!text.isEmpty()) {
       text += ' ';
@@ -5858,6 +5904,7 @@ String App::collectPhantomAfterText(size_t currentIndex, size_t charTarget) cons
   }
 
   String text;
+  text.reserve(totalChars);
   for (size_t index = currentIndex + 1; index < endIndex; ++index) {
     if (!text.isEmpty()) {
       text += ' ';

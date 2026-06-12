@@ -7,6 +7,9 @@
 #include <algorithm>
 #include <vector>
 
+#include "storage/fs/StorageFiles.h"
+#include "storage/fs/StoragePaths.h"
+#include "text/AsciiText.h"
 #include "text/LatinText.h"
 
 namespace {
@@ -15,8 +18,6 @@ constexpr const char *kConfigPaths[] = {
     "/config/rss.conf",
     "/rss.conf",
 };
-constexpr const char *kBooksPath = "/books";
-constexpr const char *kArticleFilesPath = "/books/articles";
 constexpr const char *kStatusTitle = "RSS";
 constexpr uint32_t kWifiConnectTimeoutMs = 15000;
 constexpr uint32_t kWifiConnectPollMs = 250;
@@ -30,37 +31,9 @@ constexpr uint8_t kMaxItemsPerFeed = 5;
 constexpr uint8_t kMaxArticlesPerCheck = 12;
 constexpr uint8_t kMaxFeedRedirects = 3;
 
-bool directoryExists(const char *path) {
-  File dir = SD_MMC.open(path);
-  const bool exists = dir && dir.isDirectory();
-  if (dir) {
-    dir.close();
-  }
-  return exists;
-}
-
-bool fileExists(const char *path) {
-  File file = SD_MMC.open(path);
-  const bool exists = file && !file.isDirectory();
-  if (file) {
-    file.close();
-  }
-  return exists;
-}
-
-bool ensureDirectory(const char *path) {
-  if (directoryExists(path)) {
-    return true;
-  }
-  if (fileExists(path)) {
-    Serial.printf("[rss] path is a file, not a directory: %s\n", path);
-    return false;
-  }
-  return SD_MMC.mkdir(path) || directoryExists(path);
-}
-
 bool ensureArticleDirectory() {
-  return ensureDirectory(kBooksPath) && ensureDirectory(kArticleFilesPath);
+  return StorageFiles::ensureDirectory(StoragePaths::kBooksPath, "rss") &&
+         StorageFiles::ensureDirectory(StoragePaths::kArticleFilesPath, "rss");
 }
 
 String trimCopy(String value) {
@@ -75,25 +48,8 @@ bool startsWithHttp(const String &url) {
 }
 
 bool isSafeFilenameChar(char c) {
-  return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') ||
-         c == '-' || c == '_' || c == ' ' || c == '.';
-}
-
-char lowerAscii(char c) {
-  return (c >= 'A' && c <= 'Z') ? static_cast<char>(c + ('a' - 'A')) : c;
-}
-
-int hexValue(char c) {
-  if (c >= '0' && c <= '9') {
-    return c - '0';
-  }
-  if (c >= 'a' && c <= 'f') {
-    return c - 'a' + 10;
-  }
-  if (c >= 'A' && c <= 'F') {
-    return c - 'A' + 10;
-  }
-  return -1;
+  return AsciiText::isAlphaNumeric(c) || c == '-' || c == '_' || c == ' ' ||
+         c == '.';
 }
 
 bool parseNumericEntity(const String &entity, uint32_t &codepoint) {
@@ -114,8 +70,8 @@ bool parseNumericEntity(const String &entity, uint32_t &codepoint) {
 
   for (; index < entity.length(); ++index) {
     const int digit =
-        base == 16 ? hexValue(entity[index])
-                   : (entity[index] >= '0' && entity[index] <= '9' ? entity[index] - '0' : -1);
+        base == 16 ? AsciiText::hexValue(entity[index])
+                   : (AsciiText::isDigit(entity[index]) ? entity[index] - '0' : -1);
     if (digit < 0 || digit >= base) {
       return false;
     }
@@ -123,13 +79,6 @@ bool parseNumericEntity(const String &entity, uint32_t &codepoint) {
   }
 
   return codepoint <= 0x10FFFF && !(codepoint >= 0xD800 && codepoint <= 0xDFFF);
-}
-
-void appendText(String &target, const char *text) {
-  while (*text != '\0') {
-    target += *text;
-    ++text;
-  }
 }
 
 bool appendDecodedCodepoint(String &target, uint32_t codepoint) {
@@ -160,7 +109,7 @@ bool appendDecodedCodepoint(String &target, uint32_t codepoint) {
       target += 'c';
       return true;
     case 0x00A3:
-      appendText(target, "GBP");
+      target += "GBP";
       return true;
     case 0x00A4:
       target += '$';
@@ -169,16 +118,16 @@ bool appendDecodedCodepoint(String &target, uint32_t codepoint) {
       target += 'Y';
       return true;
     case 0x00A9:
-      appendText(target, "(c)");
+      target += "(c)";
       return true;
     case 0x00AE:
-      appendText(target, "(r)");
+      target += "(r)";
       return true;
     case 0x00B0:
-      appendText(target, "deg");
+      target += "deg";
       return true;
     case 0x00B1:
-      appendText(target, "+/-");
+      target += "+/-";
       return true;
     case 0x00B2:
       target += '2';
@@ -190,13 +139,13 @@ bool appendDecodedCodepoint(String &target, uint32_t codepoint) {
       target += '1';
       return true;
     case 0x00BC:
-      appendText(target, "1/4");
+      target += "1/4";
       return true;
     case 0x00BD:
-      appendText(target, "1/2");
+      target += "1/2";
       return true;
     case 0x00BE:
-      appendText(target, "3/4");
+      target += "3/4";
       return true;
     case 0x00D7:
       target += 'x';
@@ -213,7 +162,7 @@ bool appendDecodedCodepoint(String &target, uint32_t codepoint) {
     case 0x2013:
     case 0x2014:
     case 0x2015:
-      appendText(target, " - ");
+      target += " - ";
       return true;
     case 0x2018:
     case 0x2019:
@@ -241,7 +190,7 @@ bool appendDecodedCodepoint(String &target, uint32_t codepoint) {
       target += '*';
       return true;
     case 0x2026:
-      appendText(target, "...");
+      target += "...";
       return true;
     default:
       return false;
@@ -319,11 +268,11 @@ bool decodeXmlEntity(const String &entity, String &decoded) {
     return true;
   }
   if (entity == "ndash" || entity == "mdash") {
-    appendText(decoded, " - ");
+    decoded += " - ";
     return true;
   }
   if (entity == "hellip") {
-    appendText(decoded, "...");
+    decoded += "...";
     return true;
   }
   if (entity == "rsquo" || entity == "lsquo" || entity == "sbquo") {
@@ -377,7 +326,8 @@ String decodeXmlEntitiesOnce(const String &value) {
 
 bool matchesIgnoreCaseAt(const String &text, size_t index, const char *needle) {
   for (size_t i = 0; needle[i] != '\0'; ++i) {
-    if (index + i >= text.length() || lowerAscii(text[index + i]) != lowerAscii(needle[i])) {
+    if (index + i >= text.length() ||
+        AsciiText::toLower(text[index + i]) != AsciiText::toLower(needle[i])) {
       return false;
     }
   }
@@ -730,11 +680,13 @@ bool RssFeedManager::fetchUrl(const String &url, String &body, String &error,
       return false;
     }
 
-    body = "";
-    body.reserve(8192);
     uint8_t buffer[512];
     size_t totalRead = 0;
     const int reportedSize = http.getSize();
+    const size_t reserveBytes =
+        reportedSize > 0 ? std::min(static_cast<size_t>(reportedSize), kMaxFeedBytes) : 8192;
+    body = "";
+    body.reserve(reserveBytes);
     const uint32_t startedMs = millis();
     uint32_t lastByteMs = startedMs;
     uint32_t lastReportMs = 0;
@@ -916,7 +868,8 @@ bool RssFeedManager::saveItem(const FeedItem &item, Preferences &preferences, Re
     Serial.println("[rss] article folder unavailable");
     return false;
   }
-  const String finalPath = String(kArticleFilesPath) + "/" + filenameForItem(item);
+  const String finalPath =
+      String(StoragePaths::kArticleFilesPath) + "/" + filenameForItem(item);
   const String tmpPath = finalPath + ".tmp";
   SD_MMC.remove(tmpPath);
 
@@ -1006,7 +959,7 @@ String RssFeedManager::attributeValue(const String &text, const String &tagPrefi
     int attrIndex = indexOfIgnoreCase(text, needle.c_str(), tagStart, static_cast<size_t>(tagEnd));
     if (attrIndex >= 0) {
       int valueStart = attrIndex + needle.length();
-      while (valueStart < tagEnd && isspace(static_cast<unsigned char>(text[valueStart]))) {
+      while (valueStart < tagEnd && AsciiText::isWhitespace(text[valueStart])) {
         ++valueStart;
       }
       if (valueStart < tagEnd) {
@@ -1020,7 +973,7 @@ String RssFeedManager::attributeValue(const String &text, const String &tagPrefi
           }
         } else {
           int valueEnd = valueStart;
-          while (valueEnd < tagEnd && !isspace(static_cast<unsigned char>(text[valueEnd])) &&
+          while (valueEnd < tagEnd && !AsciiText::isWhitespace(text[valueEnd]) &&
                  text[valueEnd] != '>') {
             ++valueEnd;
           }
