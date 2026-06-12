@@ -811,22 +811,22 @@ namespace IndexedBook {
             SD_MMC.remove(indexPath);
             SD_MMC.remove(dataPath);
             errno = 0;
-            const bool indexRenamed = SD_MMC.rename(tmpIndexPath, indexPath);
-            const int indexRenameErrno = errno;
-            bool dataRenamed = false;
-            int dataRenameErrno = 0;
-            if (indexRenamed) {
+            const bool dataRenamed = SD_MMC.rename(tmpDataPath, dataPath);
+            const int dataRenameErrno = errno;
+            bool indexRenamed = false;
+            int indexRenameErrno = 0;
+            if (dataRenamed) {
                 errno = 0;
-                dataRenamed = SD_MMC.rename(tmpDataPath, dataPath);
-                dataRenameErrno = errno;
+                indexRenamed = SD_MMC.rename(tmpIndexPath, indexPath);
+                indexRenameErrno = errno;
             }
             const bool renamed = indexRenamed && dataRenamed;
             if (!renamed) {
+                if (!dataRenamed) {
+                    StorageFiles::logError("storage-index", "rename data", tmpDataPath, dataPath, dataRenameErrno);
+                }
                 if (!indexRenamed) {
                     StorageFiles::logError("storage-index", "rename index", tmpIndexPath, indexPath, indexRenameErrno);
-                }
-                if (indexRenamed && !dataRenamed) {
-                    StorageFiles::logError("storage-index", "rename data", tmpDataPath, dataPath, dataRenameErrno);
                 }
                 SD_MMC.remove(tmpIndexPath);
                 SD_MMC.remove(tmpDataPath);
