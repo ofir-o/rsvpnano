@@ -87,7 +87,6 @@ constexpr uint32_t TOUCH_RECOVERY_EVENT_IGNORE_MS = 0;
 
 constexpr int TCA9554_ADDRESS = 0x20;
 constexpr uint8_t TCA9554_PIN_BACKLIGHT_ENABLE = 1;
-constexpr uint8_t TCA9554_PIN_BATTERY_ADC_ENABLE = 1;
 constexpr uint8_t TCA9554_PIN_SYS_EN = 6;
 constexpr uint8_t TCA9554_PIN_AUDIO_ENABLE = 7;
 

@@ -204,13 +204,14 @@ constexpr size_t kSettingsHomeDisplayIndex = 2;
 constexpr size_t kSettingsHomeTypographyIndex = 3;
 constexpr size_t kSettingsHomeWifiIndex = 4;
 constexpr size_t kSettingsHomeUpdateIndex = 5;
+constexpr size_t kSettingsHomeFirmwareVersionIndex = 6;
 constexpr size_t kSettingsHomeRestructuredDisplayIndex = 1;
 constexpr size_t kSettingsHomeRestructuredPacingIndex = 2;
 constexpr size_t kSettingsHomeRestructuredTypographyIndex = 3;
 constexpr size_t kSettingsHomeRestructuredWifiIndex = 4;
 constexpr size_t kSettingsHomeRestructuredUpdateIndex = 5;
-constexpr size_t kSettingsHomeRestructuredSdCardIndex = 6;
-constexpr size_t kSettingsHomeFirmwareVersionIndex = 7;
+constexpr size_t kSettingsHomeRestructuredFirmwareVersionIndex = 6;
+constexpr size_t kSettingsHomeRestructuredSdCardIndex = 7;
 constexpr size_t kSettingsDisplayThemeIndex = 1;
 constexpr size_t kSettingsDisplayBrightnessIndex = 2;
 constexpr size_t kSettingsDisplayHandednessIndex = 3;
@@ -3638,6 +3639,8 @@ void App::selectRestructuredSettingsItem(uint32_t nowMs) {
       case kSettingsHomeRestructuredUpdateIndex:
         runFirmwareUpdate(preferredOtaConfig(), false, nowMs);
         return;
+      case kSettingsHomeRestructuredFirmwareVersionIndex:
+        return;
       case kSettingsHomeRestructuredSdCardIndex:
         runSdCardCheck(nowMs);
         return;
@@ -4394,6 +4397,7 @@ void App::rebuildSettingsMenuItems() {
       settingsMenuItems_.push_back(uiText(UiText::TypographyTune));
       settingsMenuItems_.push_back("Wi-Fi");
       settingsMenuItems_.push_back(firmwareUpdateMenuLabel());
+      settingsMenuItems_.push_back("Installed: " + firmwareVersionLabel());
       settingsMenuItems_.push_back("SD card check");
     } else if (menuScreen_ == MenuScreen::SettingsDisplay) {
       settingsMenuItems_.push_back(uiText(UiText::Back));

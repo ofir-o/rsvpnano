@@ -28,7 +28,9 @@ Use the hosted flasher:
 
 Open it in Chrome or Edge on desktop, connect the device over USB, and follow the installer prompts. The flasher uses ESP Web Tools and Web Serial, so it must run from HTTPS or localhost.
 
-Most devices should use the default Waveshare 3.49B rev1 firmware option. If you bought a newer Waveshare batch and the device boots but brightness/backlight control does not respond, try the rev2 firmware option instead. The rev2 build uses the alternate GPIO42 backlight profile.
+Most ESP32-S3 Touch LCD 3.49 devices should use the default rev1 firmware option. If a newer
+Waveshare batch boots but brightness or backlight control does not respond, try the rev2 firmware
+option instead; it uses the alternate GPIO42 backlight profile.
 
 The hosted flasher installs the latest published GitHub Release. For `v0.0.5`, that means the release build includes the firmware, SD card, RSS, companion sync, web companion, and settings work described below.
 
@@ -393,6 +395,9 @@ web/firmware/rsvp-nano-ota.bin
 web/firmware/rsvp-nano-rev2.bin
 web/firmware/rsvp-nano-rev2-ota.bin
 web/firmware/rsvp-nano-esp32-s3-touch-lcd-3.49-ota.bin
+web/firmware/rsvp-nano-rev2.bin
+web/firmware/rsvp-nano-rev2-ota.bin
+web/firmware/rsvp-nano-esp32-s3-touch-lcd-3.49-rev2-ota.bin
 web/firmware/rsvp-nano-esp32-s3-touch-amoled-2.41-ota.bin
 web/firmware/manifest.json
 web/firmware/manifest-rev2.json
