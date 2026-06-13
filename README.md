@@ -30,6 +30,8 @@ Open it in Chrome or Edge on desktop, connect the device over USB, and follow th
 
 The hosted flasher installs the latest published GitHub Release. For `v0.0.5`, that means the release build includes the firmware, SD card, RSS, companion sync, web companion, and settings work described below.
 
+_ insure your usb cable is a data cable _
+
 ## Prepare The SD Card
 
 Use a microSD card formatted as FAT32.
