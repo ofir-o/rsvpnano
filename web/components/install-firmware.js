@@ -1,7 +1,7 @@
 const FLASH_KEY = "rsvpnano_last_flash";
 
 function timeAgo(ts) {
-  const s = Math.floor((Date.now() - ts) / 1000);
+  const s = Math.max(0, Math.floor((Date.now() - ts) / 1000));
   if (s < 60) return "just now";
   const m = Math.floor(s / 60);
   if (m < 60) return m + (m === 1 ? " minute ago" : " minutes ago");
@@ -29,14 +29,17 @@ class InstallFirmware extends HTMLElement {
     ];
 
     this.innerHTML = `
-      <section class="card install-steps" id="install-section">
-        <button class="section-header" id="install-toggle" type="button" aria-expanded="true">
-          <div style="flex:1;display:flex;align-items:center;gap:10px">
+      <section class="card step-card" id="install-section">
+        <button class="step-card-toggle" id="install-toggle" type="button" aria-expanded="true" aria-controls="install-content">
+          <span class="section-header-main">
             <span class="step-number">1</span>
-            <h2>Install Firmware</h2>
-          </div>
+            <span class="section-header-label">
+              <span class="section-kicker">Browser Flasher</span>
+              <span class="section-title">Install Firmware</span>
+            </span>
+          </span>
           <span class="flash-history" id="flash-history"></span>
-          <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+          <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>
         </button>
         <div class="section-body" id="install-content">
           <div class="section-body-inner">
@@ -58,8 +61,18 @@ class InstallFirmware extends HTMLElement {
               </div>
               <p>${option.note}</p>
               <ul class="feature-list"></ul>
+              <div class="uptodate-badge" hidden>
+                <span class="uptodate-left">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                  Up to date
+                </span>
+                <span class="uptodate-right">
+                  <span class="uptodate-version"></span>
+                  <span class="uptodate-ago"></span>
+                </span>
+              </div>
               <esp-web-install-button manifest="${option.manifest}">
-                <button slot="activate">Install Firmware</button>
+                <button class="firmware-install-btn" slot="activate">Install Firmware</button>
                 <span slot="unsupported">Use Chrome or Edge on desktop with Web Serial support.</span>
                 <span slot="not-allowed">This page must be opened over HTTPS or localhost.</span>
               </esp-web-install-button>
@@ -74,12 +87,13 @@ class InstallFirmware extends HTMLElement {
     this._section = this.querySelector("#install-section");
     this._historyEl = this.querySelector("#flash-history");
 
-    this.querySelector("#install-toggle").addEventListener("click", () => {
-      this._section.classList.toggle("is-collapsed");
-      this.querySelector("#install-toggle").setAttribute(
-        "aria-expanded",
-        this._section.classList.contains("is-collapsed") ? "false" : "true",
-      );
+    const toggle = this.querySelector("#install-toggle");
+    const content = this.querySelector("#install-content");
+    toggle.addEventListener("click", () => {
+      const collapsed = !this._section.classList.contains("is-collapsed");
+      this._section.classList.toggle("is-collapsed", collapsed);
+      toggle.setAttribute("aria-expanded", collapsed ? "false" : "true");
+      content.hidden = collapsed;
     });
 
     this._showFlashHistory();
@@ -89,12 +103,13 @@ class InstallFirmware extends HTMLElement {
     this.querySelectorAll(".install-option").forEach((option) => {
       option.querySelector('button[slot="activate"]').addEventListener("click", () => {
         this._activeInstall = {
+          manifest: option.dataset.manifest,
           title: option.dataset.title,
           version: option.dataset.version,
         };
       });
 
-      fetch(option.dataset.manifest)
+      fetch(option.dataset.manifest, { cache: "no-store" })
         .then(r => r.json())
         .then(m => {
           option.dataset.version = m.version;
@@ -104,46 +119,125 @@ class InstallFirmware extends HTMLElement {
             const ul = option.querySelector(".feature-list");
             ul.innerHTML = m.features.map(f => "<li>" + f + "</li>").join("");
           }
-          this._updateButtonText();
+          this._refreshInstallOption(option);
+          this._showFlashHistory();
         });
-      });
+    });
+  }
+
+  _readFlashData() {
+    try {
+      return JSON.parse(localStorage.getItem(FLASH_KEY));
+    } catch (e) {
+      return null;
+    }
   }
 
   _showFlashHistory() {
-    try {
-      const data = JSON.parse(localStorage.getItem(FLASH_KEY));
-      if (data && data.timestamp) {
-        const versionLabel = data.version ? data.version + " " : "";
-        this._historyEl.textContent = versionLabel + "flashed " + timeAgo(data.timestamp);
-      } else {
-        this._historyEl.textContent = "No installations in history";
-      }
-    } catch (e) {
+    const data = this._readFlashData();
+    if (!data || !data.timestamp) {
       this._historyEl.textContent = "No installations in history";
+      this._historyEl.classList.remove("update-available");
+      return;
+    }
+
+    const flashedOption = this._optionForFlashData(data);
+    const hasUpdate =
+      flashedOption?.dataset.version && data.version && flashedOption.dataset.version !== data.version;
+    if (hasUpdate) {
+      this._historyEl.textContent = "Update available";
+      this._historyEl.classList.add("update-available");
+    } else {
+      const titleLabel = data.title ? data.title + " " : "";
+      const versionLabel = data.version ? data.version + " " : "";
+      this._historyEl.textContent = titleLabel + versionLabel + "flashed " + timeAgo(data.timestamp);
+      this._historyEl.classList.remove("update-available");
     }
   }
 
   _autoCollapse() {
-    try {
-      const data = JSON.parse(localStorage.getItem(FLASH_KEY));
-      if (data && data.timestamp) {
-        this._section.classList.add("is-collapsed");
-        this.querySelector("#install-toggle").setAttribute("aria-expanded", "false");
-      }
-    } catch (e) {}
+    const data = this._readFlashData();
+    if (data && data.timestamp) {
+      this._section.classList.add("is-collapsed");
+      this.querySelector("#install-toggle").setAttribute("aria-expanded", "false");
+      this.querySelector("#install-content").hidden = true;
+    }
   }
 
-  _updateButtonText() {
-    try {
-      const data = JSON.parse(localStorage.getItem(FLASH_KEY));
-      this.querySelectorAll(".install-option").forEach((option) => {
-        const btn = option.querySelector('button[slot="activate"]');
-        const version = option.dataset.version;
-        if (btn && data && data.version && version && data.version !== version) {
-          btn.textContent = "Update Firmware";
-        }
-      });
-    } catch (e) {}
+  _optionForFlashData(data) {
+    if (!data) return null;
+    return Array.from(this.querySelectorAll(".install-option")).find((option) => {
+      if (data.manifest) return option.dataset.manifest === data.manifest;
+      if (data.title) return option.dataset.title === data.title;
+      return false;
+    }) || null;
+  }
+
+  _refreshInstallButtons() {
+    this.querySelectorAll(".install-option").forEach((option) => this._refreshInstallOption(option));
+  }
+
+  _refreshInstallOption(option) {
+    const data = this._readFlashData();
+    const installBtn = option.querySelector(".firmware-install-btn");
+    const uptodateBadge = option.querySelector(".uptodate-badge");
+    const espButton = installBtn?.closest("esp-web-install-button");
+    if (!installBtn || !uptodateBadge || !espButton) return;
+
+    const version = option.dataset.version;
+    const sameFirmware = data?.manifest
+      ? data.manifest === option.dataset.manifest
+      : data?.title === option.dataset.title;
+    const isUpToDate = sameFirmware && data?.version && version && data.version === version;
+    const hasUpdate = sameFirmware && data?.version && version && data.version !== version;
+
+    if (isUpToDate) {
+      uptodateBadge.hidden = false;
+      espButton.hidden = true;
+      const utdVersion = option.querySelector(".uptodate-version");
+      const utdAgo = option.querySelector(".uptodate-ago");
+      if (utdVersion) utdVersion.textContent = data.version;
+      if (utdAgo) utdAgo.textContent = timeAgo(data.timestamp);
+
+      let reinstallLink = option.querySelector(".uptodate-reinstall");
+      if (!reinstallLink) {
+        reinstallLink = document.createElement("button");
+        reinstallLink.className = "uptodate-reinstall";
+        reinstallLink.addEventListener("click", () => {
+          espButton.style.position = "absolute";
+          espButton.style.opacity = "0";
+          espButton.style.pointerEvents = "none";
+          espButton.hidden = false;
+          installBtn.click();
+          espButton.hidden = true;
+          espButton.style.position = "";
+          espButton.style.opacity = "";
+          espButton.style.pointerEvents = "";
+        });
+        uptodateBadge.insertAdjacentElement("afterend", reinstallLink);
+      }
+      reinstallLink.textContent = "Install Firmware · " + version;
+      reinstallLink.hidden = false;
+    } else {
+      uptodateBadge.hidden = true;
+      espButton.hidden = false;
+      const reinstallLink = option.querySelector(".uptodate-reinstall");
+      if (reinstallLink) reinstallLink.hidden = true;
+
+      if (hasUpdate) {
+        installBtn.innerHTML =
+          '<span>' +
+          '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><path d="M12 19V5"/><path d="M5 12l7-7 7 7"/></svg>' +
+          "Update Firmware</span>" +
+          '<span class="btn-version"><span>' + version + "</span>" +
+          "<span>" + timeAgo(data.timestamp) + "</span></span>";
+      } else {
+        const versionTag = version
+          ? '<span class="btn-version">' + version + "</span>"
+          : "";
+        installBtn.innerHTML = "<span>Install Firmware</span>" + versionTag;
+      }
+    }
   }
 
   _observeInstallDialog() {
@@ -155,20 +249,21 @@ class InstallFirmware extends HTMLElement {
           let saved = false;
           const pollTimer = setInterval(() => {
             if (!document.body.contains(node)) { clearInterval(pollTimer); return; }
-            if (saved) return;
-            try {
-              const text = node.shadowRoot?.textContent || "";
-              if (text.indexOf("Installation complete") !== -1) {
-                saved = true;
-                clearInterval(pollTimer);
-                localStorage.setItem(FLASH_KEY, JSON.stringify({
-                  version: this._activeInstall?.version,
-                  title: this._activeInstall?.title,
-                  timestamp: Date.now(),
-                }));
-                this._showFlashHistory();
-              }
-            } catch (e) {}
+            if (saved || !node.shadowRoot) return;
+
+            const msg = node.shadowRoot.querySelector("ewt-page-message");
+            if (!msg || !msg.label || String(msg.label).indexOf("complete") === -1) return;
+
+            saved = true;
+            clearInterval(pollTimer);
+            localStorage.setItem(FLASH_KEY, JSON.stringify({
+              manifest: this._activeInstall?.manifest,
+              title: this._activeInstall?.title,
+              version: this._activeInstall?.version,
+              timestamp: Date.now(),
+            }));
+            this._showFlashHistory();
+            this._refreshInstallButtons();
           }, 500);
 
           setTimeout(() => clearInterval(pollTimer), 600000);
