@@ -195,9 +195,7 @@ class DisplayManager {
   uint8_t brightnessPercent_ = 100;
   bool darkMode_ = true;
   bool nightMode_ = false;
-  BoardConfig::UiOrientation uiOrientation_ =
-      BoardConfig::UI_ROTATED_180 ? BoardConfig::UiOrientation::LandscapeFlipped
-                                  : BoardConfig::UiOrientation::Landscape;
+  BoardConfig::UiOrientation uiOrientation_ = BoardConfig::DEFAULT_UI_ORIENTATION;
   bool tickerPlaybackFrameActive_ = false;
   String lastRenderKey_;
   String batteryLabel_;

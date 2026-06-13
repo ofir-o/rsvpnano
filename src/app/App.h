@@ -81,10 +81,12 @@ class App {
 
   enum class MenuScreen {
     Main,
+    Articles,
     SettingsHome,
     SettingsDisplay,
     SettingsPacing,
     WifiSettings,
+    WifiNetworkSettings,
     WifiNetworks,
     TextEntry,
     TypographyTuning,
@@ -93,6 +95,8 @@ class App {
     RestartConfirm,
     SdCardRepairConfirm,
     UpdateConfirm,
+    QuickSettings,
+    QuickSync,
     FocusTimerGenres,
     FocusTimerSession,
   };
@@ -180,8 +184,14 @@ class App {
   void maybeSaveReadingPosition(uint32_t nowMs);
   void handleBootButton(uint32_t nowMs);
   void handlePowerButton(uint32_t nowMs);
+  void handleKeyButton(uint32_t nowMs);
   bool handleStandbyCombo(uint32_t nowMs);
+  void registerBootButtonTap(uint32_t nowMs);
+  void processPendingBootButtonTap(uint32_t nowMs);
+  void executeBootButtonSingleTap(uint32_t nowMs);
+  void clearBootButtonTapSequence();
   void toggleMenuFromPowerButton(uint32_t nowMs);
+  void toggleReaderPlaybackFromShortcut(uint32_t nowMs);
   void openMainMenu(uint32_t nowMs);
   void cycleBrightness();
   void cycleThemeMode(uint32_t nowMs);
@@ -200,6 +210,10 @@ class App {
   void updateBatteryWarningOverlay(uint32_t nowMs);
   void handleTouch(uint32_t nowMs);
   void applyPausedTouchGesture(const TouchEvent &event, uint32_t nowMs);
+  bool handleTopEdgeMenuSwipe(const TouchEvent &event, uint32_t nowMs, int deltaX, int deltaY,
+                              bool ended);
+  bool handleBottomEdgeQuickSettingsSwipe(const TouchEvent &event, uint32_t nowMs, int deltaX,
+                                          int deltaY, bool ended);
   void handleReaderTap(uint16_t x, uint16_t y, uint32_t nowMs);
   bool handleFooterMetricTap(uint16_t x, uint16_t y, uint32_t nowMs);
   bool handleBatteryBadgeTap(uint16_t x, uint16_t y, uint32_t nowMs);
@@ -225,6 +239,13 @@ class App {
   void applyFocusTimerTouch(const TouchEvent &event, uint32_t nowMs);
   void moveMenuSelection(int direction);
   void selectMenuItem(uint32_t nowMs);
+  bool isSettingsMenuScreen(MenuScreen screen) const;
+  void openArticlesMenu();
+  void selectArticlesItem(uint32_t nowMs);
+  void openQuickSettings(uint32_t nowMs);
+  void selectQuickSettingsItem(uint32_t nowMs);
+  void openQuickSync();
+  void selectQuickSyncItem(uint32_t nowMs);
   void openFocusTimer();
   void updateFocusTimer(uint32_t nowMs);
   void resetFocusTimer();
@@ -232,7 +253,9 @@ class App {
   void selectFocusTimerGenre(uint32_t nowMs);
   void openSettings();
   void selectSettingsItem(uint32_t nowMs);
+  void selectRestructuredSettingsItem(uint32_t nowMs);
   void openWifiSettings();
+  void openWifiNetworkSettings();
   void selectWifiSettingsItem(uint32_t nowMs);
   void openTypographyTuning();
   void selectTypographyTuningItem(uint32_t nowMs);
@@ -311,7 +334,7 @@ class App {
   void updateStandbyScreensaver(uint32_t nowMs, bool force = false);
   void enterPowerOff(uint32_t nowMs);
   void enterSleep(uint32_t nowMs);
-  void wakeFromSleep();
+  void wakeFromSleep(bool fullPeripheralReset = false);
   bool restoreSavedBook(uint32_t nowMs);
   bool prepareBootBookLoad();
   void loadPendingBootBook(uint32_t nowMs);
@@ -341,6 +364,7 @@ class App {
   int findBookIndexByPath(const String &path) const;
   void renderMenu();
   void renderMainMenu();
+  void renderArticlesMenu();
   void renderSettings();
   void renderTypographyTuning();
   void renderBookPicker();
@@ -348,6 +372,8 @@ class App {
   void renderRestartConfirm();
   void renderSdCardRepairConfirm();
   void renderUpdateConfirm();
+  void renderQuickSettings();
+  void renderQuickSync();
   void renderFocusTimerGenres();
   void renderFocusTimerSession();
   void renderActiveReader(uint32_t nowMs);
@@ -425,6 +451,7 @@ class App {
   ReadingLoop reader_;
   ButtonHandler button_;
   ButtonHandler powerButton_;
+  ButtonHandler keyButton_;
   TouchHandler touch_;
   StorageManager storage_;
   IndexedBookStore activeBookStore_;
@@ -439,6 +466,7 @@ class App {
   uint32_t bootStartedMs_ = 0;
   uint32_t lastActivityMs_ = 0;
   uint32_t lastStateLogMs_ = 0;
+  uint32_t powerButtonEventArmMs_ = 0;
   uint32_t wpmFeedbackUntilMs_ = 0;
   uint32_t lastProgressSaveMs_ = 0;
   uint32_t lastBatterySampleMs_ = 0;
@@ -446,9 +474,11 @@ class App {
   uint32_t lastScrollAnimationRenderMs_ = 0;
   uint32_t lastCompanionSyncRenderMs_ = 0;
   uint32_t lastReaderTapMs_ = 0;
+  uint32_t lastBootButtonTapMs_ = 0;
   uint32_t standbyComboStartedMs_ = 0;
   uint32_t standbyEnteredMs_ = 0;
   uint32_t lastStandbyFrameMs_ = 0;
+  uint32_t lastKeyButtonTapMs_ = 0;
   uint32_t standbyLifeGeneration_ = 0;
   uint32_t standbyScreensaverRng_ = 1;
   uint32_t chapterTransitionUntilMs_ = 0;
@@ -460,6 +490,7 @@ class App {
   size_t currentBookIndex_ = 0;
   size_t pendingBootBookIndex_ = 0;
   size_t menuSelectedIndex_ = 0;
+  size_t articlesSelectedIndex_ = 0;
   size_t settingsSelectedIndex_ = 0;
   size_t wifiNetworkSelectedIndex_ = 0;
   size_t bookPickerSelectedIndex_ = 0;
@@ -468,8 +499,11 @@ class App {
   size_t restartConfirmSelectedIndex_ = 0;
   size_t sdCardRepairConfirmSelectedIndex_ = 0;
   size_t updateConfirmSelectedIndex_ = 0;
+  size_t quickSettingsSelectedIndex_ = 0;
+  size_t quickSyncSelectedIndex_ = 0;
   size_t focusTimerGenreSelectedIndex_ = 0;
   uint8_t standbyTimerIndex_ = 0;
+  uint8_t bootButtonTapCount_ = 0;
   uint8_t brightnessLevelIndex_ = 4;
   uint8_t readerFontSizeIndex_ = 0;
   uint16_t pacingLongWordDelayMs_ = 200;
@@ -532,8 +566,13 @@ class App {
   bool lastReaderTapValid_ = false;
   bool bootButtonReleasedSinceBoot_ = false;
   bool bootButtonLongPressHandled_ = false;
+  bool bootButtonTapPending_ = false;
   bool powerButtonReleasedSinceBoot_ = false;
   bool powerButtonLongPressHandled_ = false;
+  bool keyButtonReleasedSinceBoot_ = false;
+  bool keyButtonLongPressHandled_ = false;
+  bool keyButtonTapArmed_ = false;
+  bool bookPickerArticlesOnly_ = false;
   bool powerOffStarted_ = false;
   bool standbyComboActive_ = false;
   bool standbyComboHandled_ = false;

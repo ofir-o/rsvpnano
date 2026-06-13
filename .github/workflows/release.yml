@@ -107,10 +107,12 @@ jobs:
           RSVP Nano firmware release.
 
           Assets:
-          - `rsvp-nano.bin` is the default rev1 full browser-flasher image.
-          - `rsvp-nano-ota.bin` is the default rev1 app-only OTA binary.
-          - `rsvp-nano-rev2.bin` is the rev2 full browser-flasher image for GPIO42 backlight boards.
-          - `rsvp-nano-rev2-ota.bin` is the rev2 app-only OTA binary.
+          - `rsvp-nano.bin` is the full browser-flasher image for fresh installs on the Touch LCD 3.49.
+          - `rsvp-nano-ota.bin` is the legacy app-only OTA binary for existing Touch LCD 3.49 devices.
+          - `rsvp-nano-rev2.bin` is the full browser-flasher image for Touch LCD 3.49 GPIO42 backlight boards.
+          - `rsvp-nano-rev2-ota.bin` is the Touch LCD 3.49 GPIO42 OTA binary.
+          - `rsvp-nano-esp32-s3-touch-lcd-3.49-ota.bin` is the Touch LCD 3.49 OTA binary.
+          - `rsvp-nano-esp32-s3-touch-amoled-2.41-ota.bin` is the Touch AMOLED 2.41 OTA binary.
           NOTES
           fi
 
@@ -120,14 +122,27 @@ jobs:
           RELEASE_TAG: ${{ steps.release.outputs.tag }}
           BUILD_SHA: ${{ steps.release.outputs.commit_sha }}
         run: |
-          gh release create "$RELEASE_TAG" \
-            web/firmware/rsvp-nano.bin \
-            web/firmware/rsvp-nano-ota.bin \
-            web/firmware/rsvp-nano-rev2.bin \
-            web/firmware/rsvp-nano-rev2-ota.bin \
-            --title "$RELEASE_TAG" \
-            --notes-file release-notes.md \
-            --target "$BUILD_SHA"
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" \
+              web/firmware/rsvp-nano.bin \
+              web/firmware/rsvp-nano-ota.bin \
+              web/firmware/rsvp-nano-rev2.bin \
+              web/firmware/rsvp-nano-rev2-ota.bin \
+              web/firmware/rsvp-nano-esp32-s3-touch-lcd-3.49-ota.bin \
+              web/firmware/rsvp-nano-esp32-s3-touch-amoled-2.41-ota.bin \
+              --clobber
+          else
+            gh release create "$RELEASE_TAG" \
+              web/firmware/rsvp-nano.bin \
+              web/firmware/rsvp-nano-ota.bin \
+              web/firmware/rsvp-nano-rev2.bin \
+              web/firmware/rsvp-nano-rev2-ota.bin \
+              web/firmware/rsvp-nano-esp32-s3-touch-lcd-3.49-ota.bin \
+              web/firmware/rsvp-nano-esp32-s3-touch-amoled-2.41-ota.bin \
+              --title "$RELEASE_TAG" \
+              --notes-file release-notes.md \
+              --target "$BUILD_SHA"
+          fi
 
       - name: Configure GitHub Pages
         if: github.repository == 'ionutdecebal/rsvpnano'

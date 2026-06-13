@@ -13,7 +13,7 @@
 #include "display/EmbeddedOpenDyslexicFont70.h"
 #include "display/EmbeddedSerifFont.h"
 #include "display/EmbeddedSerifFont70.h"
-#include "display/axs15231b.h"
+#include "display/BoardDisplay.h"
 #include "text/LatinText.h"
 
 namespace {
@@ -47,8 +47,11 @@ constexpr int kTinyGlyphWidth = 5;
 constexpr int kTinyGlyphHeight = 7;
 constexpr int kTinyGlyphSpacing = 1;
 constexpr int kTinyScale = 2;
-constexpr int kFooterMarginX = 12;
-constexpr int kFooterMarginBottom = 8;
+constexpr int kReaderChromeMarginX = BoardConfig::READER_CHROME_MARGIN_X;
+constexpr int kReaderChromeMarginTop = BoardConfig::READER_CHROME_MARGIN_TOP;
+constexpr int kReaderChromeMarginBottom = BoardConfig::READER_CHROME_MARGIN_BOTTOM;
+constexpr int kReaderBatteryMarginX = BoardConfig::READER_BATTERY_MARGIN_X;
+constexpr int kReaderBatteryMarginTop = BoardConfig::READER_BATTERY_MARGIN_TOP;
 constexpr int kCompactMenuRowHeight = 22;
 constexpr int kCompactMenuX = 28;
 constexpr int kLibraryRowHeight = 38;
@@ -88,7 +91,7 @@ constexpr int kVirtualBufferWidth = kDisplayWidth;
 constexpr int kVirtualBufferHeight = kPanelNativeHeight;
 
 constexpr size_t kBytesPerPixel = sizeof(uint16_t);
-constexpr size_t kMaxChunkBytes = 16 * 1024;
+constexpr size_t kMaxChunkBytes = BoardConfig::DISPLAY_TX_CHUNK_BYTES;
 constexpr int kTxBufferWidth = kDisplayWidth > kPanelNativeWidth ? kDisplayWidth : kPanelNativeWidth;
 constexpr int kMaxChunkPhysicalRows = kMaxChunkBytes / (kTxBufferWidth * kBytesPerPixel);
 static_assert(kMaxChunkPhysicalRows > 0, "Display chunk buffer must hold at least one row");
@@ -912,8 +915,8 @@ void DisplayManager::setUiOrientation(BoardConfig::UiOrientation orientation) {
 }
 
 void DisplayManager::setUiRotated180(bool rotated180) {
-  setUiOrientation(rotated180 ? BoardConfig::UiOrientation::LandscapeFlipped
-                              : BoardConfig::UiOrientation::Landscape);
+  setUiOrientation(rotated180 ? BoardConfig::ROTATED_UI_ORIENTATION
+                              : BoardConfig::DEFAULT_UI_ORIENTATION);
 }
 
 void DisplayManager::setTypographyConfig(const TypographyConfig &config) {
@@ -966,7 +969,7 @@ bool DisplayManager::begin() {
   lastRenderKey_ = "";
   fillScreen(backgroundColor());
   applyBrightness();
-  ESP_LOGI(kDisplayTag, "AXS15231B LCD initialized");
+  ESP_LOGI(kDisplayTag, "Display initialized for %s", BoardConfig::BOARD_LABEL);
   return true;
 }
 
@@ -976,7 +979,7 @@ void DisplayManager::prepareForSleep() {
   }
 
   fillScreen(kTrueBlack);
-  axs15231bSleep();
+  boardDisplaySleep();
   initialized_ = false;
   tickerPlaybackFrameActive_ = false;
   lastRenderKey_ = "";
@@ -988,7 +991,7 @@ bool DisplayManager::wakeFromSleep() {
     return false;
   }
 
-  axs15231bWake();
+  boardDisplayWake();
   initialized_ = true;
   tickerPlaybackFrameActive_ = false;
   lastRenderKey_ = "";
@@ -1018,7 +1021,9 @@ bool DisplayManager::allocateBuffers() {
 }
 
 bool DisplayManager::initPanel() {
-  axs15231bInit();
+  if (!boardDisplayInit()) {
+    return false;
+  }
   ESP_LOGI(kDisplayTag, "Panel init sequence complete");
   return true;
 }
@@ -1028,11 +1033,10 @@ bool DisplayManager::drawBitmap(int xStart, int yStart, int xEnd, int yEnd, cons
     return false;
   }
 
-  axs15231bPushColors(static_cast<uint16_t>(xStart), static_cast<uint16_t>(yStart),
-                      static_cast<uint16_t>(xEnd - xStart),
-                      static_cast<uint16_t>(yEnd - yStart),
-                      static_cast<const uint16_t *>(colorData));
-  return true;
+  return boardDisplayPushColors(static_cast<uint16_t>(xStart), static_cast<uint16_t>(yStart),
+                                static_cast<uint16_t>(xEnd - xStart),
+                                static_cast<uint16_t>(yEnd - yStart),
+                                static_cast<const uint16_t *>(colorData));
 }
 
 void DisplayManager::fillScreen(uint16_t color) {
@@ -1574,13 +1578,14 @@ void DisplayManager::drawBatteryBadge(int logicalWidth, int logicalHeight) {
   }
 
   const int width = measureTinyTextWidth(batteryLabel_, kTinyScale);
-  const int x = std::max(kFooterMarginX, logicalWidth - kFooterMarginX - width);
-  const int y = logicalHeight > (kDisplayHeight * 2) ? kFooterMarginBottom + 8 : kFooterMarginBottom;
+  const int x = std::max(kReaderBatteryMarginX, logicalWidth - kReaderBatteryMarginX - width);
+  const int y = logicalHeight > (kDisplayHeight * 2) ? kReaderBatteryMarginTop + 8
+                                                      : kReaderBatteryMarginTop;
   drawTinyTextAt(batteryLabel_, x, y, footerColor(), kTinyScale);
 }
 
 void DisplayManager::drawPreviousSentenceHint() {
-  drawTinyTextAt("<<", kFooterMarginX, kFooterMarginBottom, footerColor(), kTinyScale);
+  drawTinyTextAt("<<", kReaderChromeMarginX, kReaderChromeMarginTop, footerColor(), kTinyScale);
 }
 
 void DisplayManager::drawFooter(const String &chapterLabel, const String &statusLabel,
@@ -1589,21 +1594,22 @@ void DisplayManager::drawFooter(const String &chapterLabel, const String &status
     return;
   }
 
-  const int y = kDisplayHeight - kTinyGlyphHeight * kTinyScale - kFooterMarginBottom;
-  int maxChapterWidth = kDisplayWidth - (kFooterMarginX * 2);
+  const int y = kDisplayHeight - kTinyGlyphHeight * kTinyScale - kReaderChromeMarginBottom;
+  int maxChapterWidth = kDisplayWidth - (kReaderChromeMarginX * 2);
 
   if (chrome.showProgress) {
     const String status = statusLabel.isEmpty() ? "0%" : statusLabel;
     const int statusWidth = measureTinyTextWidth(status, kTinyScale);
-    const int rightX = std::max(kFooterMarginX, kDisplayWidth - kFooterMarginX - statusWidth);
-    maxChapterWidth = std::max(0, rightX - kFooterMarginX - 18);
+    const int rightX =
+        std::max(kReaderChromeMarginX, kDisplayWidth - kReaderChromeMarginX - statusWidth);
+    maxChapterWidth = std::max(0, rightX - kReaderChromeMarginX - 18);
     drawTinyTextAt(status, rightX, y, footerColor(), kTinyScale);
   }
 
   if (chrome.showChapter) {
     const String chapter = fitTinyText(chapterLabel.isEmpty() ? "START" : chapterLabel,
                                       maxChapterWidth, kTinyScale);
-    drawTinyTextAt(chapter, kFooterMarginX, y, footerColor(), kTinyScale);
+    drawTinyTextAt(chapter, kReaderChromeMarginX, y, footerColor(), kTinyScale);
   }
 }
 
@@ -1728,8 +1734,8 @@ void DisplayManager::drawMenuItem(const String &item, int y, bool selected) {
 }
 
 void DisplayManager::applyBrightness() {
-  axs15231bSetBrightnessPercent(brightnessPercent_);
-  axs15231bSetBacklight(true);
+  boardDisplaySetBrightnessPercent(brightnessPercent_);
+  boardDisplaySetBacklight(true);
 }
 
 void DisplayManager::flushScaledFrame(int scale, int virtualWidth, int virtualHeight) {
@@ -2491,7 +2497,7 @@ void DisplayManager::renderScrollView(const std::vector<ContextWord> &words, uin
   const int overlayReserve = overlayText.isEmpty() ? 0 : (kTinyGlyphHeight * kTinyScale + 6);
   const bool showFooterRow = chrome.showChapter || chrome.showProgress;
   const int footerReserve =
-      showFooterRow ? (kTinyGlyphHeight * kTinyScale + kFooterMarginBottom + 6) : 6;
+      showFooterRow ? (kTinyGlyphHeight * kTinyScale + kReaderChromeMarginBottom + 6) : 6;
   const int textTop = kScrollTop;
   const int textBottom = virtualHeight - footerReserve - overlayReserve;
   const ReaderTypeface contextTypeface = currentReaderTypeface();

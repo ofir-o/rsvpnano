@@ -28,17 +28,16 @@ class TouchHandler {
   void setUiRotated180(bool rotated180);
 
  private:
-  static constexpr uint8_t kAddress = 0x3B;  // AXS15231B touch endpoint on the 3.49" board.
+  static constexpr uint8_t kAddress = BoardConfig::TOUCH_I2C_ADDRESS;
   bool initialized_ = false;
   uint32_t lastPollMs_ = 0;
   uint32_t backoffUntilMs_ = 0;
+  uint32_t ignoreEventsUntilMs_ = 0;
   uint32_t lastTouchSampleMs_ = 0;
   uint8_t consecutiveReadFailures_ = 0;
   uint8_t emptyTouchSamples_ = 0;
   bool touchActive_ = false;
-  BoardConfig::UiOrientation uiOrientation_ =
-      BoardConfig::UI_ROTATED_180 ? BoardConfig::UiOrientation::LandscapeFlipped
-                                  : BoardConfig::UiOrientation::Landscape;
+  BoardConfig::UiOrientation uiOrientation_ = BoardConfig::DEFAULT_UI_ORIENTATION;
   uint16_t lastX_ = 0;
   uint16_t lastY_ = 0;
 

@@ -58,6 +58,11 @@ constexpr uint32_t kEnvelopeReleaseMs = 12;
 }  // namespace
 
 bool AudioManager::begin() {
+  if (!BoardConfig::HAS_AUDIO_OUTPUT) {
+    available_ = false;
+    return false;
+  }
+
   if (available_) {
     return true;
   }
@@ -82,6 +87,10 @@ bool AudioManager::begin() {
 }
 
 bool AudioManager::beep() {
+  if (!BoardConfig::HAS_AUDIO_OUTPUT) {
+    return false;
+  }
+
   if (!prepareForBeep()) {
     return false;
   }
