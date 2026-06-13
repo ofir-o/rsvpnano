@@ -1,5 +1,7 @@
 #include "storage/index/BufferedWriter.h"
 
+#include <cstring>
+
 BufferedWriter::BufferedWriter(File& file, size_t capacity) : file_(file) {
     buffer_.reserve(capacity);
 }
@@ -34,7 +36,9 @@ bool BufferedWriter::write(const void* data, size_t len) {
         }
     }
 
-    buffer_.insert(buffer_.end(), bytes, bytes + len);
+    const size_t offset = buffer_.size();
+    buffer_.resize(offset + len);
+    std::memcpy(buffer_.data() + offset, bytes, len);
     return true;
 }
 

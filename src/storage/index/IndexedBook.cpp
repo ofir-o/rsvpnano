@@ -33,6 +33,7 @@ namespace IndexedBook {
         constexpr uint32_t kFnv1aPrime = 16777619UL;
         constexpr size_t kFingerprintSampleBytes = 512;
         constexpr size_t kParseBufferBytes = 4096;
+        constexpr size_t kSidecarWriteBufferBytes = 16 * 1024;
         constexpr size_t kIndexProgressStepBytes = 256UL * 1024UL;
         constexpr size_t kParseMemoryCheckWordInterval = 512;
         constexpr size_t kParseMinFreeHeapBytes = 32 * 1024;
@@ -626,7 +627,7 @@ namespace IndexedBook {
                     return false;
                 }
 
-                BufferedWriter dataWriter(dataFile);
+                BufferedWriter dataWriter(dataFile, kSidecarWriteBufferBytes);
                 dataContext.dataWriter = &dataWriter;
                 dataContext.metadata = &metadata;
 
@@ -713,7 +714,7 @@ namespace IndexedBook {
                     return false;
                 }
 
-                BufferedWriter indexWriter(indexFile);
+                BufferedWriter indexWriter(indexFile, kSidecarWriteBufferBytes);
                 if (!indexWriter.write(&header, sizeof(header))) {
                     indexWriter.discard();
                     indexFile.close();
@@ -743,13 +744,8 @@ namespace IndexedBook {
                     parseFailed = true;
                 }
 
-                // Write paragraph start offsets after the fixed-width word records.
-                if (!parseFailed && !indexWriter.seek(header.paragraphsOffset)) {
-                    Serial.printf("[storage-index] paragraph table seek failed: %s offset=%lu\n", tmpIndexPath.c_str(),
-                                  static_cast<unsigned long>(header.paragraphsOffset));
-                    parseFailed = true;
-                }
-
+                // Word records end exactly where the paragraph table begins, so keep
+                // the writer streaming sequentially.
                 for (size_t i = 0; !parseFailed && i < metadata.paragraphStarts.size(); ++i) {
                     const uint32_t wordIndex = static_cast<uint32_t>(metadata.paragraphStarts[i]);
                     if (!indexWriter.write(&wordIndex, sizeof(wordIndex))) {
@@ -759,13 +755,7 @@ namespace IndexedBook {
                     }
                 }
 
-                // Write chapter markers after the paragraph table.
-                if (!parseFailed && !indexWriter.seek(header.chaptersOffset)) {
-                    Serial.printf("[storage-index] chapter table seek failed: %s offset=%lu\n", tmpIndexPath.c_str(),
-                                  static_cast<unsigned long>(header.chaptersOffset));
-                    parseFailed = true;
-                }
-
+                // Chapter markers follow the paragraph table without a gap.
                 for (size_t i = 0; !parseFailed && i < metadata.chapters.size(); ++i) {
                     ChapterRecord record;
                     record.wordIndex = static_cast<uint32_t>(metadata.chapters[i].wordIndex);
