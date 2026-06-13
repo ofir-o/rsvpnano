@@ -12,7 +12,7 @@ It builds for Android, iOS, and JavaScript, and owns:
 Quick start:
 
 ```bash
-bash ./gradlew :conversionCore:testDebugUnitTest :conversionCore:publishWebConverterJs
+bash ./gradlew checkWeb
 python RSVPNanoCompanion/tools/run_conversion_parity.py
 ```
 

@@ -44,8 +44,8 @@ jobs:
           key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
           restore-keys: |
             ${{ runner.os }}-gradle-
-      - name: Run Gradle release assemble and tests
-        run: bash ./gradlew :conversionCore:testReleaseUnitTest :conversionCore:publishWebConverterJs :shared:testReleaseUnitTest :androidApp:assembleRelease --no-daemon
+      - name: Run Android checks
+        run: bash ./gradlew checkAndroid --no-daemon
       - name: Upload test results
         if: failure()
         uses: actions/upload-artifact@v4

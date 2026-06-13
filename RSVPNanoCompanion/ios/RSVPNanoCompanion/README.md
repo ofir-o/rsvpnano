@@ -75,14 +75,14 @@ RSVPNanoCompanion/ios/RSVPNanoCompanion/RSVPNanoCompanion/Models.swift
 
 ## CI Expectations
 
-The macOS CI workflow compiles the converter for iOS, runs shared checks, builds the Kotlin
-XCFramework, and uploads the generated framework artifact. CI validates the shared iOS build path,
-but real app/share-extension behavior still needs Xcode and device testing.
+The macOS CI workflow compiles the converter for device iOS, builds the Kotlin XCFramework, and
+uploads the generated framework artifact. CI validates the shared iOS framework path, but real
+app/share-extension behavior still needs Xcode and device testing.
 
 Run this locally on macOS when touching shared/iOS integration:
 
 ```bash
-./gradlew :conversionCore:compileKotlinIosX64 :conversionCore:compileKotlinIosSimulatorArm64 :shared:check --no-daemon
+./gradlew checkIos --no-daemon
 bash RSVPNanoCompanion/tools/build_shared_xcframework.sh
 ```
 

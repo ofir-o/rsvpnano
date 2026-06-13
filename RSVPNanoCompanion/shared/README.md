@@ -5,7 +5,9 @@ lives in `:conversionCore` and is consumed from this module.
 
 Quick start:
 
-- Run `bash ./gradlew :conversionCore:testDebugUnitTest :shared:check :androidApp:assembleDebug`.
+- Run Android checks with `bash ./gradlew checkAndroid`.
+- Run iOS checks with `bash ./gradlew checkIos`.
+- Run web converter checks with `bash ./gradlew checkWeb`.
 - Build the iOS XCFramework with `bash RSVPNanoCompanion/tools/build_shared_xcframework.sh`.
 - Add the produced iOS framework to Xcode or add the module to your Android project.
 

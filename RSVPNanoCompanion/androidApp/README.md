@@ -11,13 +11,13 @@ orchestration; `:conversionCore` owns document conversion.
 Install Android Studio or a JDK 17 + Android SDK environment, then run from the repository root:
 
 ```bash
-./gradlew :conversionCore:testDebugUnitTest :shared:check :androidApp:assembleDebug
+./gradlew checkAndroid
 ```
 
-The debug APK is written under:
+The release APK is written under:
 
 ```text
-RSVPNanoCompanion/androidApp/build/outputs/apk/debug/
+RSVPNanoCompanion/androidApp/build/outputs/apk/release/
 ```
 
 ## Run

@@ -39,8 +39,8 @@ jobs:
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
 
-      - name: Build web converter
-        run: bash ./gradlew :conversionCore:publishWebConverterJs --no-daemon
+      - name: Check and build web converter
+        run: bash ./gradlew checkWeb --no-daemon
 
       - name: Download latest release firmware
         env:

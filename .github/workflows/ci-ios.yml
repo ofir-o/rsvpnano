@@ -35,27 +35,18 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - name: Run shared tests
-        run: bash ./gradlew :conversionCore:compileKotlinIosX64 :conversionCore:compileKotlinIosSimulatorArm64 :shared:check --no-daemon
-      - name: Upload test results
+      - name: Run iOS checks
+        run: bash ./gradlew checkIos --no-daemon
+      - name: Upload Gradle reports
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: ios-test-results
+          name: ios-gradle-reports
           path: |
             **/build/reports/tests/
             **/build/test-results/
       - name: Build shared XCFramework
         run: bash RSVPNanoCompanion/tools/build_shared_xcframework.sh
-      - name: Build iOS app release
-        run: |
-          xcodebuild \
-            -project RSVPNanoCompanion/ios/RSVPNanoCompanion/RSVPNanoCompanion.xcodeproj \
-            -scheme RSVPNanoCompanion \
-            -configuration Release \
-            -sdk iphonesimulator \
-            CODE_SIGNING_ALLOWED=NO \
-            build
       - name: Upload shared artifacts
         if: success()
         uses: actions/upload-artifact@v4

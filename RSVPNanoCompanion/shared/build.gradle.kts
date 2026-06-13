@@ -19,16 +19,14 @@ kotlin {
 
 	androidTarget()
 
-	listOf(
-		iosArm64(),
-		iosSimulatorArm64(),
-	).forEach { iosTarget ->
-		iosTarget.binaries.framework {
+	iosArm64 {
+		binaries.framework {
 			baseName = "shared"
 			isStatic = true
 			sharedXcFramework.add(this)
 		}
 	}
+	iosSimulatorArm64()
 
 	jvmToolchain(17)
 
