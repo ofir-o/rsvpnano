@@ -182,6 +182,12 @@ enum UpdateConfirmItem : size_t {
   UpdateConfirmItemCount,
 };
 
+enum PowerOffConfirmItem : size_t {
+  PowerOffConfirmNo,
+  PowerOffConfirmYes,
+  PowerOffConfirmItemCount,
+};
+
 enum QuickSettingsItem : size_t {
   QuickSettingsBrightness,
   QuickSettingsTheme,
@@ -199,6 +205,7 @@ enum QuickSyncItem : size_t {
 constexpr size_t kRestartConfirmHeaderRows = 1;
 constexpr size_t kSdCardRepairConfirmHeaderRows = 1;
 constexpr size_t kUpdateConfirmHeaderRows = 2;
+constexpr size_t kPowerOffConfirmHeaderRows = 1;
 constexpr size_t kSettingsBackIndex = 0;
 constexpr size_t kSettingsHomePacingIndex = 1;
 constexpr size_t kSettingsHomeDisplayIndex = 2;
@@ -1382,6 +1389,8 @@ void App::executeBootButtonSingleTap(uint32_t nowMs) {
   if (state_ == AppState::Menu && BoardConfig::BOOT_BUTTON_BACKS_OUT_OF_MENU) {
     if (menuScreen_ == MenuScreen::Main || menuScreen_ == MenuScreen::QuickSettings) {
       setState(AppState::Paused, nowMs);
+    } else if (menuScreen_ == MenuScreen::PowerOffConfirm) {
+      cancelPowerOffConfirm(nowMs);
     } else if (menuScreen_ == MenuScreen::QuickSync) {
       menuScreen_ = MenuScreen::QuickSettings;
       renderQuickSettings();
@@ -1544,7 +1553,11 @@ void App::handlePowerButton(uint32_t nowMs) {
 
     if (powerButton_.isHeld() && powerButton_.heldDurationMs(nowMs) >= kPowerOffHoldMs) {
       powerButtonLongPressHandled_ = true;
-      enterPowerOff(nowMs);
+      if (BoardConfig::SUPPORTS_SOFTWARE_POWEROFF) {
+        openPowerOffConfirm(nowMs);
+      } else {
+        enterStandby(nowMs);
+      }
       return;
     }
 
@@ -1588,7 +1601,7 @@ void App::handlePowerButton(uint32_t nowMs) {
   if (logicalPowerButtonUsesVirtualState() && BoardConfig::consumeVirtualPowerButtonLongPressEvent()) {
     powerButtonLongPressHandled_ = true;
     if (BoardConfig::SUPPORTS_SOFTWARE_POWEROFF) {
-      enterPowerOff(nowMs);
+      openPowerOffConfirm(nowMs);
     } else {
       enterStandby(nowMs);
     }
@@ -1611,7 +1624,7 @@ void App::handlePowerButton(uint32_t nowMs) {
   if (powerButton_.isHeld() && nowMs - powerButton_.lastEdgeMs() >= kPowerOffHoldMs) {
     powerButtonLongPressHandled_ = true;
     if (BoardConfig::SUPPORTS_SOFTWARE_POWEROFF) {
-      enterPowerOff(nowMs);
+      openPowerOffConfirm(nowMs);
     } else {
       enterStandby(nowMs);
     }
@@ -1690,6 +1703,8 @@ void App::toggleMenuFromPowerButton(uint32_t nowMs) {
   if (state_ == AppState::Menu) {
     if (menuScreen_ == MenuScreen::Main) {
       setState(AppState::Paused, nowMs);
+    } else if (menuScreen_ == MenuScreen::PowerOffConfirm) {
+      cancelPowerOffConfirm(nowMs);
     } else if (menuScreen_ == MenuScreen::QuickSync) {
       menuScreen_ = MenuScreen::QuickSettings;
       renderQuickSettings();
@@ -3067,6 +3082,9 @@ void App::moveMenuSelection(int direction) {
   } else if (menuScreen_ == MenuScreen::UpdateConfirm) {
     selectedIndex = &updateConfirmSelectedIndex_;
     itemCount = UpdateConfirmItemCount;
+  } else if (menuScreen_ == MenuScreen::PowerOffConfirm) {
+    selectedIndex = &powerOffConfirmSelectedIndex_;
+    itemCount = PowerOffConfirmItemCount;
   } else if (menuScreen_ == MenuScreen::QuickSettings) {
     selectedIndex = &quickSettingsSelectedIndex_;
     itemCount = QuickSettingsItemCount;
@@ -3138,6 +3156,10 @@ void App::moveMenuSelection(int direction) {
     const String selectedLabel =
         updateConfirmSelectedIndex_ == UpdateConfirmUpdate ? "Update" : "Skip for now";
     Serial.printf("[ota] selected=%s\n", selectedLabel.c_str());
+  } else if (menuScreen_ == MenuScreen::PowerOffConfirm) {
+    const String selectedLabel =
+        powerOffConfirmSelectedIndex_ == PowerOffConfirmYes ? "Yes" : "Cancel";
+    Serial.printf("[power-off] selected=%s\n", selectedLabel.c_str());
   } else if (menuScreen_ == MenuScreen::QuickSettings) {
     String selectedLabel = "Brightness";
     switch (quickSettingsSelectedIndex_) {
@@ -3268,6 +3290,10 @@ void App::selectMenuItem(uint32_t nowMs) {
   }
   if (menuScreen_ == MenuScreen::UpdateConfirm) {
     selectUpdateConfirmItem(nowMs);
+    return;
+  }
+  if (menuScreen_ == MenuScreen::PowerOffConfirm) {
+    selectPowerOffConfirmItem(nowMs);
     return;
   }
   if (menuScreen_ == MenuScreen::QuickSettings) {
@@ -5173,6 +5199,57 @@ void App::selectUpdateConfirmItem(uint32_t nowMs) {
   runFirmwareUpdate(preferredOtaConfig(), false, nowMs);
 }
 
+void App::openPowerOffConfirm(uint32_t nowMs) {
+  powerOffConfirmReturnState_ = state_;
+  powerOffConfirmReturnScreen_ = state_ == AppState::Menu ? menuScreen_ : MenuScreen::Main;
+  powerOffConfirmSelectedIndex_ = PowerOffConfirmNo;
+  pausedTouch_.active = false;
+  pausedTouchIntent_ = TouchIntent::None;
+  touchPlayHeld_ = false;
+  wpmFeedbackVisible_ = false;
+  contextViewVisible_ = false;
+
+  if (state_ != AppState::Menu) {
+    saveReadingPosition(true);
+  }
+
+  menuScreen_ = MenuScreen::PowerOffConfirm;
+  if (state_ == AppState::Menu) {
+    renderPowerOffConfirm();
+  } else {
+    setState(AppState::Menu, nowMs);
+  }
+}
+
+void App::cancelPowerOffConfirm(uint32_t nowMs) {
+  Serial.println("[power-off] cancelled by user");
+  const AppState returnState = powerOffConfirmReturnState_;
+  const MenuScreen returnScreen = powerOffConfirmReturnScreen_;
+  menuScreen_ = returnScreen;
+
+  if (returnState == AppState::Menu) {
+    renderMenu();
+    return;
+  }
+
+  if (returnState == AppState::Playing) {
+    setState(AppState::Paused, nowMs);
+    return;
+  }
+
+  setState(returnState, nowMs);
+}
+
+void App::selectPowerOffConfirmItem(uint32_t nowMs) {
+  if (powerOffConfirmSelectedIndex_ != PowerOffConfirmYes) {
+    cancelPowerOffConfirm(nowMs);
+    return;
+  }
+
+  Serial.println("[power-off] confirmed by user");
+  enterPowerOff(nowMs);
+}
+
 void App::enterCompanionSync(uint32_t nowMs) {
   if (blockNetworkActionForOtaCheck("Sync", nowMs)) {
     return;
@@ -6334,6 +6411,8 @@ void App::renderMenu() {
     renderSdCardRepairConfirm();
   } else if (menuScreen_ == MenuScreen::UpdateConfirm) {
     renderUpdateConfirm();
+  } else if (menuScreen_ == MenuScreen::PowerOffConfirm) {
+    renderPowerOffConfirm();
   } else if (menuScreen_ == MenuScreen::QuickSettings) {
     renderQuickSettings();
   } else if (menuScreen_ == MenuScreen::QuickSync) {
@@ -6471,6 +6550,16 @@ void App::renderUpdateConfirm() {
   items.push_back("Update");
 
   display_.renderMenu(items, updateConfirmSelectedIndex_ + kUpdateConfirmHeaderRows);
+}
+
+void App::renderPowerOffConfirm() {
+  std::vector<String> items;
+  items.reserve(PowerOffConfirmItemCount + kPowerOffConfirmHeaderRows);
+  items.push_back("Power off?");
+  items.push_back("Cancel");
+  items.push_back("Yes");
+
+  display_.renderMenu(items, powerOffConfirmSelectedIndex_ + kPowerOffConfirmHeaderRows);
 }
 
 void App::renderQuickSettings() {
