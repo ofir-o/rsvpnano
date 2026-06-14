@@ -1,23 +1,23 @@
-#include "display/co5300.h"
+#include "drivers/display/sh8601/sh8601.h"
 
+#include <Arduino.h>
+#include <SPI.h>
 #include <driver/spi_master.h>
 #include <esp_log.h>
 
 #include "board/BoardConfig.h"
 
-#if defined(RSVP_BOARD_WAVESHARE_ESP32S3_TOUCH_AMOLED_216)
-
 namespace {
 
 constexpr int kSpiFrequency = 20000000;
 constexpr int kSendBufferRows =
-    BoardConfig::DISPLAY_TX_CHUNK_BYTES /
-    (BoardConfig::PANEL_NATIVE_WIDTH * static_cast<int>(sizeof(uint16_t)));
-static_assert(kSendBufferRows > 0, "CO5300 transfer buffer must hold at least one full row");
-constexpr int kSendBufferPixels = BoardConfig::PANEL_NATIVE_WIDTH * kSendBufferRows;
+    Board::Config::DISPLAY_TX_CHUNK_BYTES /
+    (Board::Config::PANEL_NATIVE_WIDTH * static_cast<int>(sizeof(uint16_t)));
+static_assert(kSendBufferRows > 0, "SH8601 transfer buffer must hold at least one full row");
+constexpr int kSendBufferPixels = Board::Config::PANEL_NATIVE_WIDTH * kSendBufferRows;
 constexpr uint8_t kRamWriteCommand = 0x2C;
 constexpr uint8_t kRamWriteContinueCommand = 0x3C;
-static const char *kCo5300Tag = "co5300";
+static const char *kSh8601Tag = "sh8601";
 
 struct LcdCommand {
   uint8_t cmd;
@@ -26,24 +26,19 @@ struct LcdCommand {
   uint16_t delayMs;
 };
 
-// Keep the panel memory in its native orientation and let the shared mapping layer handle the
-// landscape transform, just like the stabilized 2.41 port.
-constexpr uint8_t kDefaultMadctl = BoardConfig::UI_ROTATED_180 ? 0xC0 : 0x00;
+// Keep the SH8601 memory in its unmirrored native orientation and let the shared display mapping
+// handle the quarter-turn into landscape. The borrowed X-mirror bit from Espressif's sample left
+// the whole UI horizontally mirrored on real hardware.
+constexpr uint8_t kDefaultMadctl = 0x00;
 constexpr LcdCommand kQspiInit[] = {
-    {0x11, {0x00}, 0, 120},
-    {0xFE, {0x20}, 1, 0},
-    {0x19, {0x10}, 1, 0},
-    {0x1C, {0xA0}, 1, 0},
-    {0xFE, {0x00}, 1, 0},
-    {0xC4, {0x80}, 1, 0},
-    {0x3A, {0x55}, 1, 0},
-    {0x35, {0x00}, 1, 0},
-    {0x53, {0x20}, 1, 0},
-    {0x51, {0xFF}, 1, 0},
-    {0x63, {0xFF}, 1, 0},
-    {0x2A, {0x00, 0x00, 0x01, 0xDF}, 4, 0},
-    {0x2B, {0x00, 0x00, 0x01, 0xDF}, 4, 0},
     {0x36, {kDefaultMadctl}, 1, 0},
+    {0x3A, {0x55}, 1, 0},
+    {0x11, {0x00}, 0, 120},
+    {0x44, {0x01, 0xD1}, 2, 0},
+    {0x35, {0x00}, 1, 0},
+    {0x53, {0x20}, 1, 10},
+    {0x2A, {0x00, 0x00, 0x01, 0x6F}, 4, 0},
+    {0x2B, {0x00, 0x00, 0x01, 0xBF}, 4, 0},
     {0x29, {0x00}, 0, 10},
 };
 
@@ -99,22 +94,24 @@ void applyBrightness() {
 
 }  // namespace
 
-void co5300Init() {
-  pinMode(BoardConfig::PIN_LCD_RST, OUTPUT);
-  digitalWrite(BoardConfig::PIN_LCD_RST, HIGH);
-  delay(10);
-  digitalWrite(BoardConfig::PIN_LCD_RST, LOW);
-  delay(200);
-  digitalWrite(BoardConfig::PIN_LCD_RST, HIGH);
-  delay(200);
+void sh8601Init() {
+  if (Board::Config::PIN_LCD_RST >= 0) {
+    pinMode(Board::Config::PIN_LCD_RST, OUTPUT);
+    digitalWrite(Board::Config::PIN_LCD_RST, HIGH);
+    delay(10);
+    digitalWrite(Board::Config::PIN_LCD_RST, LOW);
+    delay(150);
+    digitalWrite(Board::Config::PIN_LCD_RST, HIGH);
+    delay(150);
+  }
 
   if (!gBusReady) {
     spi_bus_config_t busConfig = {};
-    busConfig.data0_io_num = BoardConfig::PIN_LCD_DATA0;
-    busConfig.data1_io_num = BoardConfig::PIN_LCD_DATA1;
-    busConfig.sclk_io_num = BoardConfig::PIN_LCD_SCLK;
-    busConfig.data2_io_num = BoardConfig::PIN_LCD_DATA2;
-    busConfig.data3_io_num = BoardConfig::PIN_LCD_DATA3;
+    busConfig.data0_io_num = Board::Config::PIN_LCD_DATA0;
+    busConfig.data1_io_num = Board::Config::PIN_LCD_DATA1;
+    busConfig.sclk_io_num = Board::Config::PIN_LCD_SCLK;
+    busConfig.data2_io_num = Board::Config::PIN_LCD_DATA2;
+    busConfig.data3_io_num = Board::Config::PIN_LCD_DATA3;
     busConfig.max_transfer_sz = (kSendBufferPixels * static_cast<int>(sizeof(uint16_t))) + 8;
     busConfig.flags = SPICOMMON_BUSFLAG_MASTER | SPICOMMON_BUSFLAG_GPIO_PINS;
 
@@ -123,7 +120,7 @@ void co5300Init() {
     deviceConfig.address_bits = 24;
     deviceConfig.mode = SPI_MODE0;
     deviceConfig.clock_speed_hz = kSpiFrequency;
-    deviceConfig.spics_io_num = BoardConfig::PIN_LCD_CS;
+    deviceConfig.spics_io_num = Board::Config::PIN_LCD_CS;
     deviceConfig.flags = SPI_DEVICE_HALFDUPLEX;
     deviceConfig.queue_size = 10;
 
@@ -141,16 +138,16 @@ void co5300Init() {
 
   gDisplayOn = true;
   applyBrightness();
-  ESP_LOGI(kCo5300Tag, "CO5300 QSPI init complete");
+  ESP_LOGI(kSh8601Tag, "SH8601 QSPI init complete");
 }
 
-void co5300SetDisplayOn(bool on) {
+void sh8601SetDisplayOn(bool on) {
   gDisplayOn = on;
   sendCommand(on ? 0x29 : 0x28, nullptr, 0);
   applyBrightness();
 }
 
-void co5300SetBrightnessPercent(uint8_t percent) {
+void sh8601SetBrightnessPercent(uint8_t percent) {
   if (percent > 100) {
     percent = 100;
   }
@@ -159,7 +156,7 @@ void co5300SetBrightnessPercent(uint8_t percent) {
   applyBrightness();
 }
 
-void co5300Sleep() {
+void sh8601Sleep() {
   gDisplayOn = false;
   sendCommand(0x28, nullptr, 0);
   delay(10);
@@ -167,7 +164,7 @@ void co5300Sleep() {
   delay(120);
 }
 
-void co5300Wake() {
+void sh8601Wake() {
   sendCommand(0x11, nullptr, 0);
   delay(120);
   gDisplayOn = true;
@@ -175,7 +172,7 @@ void co5300Wake() {
   applyBrightness();
 }
 
-void co5300PushColors(uint16_t x, uint16_t y, uint16_t width, uint16_t height,
+void sh8601PushColors(uint16_t x, uint16_t y, uint16_t width, uint16_t height,
                       const uint16_t *data) {
   if (gSpi == nullptr || data == nullptr || width == 0 || height == 0) {
     return;
@@ -212,5 +209,3 @@ void co5300PushColors(uint16_t x, uint16_t y, uint16_t width, uint16_t height,
     cursor += chunkPixels;
   }
 }
-
-#endif

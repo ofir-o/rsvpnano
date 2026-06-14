@@ -1,5 +1,7 @@
-#include "display/axs15231b.h"
+#include "drivers/display/axs15231b/axs15231b.h"
 
+#include <Arduino.h>
+#include <SPI.h>
 #include <driver/spi_master.h>
 #include <esp_log.h>
 
@@ -32,7 +34,7 @@ bool gBacklightOn = false;
 uint8_t gBrightnessPercent = 100;
 
 void writeBacklightPwm() {
-  pinMode(BoardConfig::PIN_LCD_BACKLIGHT, OUTPUT);
+  pinMode(Board::Config::PIN_LCD_BACKLIGHT, OUTPUT);
   analogWriteResolution(8);
   // AP3032 CTRL PWM dimming:
   // Datasheet recommends high-frequency PWM to avoid audio noise,
@@ -41,7 +43,7 @@ void writeBacklightPwm() {
   analogWriteFrequency(25000);
 
   if (!gBacklightOn) {
-    analogWrite(BoardConfig::PIN_LCD_BACKLIGHT, 255);
+    analogWrite(Board::Config::PIN_LCD_BACKLIGHT, 255);
     return;
   }
 
@@ -49,7 +51,7 @@ void writeBacklightPwm() {
   const uint8_t brightness = gBrightnessPercent == 0 ? 1 : gBrightnessPercent;
   const uint8_t activeDuty =
       static_cast<uint8_t>((static_cast<uint16_t>(brightness) * 255U) / 100U);
-  analogWrite(BoardConfig::PIN_LCD_BACKLIGHT, 255 - activeDuty);
+  analogWrite(Board::Config::PIN_LCD_BACKLIGHT, 255 - activeDuty);
 }
 
 void setBacklight(bool on) {
@@ -89,21 +91,21 @@ void setColumnWindow(uint16_t x1, uint16_t x2) {
 void axs15231bInit() {
   setBacklight(false);
 
-  pinMode(BoardConfig::PIN_LCD_RST, OUTPUT);
-  digitalWrite(BoardConfig::PIN_LCD_RST, HIGH);
+  pinMode(Board::Config::PIN_LCD_RST, OUTPUT);
+  digitalWrite(Board::Config::PIN_LCD_RST, HIGH);
   delay(30);
-  digitalWrite(BoardConfig::PIN_LCD_RST, LOW);
+  digitalWrite(Board::Config::PIN_LCD_RST, LOW);
   delay(250);
-  digitalWrite(BoardConfig::PIN_LCD_RST, HIGH);
+  digitalWrite(Board::Config::PIN_LCD_RST, HIGH);
   delay(30);
 
   if (!gBusReady) {
     spi_bus_config_t busConfig = {};
-    busConfig.data0_io_num = BoardConfig::PIN_LCD_DATA0;
-    busConfig.data1_io_num = BoardConfig::PIN_LCD_DATA1;
-    busConfig.sclk_io_num = BoardConfig::PIN_LCD_SCLK;
-    busConfig.data2_io_num = BoardConfig::PIN_LCD_DATA2;
-    busConfig.data3_io_num = BoardConfig::PIN_LCD_DATA3;
+    busConfig.data0_io_num = Board::Config::PIN_LCD_DATA0;
+    busConfig.data1_io_num = Board::Config::PIN_LCD_DATA1;
+    busConfig.sclk_io_num = Board::Config::PIN_LCD_SCLK;
+    busConfig.data2_io_num = Board::Config::PIN_LCD_DATA2;
+    busConfig.data3_io_num = Board::Config::PIN_LCD_DATA3;
     busConfig.max_transfer_sz = (kSendBufferPixels * static_cast<int>(sizeof(uint16_t))) + 8;
     busConfig.flags = SPICOMMON_BUSFLAG_MASTER | SPICOMMON_BUSFLAG_GPIO_PINS;
 
@@ -112,7 +114,7 @@ void axs15231bInit() {
     deviceConfig.address_bits = 24;
     deviceConfig.mode = SPI_MODE3;
     deviceConfig.clock_speed_hz = kSpiFrequency;
-    deviceConfig.spics_io_num = BoardConfig::PIN_LCD_CS;
+    deviceConfig.spics_io_num = Board::Config::PIN_LCD_CS;
     deviceConfig.flags = SPI_DEVICE_HALFDUPLEX;
     deviceConfig.queue_size = 10;
 
