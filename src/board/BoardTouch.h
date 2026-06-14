@@ -1,30 +1,19 @@
 #pragma once
 
 #include <Arduino.h>
+#include <Wire.h>
 
 #include "board/BoardConfig.h"
+#include "drivers/touch/TouchTypes.h"
 
 namespace Board::Touch {
 
-enum class Phase {
-  Start,
-  Move,
-  End,
-};
-
-struct Event {
-  bool touched = false;
-  uint16_t x = 0;
-  uint16_t y = 0;
-  uint8_t gesture = 0;
-  Phase phase = Phase::Move;
-};
-
-bool begin();
-void end();
-void cancel();
-bool readEvent(Event &event);
-void setUiOrientation(Board::Config::UiOrientation orientation);
-void setUiRotated180(bool rotated180);
+TwoWire &wire();
+void resetController();
+bool ready();
+bool configure();
+size_t packetLength();
+bool readPacket(uint8_t *buffer, size_t len);
+bool decodePacket(const uint8_t *data, size_t len, BoardDrivers::Touch::Sample &sample);
 
 }  // namespace Board::Touch

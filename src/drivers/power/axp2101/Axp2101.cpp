@@ -30,12 +30,16 @@ constexpr uint8_t kLongPressRestartMask = 0x01;
 constexpr uint8_t kPowerKeyTimingMask = 0x0F;
 constexpr uint32_t kPowerKeyPollIntervalMs = 20;
 
-bool gReady = false;
-bool gPowerButtonHeld = false;
-bool gShortPressPending = false;
-bool gLongPressPending = false;
-uint32_t gLastPowerKeyPollMs = 0;
-Board::Power::DiagnosticSnapshot gDiagnosticSnapshot;
+struct Context {
+  bool ready = false;
+  bool powerButtonHeld = false;
+  bool shortPressPending = false;
+  bool longPressPending = false;
+  uint32_t lastPowerKeyPollMs = 0;
+  Board::Power::DiagnosticSnapshot diagnosticSnapshot;
+};
+
+Context gContext;
 
 bool readRegister(uint8_t reg, uint8_t &value) {
   Wire.beginTransmission(kAddress);
@@ -82,7 +86,7 @@ uint16_t readH5L8(uint8_t highReg, uint8_t lowReg) {
 }
 
 void captureDiagnostics(uint8_t status1) {
-  if (gDiagnosticSnapshot.available) {
+  if (gContext.diagnosticSnapshot.available) {
     return;
   }
 
@@ -101,7 +105,7 @@ void captureDiagnostics(uint8_t status1) {
     snapshot.powerKeyIrqStatus = irqStatus2;
   }
 
-  gDiagnosticSnapshot = snapshot;
+  gContext.diagnosticSnapshot = snapshot;
 }
 
 bool batteryConnected() {
@@ -114,14 +118,14 @@ bool batteryConnected() {
 bool begin() {
   uint8_t value = 0;
   if (!readRegister(kStatus1Reg, value)) {
-    if (gReady) {
+    if (gContext.ready) {
       Serial.println("[board] AXP2101 no longer responding");
     }
-    gReady = false;
+    gContext.ready = false;
     return false;
   }
 
-  gReady = true;
+  gContext.ready = true;
   captureDiagnostics(value);
   if (!updateRegisterBits(kAdcChannelCtrlReg, 0x01, 0x01)) {
     Serial.println("[board] AXP2101 battery voltage ADC enable failed");
@@ -149,16 +153,16 @@ bool begin() {
     }
   }
 
-  gPowerButtonHeld = false;
-  gShortPressPending = false;
-  gLongPressPending = false;
-  gLastPowerKeyPollMs = 0;
+  gContext.powerButtonHeld = false;
+  gContext.shortPressPending = false;
+  gContext.longPressPending = false;
+  gContext.lastPowerKeyPollMs = 0;
   writeRegister(kIrqStatus2Reg, 0xFF);
   return true;
 }
 
 bool readBatteryStatus(Board::Power::BatteryStatus &status) {
-  if (!gReady && !begin()) {
+  if (!gContext.ready && !begin()) {
     return false;
   }
 
@@ -183,10 +187,10 @@ bool readBatteryStatus(Board::Power::BatteryStatus &status) {
   return true;
 }
 
-Board::Power::DiagnosticSnapshot diagnosticSnapshot() { return gDiagnosticSnapshot; }
+Board::Power::DiagnosticSnapshot diagnosticSnapshot() { return gContext.diagnosticSnapshot; }
 
 bool externalPowerPresent() {
-  if (!gReady && !begin()) {
+  if (!gContext.ready && !begin()) {
     return false;
   }
 
@@ -200,7 +204,7 @@ bool externalPowerPresent() {
 }
 
 bool releasePower() {
-  if (!gReady && !begin()) {
+  if (!gContext.ready && !begin()) {
     return false;
   }
 
@@ -219,12 +223,12 @@ void pollPowerKeyIfDue(bool force) {
   }
 
   const uint32_t nowMs = millis();
-  if (!force && (nowMs - gLastPowerKeyPollMs) < kPowerKeyPollIntervalMs) {
+  if (!force && (nowMs - gContext.lastPowerKeyPollMs) < kPowerKeyPollIntervalMs) {
     return;
   }
-  gLastPowerKeyPollMs = nowMs;
+  gContext.lastPowerKeyPollMs = nowMs;
 
-  if (!gReady && !begin()) {
+  if (!gContext.ready && !begin()) {
     return;
   }
 
@@ -234,16 +238,16 @@ void pollPowerKeyIfDue(bool force) {
   }
 
   if ((status2 & kPowerKeyNegativeIrqMask) != 0) {
-    gPowerButtonHeld = true;
+    gContext.powerButtonHeld = true;
   }
   if ((status2 & kPowerKeyPositiveIrqMask) != 0) {
-    gPowerButtonHeld = false;
+    gContext.powerButtonHeld = false;
   }
   if ((status2 & kPowerKeyLongIrqMask) != 0) {
-    gLongPressPending = true;
+    gContext.longPressPending = true;
   }
   if ((status2 & kPowerKeyShortIrqMask) != 0) {
-    gShortPressPending = true;
+    gContext.shortPressPending = true;
   }
   if (status2 != 0) {
     writeRegister(kIrqStatus2Reg, status2);
@@ -252,20 +256,20 @@ void pollPowerKeyIfDue(bool force) {
 
 bool isPowerButtonHeld() {
   pollPowerKeyIfDue();
-  return gPowerButtonHeld;
+  return gContext.powerButtonHeld;
 }
 
 bool consumeShortPress() {
   pollPowerKeyIfDue();
-  const bool pending = gShortPressPending;
-  gShortPressPending = false;
+  const bool pending = gContext.shortPressPending;
+  gContext.shortPressPending = false;
   return pending;
 }
 
 bool consumeLongPress() {
   pollPowerKeyIfDue();
-  const bool pending = gLongPressPending;
-  gLongPressPending = false;
+  const bool pending = gContext.longPressPending;
+  gContext.longPressPending = false;
   return pending;
 }
 

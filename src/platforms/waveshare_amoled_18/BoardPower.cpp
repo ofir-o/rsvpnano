@@ -7,7 +7,12 @@
 
 namespace {
 
-bool gTca9554Sequenced = false;
+struct PowerContext {
+  bool tca9554Sequenced = false;
+};
+
+PowerContext gPower;
+
 bool tcaRead(uint8_t reg, uint8_t &value) {
   return BoardDrivers::Tca9554::read(Wire1, static_cast<uint8_t>(Board::Config::TCA9554_ADDRESS),
                                      reg, value, Board::Config::TCA9554_RELEASE_BUS_BEFORE_READ);
@@ -33,7 +38,7 @@ void configureIoExpander(bool forceDisplaySequence = false) {
                            (1U << Board::Config::TCA9554_PIN_DISPLAY_ENABLE));
   const uint8_t outputMask =
       static_cast<uint8_t>(displayMask | (1U << Board::Config::TCA9554_PIN_SD_ENABLE));
-  const bool runDisplaySequence = forceDisplaySequence || !gTca9554Sequenced;
+  const bool runDisplaySequence = forceDisplaySequence || !gPower.tca9554Sequenced;
 
   if (runDisplaySequence) {
     output &= static_cast<uint8_t>(~displayMask);
@@ -64,7 +69,7 @@ void configureIoExpander(bool forceDisplaySequence = false) {
     return;
   }
   delay(50);
-  gTca9554Sequenced = true;
+  gPower.tca9554Sequenced = true;
 }
 
 }  // namespace

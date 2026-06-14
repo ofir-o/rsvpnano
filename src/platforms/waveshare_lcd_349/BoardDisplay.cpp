@@ -8,7 +8,12 @@
 
 namespace {
 
-bool gBacklightEnableConfigured = false;
+struct DisplayContext {
+  bool backlightEnableConfigured = false;
+  Axs15231b::Context panel;
+};
+
+DisplayContext gDisplay;
 
 bool configureOutputPin(uint8_t pin, bool high) {
   return BoardDrivers::Tca9554::configureOutputPin(
@@ -21,12 +26,12 @@ bool configureOutputPin(uint8_t pin, bool high) {
 namespace Board::Display {
 
 bool begin() {
-  axs15231bInit();
+  Axs15231b::init(gDisplay.panel);
   return true;
 }
 
 void enablePowerIfAvailable() {
-  if (gBacklightEnableConfigured) {
+  if (gDisplay.backlightEnableConfigured) {
     return;
   }
 
@@ -35,7 +40,7 @@ void enablePowerIfAvailable() {
     return;
   }
 
-  gBacklightEnableConfigured = true;
+  gDisplay.backlightEnableConfigured = true;
   Serial.println("[board] Backlight enable configured");
 }
 
@@ -54,7 +59,7 @@ void holdBacklightOffForDeepSleep() {
   gpio_deep_sleep_hold_en();
 }
 
-void setBacklight(bool on) { axs15231bSetBacklight(on); }
+void setBacklight(bool on) { Axs15231b::setBacklight(gDisplay.panel, on); }
 
 void flashBacklight(uint8_t count, uint32_t onMs, uint32_t offMs) {
   for (uint8_t i = 0; i < count; ++i) {
@@ -65,15 +70,15 @@ void flashBacklight(uint8_t count, uint32_t onMs, uint32_t offMs) {
   }
 }
 
-void setBrightness(uint8_t percent) { axs15231bSetBrightnessPercent(percent); }
+void setBrightness(uint8_t percent) { Axs15231b::setBrightnessPercent(gDisplay.panel, percent); }
 
-void sleep() { axs15231bSleep(); }
+void sleep() { Axs15231b::sleep(gDisplay.panel); }
 
-void wake() { axs15231bWake(); }
+void wake() { Axs15231b::wake(gDisplay.panel); }
 
 bool pushColors(uint16_t x, uint16_t y, uint16_t width, uint16_t height,
                 const uint16_t *data) {
-  axs15231bPushColors(x, y, width, height, data);
+  Axs15231b::pushColors(gDisplay.panel, x, y, width, height, data);
   return true;
 }
 

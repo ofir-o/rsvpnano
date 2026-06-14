@@ -44,7 +44,7 @@ bool readPacket(TwoWire &wire, uint8_t address, uint8_t *buffer, size_t len) {
   return true;
 }
 
-bool decodePacket(const uint8_t *data, size_t len, TouchDriver::Sample &sample) {
+bool decodePacket(const uint8_t *data, size_t len, BoardDrivers::Touch::Sample &sample) {
   if (data == nullptr || len < packetLength()) {
     return false;
   }

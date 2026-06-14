@@ -45,11 +45,6 @@ constexpr LcdCommand kQspiInit[] = {
     {0x29, {0x00}, 0, 10},
 };
 
-spi_device_handle_t gSpi = nullptr;
-bool gBusReady = false;
-bool gDisplayOn = true;
-uint8_t gBrightnessPercent = 100;
-
 bool tca9554Read(uint8_t reg, uint8_t &value) {
   Wire1.beginTransmission(Board::Config::TCA9554_ADDRESS);
   Wire1.write(reg);
@@ -96,8 +91,9 @@ void enableDisplayRailIfAvailable() {
   delay(25);
 }
 
-void sendCommand(uint8_t command, const uint8_t *data, uint32_t length) {
-  if (gSpi == nullptr) {
+void sendCommand(Rm690b0::Context &context, uint8_t command, const uint8_t *data,
+                 uint32_t length) {
+  if (context.spi == nullptr) {
     return;
   }
 
@@ -109,10 +105,10 @@ void sendCommand(uint8_t command, const uint8_t *data, uint32_t length) {
     transaction.length = length * 8;
   }
 
-  ESP_ERROR_CHECK(spi_device_polling_transmit(gSpi, &transaction));
+  ESP_ERROR_CHECK(spi_device_polling_transmit(context.spi, &transaction));
 }
 
-void setColumnWindow(uint16_t x1, uint16_t x2) {
+void setColumnWindow(Rm690b0::Context &context, uint16_t x1, uint16_t x2) {
   x1 = static_cast<uint16_t>(x1 + kColumnOffset);
   x2 = static_cast<uint16_t>(x2 + kColumnOffset);
   const uint8_t data[] = {
@@ -121,31 +117,32 @@ void setColumnWindow(uint16_t x1, uint16_t x2) {
       static_cast<uint8_t>(x2 >> 8),
       static_cast<uint8_t>(x2),
   };
-  sendCommand(0x2A, data, sizeof(data));
+  sendCommand(context, 0x2A, data, sizeof(data));
 }
 
-void setRowWindow(uint16_t y1, uint16_t y2) {
+void setRowWindow(Rm690b0::Context &context, uint16_t y1, uint16_t y2) {
   const uint8_t data[] = {
       static_cast<uint8_t>(y1 >> 8),
       static_cast<uint8_t>(y1),
       static_cast<uint8_t>(y2 >> 8),
       static_cast<uint8_t>(y2),
   };
-  sendCommand(0x2B, data, sizeof(data));
+  sendCommand(context, 0x2B, data, sizeof(data));
 }
 
-void applyBrightness() {
-  const uint8_t level = gDisplayOn
-                            ? static_cast<uint8_t>((static_cast<uint16_t>(gBrightnessPercent) *
-                                                    255U) /
-                                                   100U)
-                            : 0;
-  sendCommand(0x51, &level, 1);
+void applyBrightness(Rm690b0::Context &context) {
+  const uint8_t level =
+      context.displayOn
+          ? static_cast<uint8_t>((static_cast<uint16_t>(context.brightnessPercent) * 255U) / 100U)
+          : 0;
+  sendCommand(context, 0x51, &level, 1);
 }
 
 }  // namespace
 
-void rm690b0Init() {
+namespace Rm690b0 {
+
+void init(Context &context) {
   enableDisplayRailIfAvailable();
 
   pinMode(Board::Config::PIN_LCD_RST, OUTPUT);
@@ -156,7 +153,7 @@ void rm690b0Init() {
   digitalWrite(Board::Config::PIN_LCD_RST, HIGH);
   delay(150);
 
-  if (!gBusReady) {
+  if (!context.busReady) {
     spi_bus_config_t busConfig = {};
     busConfig.data0_io_num = Board::Config::PIN_LCD_DATA0;
     busConfig.data1_io_num = Board::Config::PIN_LCD_DATA1;
@@ -176,56 +173,56 @@ void rm690b0Init() {
     deviceConfig.queue_size = 10;
 
     ESP_ERROR_CHECK(spi_bus_initialize(SPI3_HOST, &busConfig, SPI_DMA_CH_AUTO));
-    ESP_ERROR_CHECK(spi_bus_add_device(SPI3_HOST, &deviceConfig, &gSpi));
-    gBusReady = true;
+    ESP_ERROR_CHECK(spi_bus_add_device(SPI3_HOST, &deviceConfig, &context.spi));
+    context.busReady = true;
   }
 
   for (const auto &command : kQspiInit) {
-    sendCommand(command.cmd, command.data, command.len);
+    sendCommand(context, command.cmd, command.data, command.len);
     if (command.delayMs != 0) {
       delay(command.delayMs);
     }
   }
 
-  gDisplayOn = true;
-  applyBrightness();
+  context.displayOn = true;
+  applyBrightness(context);
   ESP_LOGI(kRm690b0Tag, "RM690B0 QSPI init complete");
 }
 
-void rm690b0SetDisplayOn(bool on) {
-  gDisplayOn = on;
-  sendCommand(on ? 0x29 : 0x28, nullptr, 0);
-  applyBrightness();
+void setDisplayOn(Context &context, bool on) {
+  context.displayOn = on;
+  sendCommand(context, on ? 0x29 : 0x28, nullptr, 0);
+  applyBrightness(context);
 }
 
-void rm690b0SetBrightnessPercent(uint8_t percent) {
+void setBrightnessPercent(Context &context, uint8_t percent) {
   if (percent > 100) {
     percent = 100;
   }
 
-  gBrightnessPercent = percent;
-  applyBrightness();
+  context.brightnessPercent = percent;
+  applyBrightness(context);
 }
 
-void rm690b0Sleep() {
-  gDisplayOn = false;
-  sendCommand(0x28, nullptr, 0);
+void sleep(Context &context) {
+  context.displayOn = false;
+  sendCommand(context, 0x28, nullptr, 0);
   delay(10);
-  sendCommand(0x10, nullptr, 0);
+  sendCommand(context, 0x10, nullptr, 0);
   delay(5);
 }
 
-void rm690b0Wake() {
-  sendCommand(0x11, nullptr, 0);
+void wake(Context &context) {
+  sendCommand(context, 0x11, nullptr, 0);
   delay(120);
-  gDisplayOn = true;
-  sendCommand(0x29, nullptr, 0);
-  applyBrightness();
+  context.displayOn = true;
+  sendCommand(context, 0x29, nullptr, 0);
+  applyBrightness(context);
 }
 
-void rm690b0PushColors(uint16_t x, uint16_t y, uint16_t width, uint16_t height,
-                       const uint16_t *data) {
-  if (gSpi == nullptr || data == nullptr || width == 0 || height == 0) {
+void pushColors(Context &context, uint16_t x, uint16_t y, uint16_t width, uint16_t height,
+                const uint16_t *data) {
+  if (context.spi == nullptr || data == nullptr || width == 0 || height == 0) {
     return;
   }
 
@@ -233,9 +230,9 @@ void rm690b0PushColors(uint16_t x, uint16_t y, uint16_t width, uint16_t height,
   size_t pixelsRemaining = static_cast<size_t>(width) * height;
   const uint16_t *cursor = data;
 
-  setColumnWindow(x, static_cast<uint16_t>(x + width - 1));
-  setRowWindow(y, static_cast<uint16_t>(y + height - 1));
-  sendCommand(kRamWriteCommand, nullptr, 0);
+  setColumnWindow(context, x, static_cast<uint16_t>(x + width - 1));
+  setRowWindow(context, y, static_cast<uint16_t>(y + height - 1));
+  sendCommand(context, kRamWriteCommand, nullptr, 0);
 
   while (pixelsRemaining > 0) {
     size_t chunkPixels = pixelsRemaining;
@@ -254,10 +251,13 @@ void rm690b0PushColors(uint16_t x, uint16_t y, uint16_t width, uint16_t height,
     transaction.base.length = chunkPixels * 16;
 
     ESP_ERROR_CHECK(
-        spi_device_polling_transmit(gSpi, reinterpret_cast<spi_transaction_t *>(&transaction)));
+        spi_device_polling_transmit(context.spi,
+                                    reinterpret_cast<spi_transaction_t *>(&transaction)));
 
     firstSend = false;
     pixelsRemaining -= chunkPixels;
     cursor += chunkPixels;
   }
 }
+
+}  // namespace Rm690b0

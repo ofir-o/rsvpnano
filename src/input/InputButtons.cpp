@@ -1,8 +1,10 @@
-#include "input/ButtonHandler.h"
+#include "input/InputButtons.h"
 
-ButtonHandler::ButtonHandler(int pin) : pin_(pin) {}
+namespace Input::Buttons {
 
-void ButtonHandler::resetState(bool held, uint32_t nowMs) {
+Button::Button(int pin) : pin_(pin) {}
+
+void Button::resetState(bool held, uint32_t nowMs) {
   held_ = held;
   pressedEvent_ = false;
   releasedEvent_ = false;
@@ -11,7 +13,7 @@ void ButtonHandler::resetState(bool held, uint32_t nowMs) {
   lastHoldDurationMs_ = 0;
 }
 
-void ButtonHandler::begin() {
+void Button::begin() {
   if (pin_ < 0) {
     resetState(false, millis());
     return;
@@ -21,9 +23,9 @@ void ButtonHandler::begin() {
   resetState(!digitalRead(pin_), millis());
 }
 
-void ButtonHandler::beginWithState(bool held) { resetState(held, millis()); }
+void Button::beginWithState(bool held) { resetState(held, millis()); }
 
-void ButtonHandler::updateFromState(bool currentHeld, uint32_t nowMs) {
+void Button::updateFromState(bool currentHeld, uint32_t nowMs) {
   pressedEvent_ = false;
   releasedEvent_ = false;
 
@@ -40,7 +42,7 @@ void ButtonHandler::updateFromState(bool currentHeld, uint32_t nowMs) {
   }
 }
 
-void ButtonHandler::update(uint32_t nowMs) {
+void Button::update(uint32_t nowMs) {
   if (pin_ < 0) {
     pressedEvent_ = false;
     releasedEvent_ = false;
@@ -50,16 +52,18 @@ void ButtonHandler::update(uint32_t nowMs) {
   updateFromState(!digitalRead(pin_), nowMs);  // Board buttons are active-low.
 }
 
-bool ButtonHandler::isHeld() const { return held_; }
+bool Button::isHeld() const { return held_; }
 
-bool ButtonHandler::wasPressedEvent() const { return pressedEvent_; }
+bool Button::wasPressedEvent() const { return pressedEvent_; }
 
-bool ButtonHandler::wasReleasedEvent() const { return releasedEvent_; }
+bool Button::wasReleasedEvent() const { return releasedEvent_; }
 
-uint32_t ButtonHandler::lastEdgeMs() const { return lastEdgeMs_; }
+uint32_t Button::lastEdgeMs() const { return lastEdgeMs_; }
 
-uint32_t ButtonHandler::heldDurationMs(uint32_t nowMs) const {
+uint32_t Button::heldDurationMs(uint32_t nowMs) const {
   return held_ ? nowMs - pressStartedMs_ : 0;
 }
 
-uint32_t ButtonHandler::lastHoldDurationMs() const { return lastHoldDurationMs_; }
+uint32_t Button::lastHoldDurationMs() const { return lastHoldDurationMs_; }
+
+}  // namespace Input::Buttons

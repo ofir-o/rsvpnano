@@ -6,7 +6,11 @@
 
 namespace {
 
-bool gBatteryPowerHoldEnabled = false;
+struct PowerContext {
+  bool batteryPowerHoldEnabled = false;
+};
+
+PowerContext gPower;
 
 }  // namespace
 
@@ -19,7 +23,7 @@ void begin() {
     gpio_hold_dis(batteryHoldPin);
     pinMode(Config::PIN_BATTERY_HOLD, OUTPUT);
     digitalWrite(Config::PIN_BATTERY_HOLD, HIGH);
-    gBatteryPowerHoldEnabled = true;
+    gPower.batteryPowerHoldEnabled = true;
   }
 
   if (Config::PIN_BATTERY_ADC >= 0) {
@@ -98,7 +102,7 @@ bool releaseBatteryPowerHold() {
   }
 
   digitalWrite(Config::PIN_BATTERY_HOLD, LOW);
-  gBatteryPowerHoldEnabled = false;
+  gPower.batteryPowerHoldEnabled = false;
   Serial.println("[board] Battery power hold released");
   return true;
 }

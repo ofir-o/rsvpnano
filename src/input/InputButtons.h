@@ -2,9 +2,11 @@
 
 #include <Arduino.h>
 
-class ButtonHandler {
+namespace Input::Buttons {
+
+class Button {
  public:
-  explicit ButtonHandler(int pin);
+  explicit Button(int pin);
 
   void begin();
   void beginWithState(bool held);
@@ -29,3 +31,5 @@ class ButtonHandler {
 
   void resetState(bool held, uint32_t nowMs);
 };
+
+}  // namespace Input::Buttons

@@ -46,16 +46,16 @@ void fillBeepBuffer() {
 
 bool enableAudioRail() { return Board::Power::enableAudioPowerIfAvailable(); }
 
-bool writeBeepBuffer() {
-  return BoardDrivers::Es8311::writeSamples(gBeepBuffer, kBeepSamples, kWriteTimeoutMs);
+bool writeBeepBuffer(BoardDrivers::Es8311::Context &context) {
+  return BoardDrivers::Es8311::writeSamples(context, gBeepBuffer, kBeepSamples, kWriteTimeoutMs);
 }
 
 }  // namespace
 
 namespace BoardPlatform::Es8311BoardAudio {
 
-bool begin(const BoardDrivers::Es8311::Config &config) {
-  if (BoardDrivers::Es8311::available()) {
+bool begin(BoardDrivers::Es8311::Context &context) {
+  if (BoardDrivers::Es8311::available(context)) {
     return true;
   }
 
@@ -67,26 +67,28 @@ bool begin(const BoardDrivers::Es8311::Config &config) {
   }
 
   delay(kAudioStartupDelayMs);
-  return BoardDrivers::Es8311::begin(config);
+  return BoardDrivers::Es8311::begin(context);
 }
 
-bool beep() {
-  if (!enableAudioRail() || !BoardDrivers::Es8311::prepareOutput()) {
+bool beep(BoardDrivers::Es8311::Context &context) {
+  if (!enableAudioRail() || !BoardDrivers::Es8311::prepareOutput(context)) {
     return false;
   }
 
-  if (writeBeepBuffer()) {
+  if (writeBeepBuffer(context)) {
     return true;
   }
 
   ESP_LOGW(kAudioTag, "Retrying speaker beep after recovering output path");
-  if (!enableAudioRail() || !BoardDrivers::Es8311::recoverOutputPath()) {
+  if (!enableAudioRail() || !BoardDrivers::Es8311::recoverOutputPath(context)) {
     return false;
   }
 
-  return writeBeepBuffer();
+  return writeBeepBuffer(context);
 }
 
-bool available() { return BoardDrivers::Es8311::available(); }
+bool available(const BoardDrivers::Es8311::Context &context) {
+  return BoardDrivers::Es8311::available(context);
+}
 
 }  // namespace BoardPlatform::Es8311BoardAudio

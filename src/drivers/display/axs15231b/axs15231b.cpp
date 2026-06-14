@@ -28,12 +28,7 @@ constexpr LcdCommand kQspiInit[] = {
     {0x29, {0x00}, 0, 100},
 };
 
-spi_device_handle_t gSpi = nullptr;
-bool gBusReady = false;
-bool gBacklightOn = false;
-uint8_t gBrightnessPercent = 100;
-
-void writeBacklightPwm() {
+void writeBacklightPwm(Axs15231b::Context &context) {
   pinMode(Board::Config::PIN_LCD_BACKLIGHT, OUTPUT);
   analogWriteResolution(8);
   // AP3032 CTRL PWM dimming:
@@ -42,25 +37,26 @@ void writeBacklightPwm() {
   // Use 25 kHz instead of 50 kHz for better board compatibility.
   analogWriteFrequency(25000);
 
-  if (!gBacklightOn) {
+  if (!context.backlightOn) {
     analogWrite(Board::Config::PIN_LCD_BACKLIGHT, 255);
     return;
   }
 
   // Waveshare drives the LCD backlight as active-low PWM; lower duty is brighter.
-  const uint8_t brightness = gBrightnessPercent == 0 ? 1 : gBrightnessPercent;
+  const uint8_t brightness = context.brightnessPercent == 0 ? 1 : context.brightnessPercent;
   const uint8_t activeDuty =
       static_cast<uint8_t>((static_cast<uint16_t>(brightness) * 255U) / 100U);
   analogWrite(Board::Config::PIN_LCD_BACKLIGHT, 255 - activeDuty);
 }
 
-void setBacklight(bool on) {
-  gBacklightOn = on;
-  writeBacklightPwm();
+void setBacklight(Axs15231b::Context &context, bool on) {
+  context.backlightOn = on;
+  writeBacklightPwm(context);
 }
 
-void sendCommand(uint8_t command, const uint8_t *data, uint32_t length) {
-  if (gSpi == nullptr) {
+void sendCommand(Axs15231b::Context &context, uint8_t command, const uint8_t *data,
+                 uint32_t length) {
+  if (context.spi == nullptr) {
     return;
   }
 
@@ -73,23 +69,25 @@ void sendCommand(uint8_t command, const uint8_t *data, uint32_t length) {
     transaction.length = length * 8;
   }
 
-  ESP_ERROR_CHECK(spi_device_polling_transmit(gSpi, &transaction));
+  ESP_ERROR_CHECK(spi_device_polling_transmit(context.spi, &transaction));
 }
 
-void setColumnWindow(uint16_t x1, uint16_t x2) {
+void setColumnWindow(Axs15231b::Context &context, uint16_t x1, uint16_t x2) {
   const uint8_t data[] = {
       static_cast<uint8_t>(x1 >> 8),
       static_cast<uint8_t>(x1),
       static_cast<uint8_t>(x2 >> 8),
       static_cast<uint8_t>(x2),
   };
-  sendCommand(0x2A, data, sizeof(data));
+  sendCommand(context, 0x2A, data, sizeof(data));
 }
 
 }  // namespace
 
-void axs15231bInit() {
-  setBacklight(false);
+namespace Axs15231b {
+
+void init(Context &context) {
+  setBacklight(context, false);
 
   pinMode(Board::Config::PIN_LCD_RST, OUTPUT);
   digitalWrite(Board::Config::PIN_LCD_RST, HIGH);
@@ -99,7 +97,7 @@ void axs15231bInit() {
   digitalWrite(Board::Config::PIN_LCD_RST, HIGH);
   delay(30);
 
-  if (!gBusReady) {
+  if (!context.busReady) {
     spi_bus_config_t busConfig = {};
     busConfig.data0_io_num = Board::Config::PIN_LCD_DATA0;
     busConfig.data1_io_num = Board::Config::PIN_LCD_DATA1;
@@ -119,12 +117,12 @@ void axs15231bInit() {
     deviceConfig.queue_size = 10;
 
     ESP_ERROR_CHECK(spi_bus_initialize(SPI3_HOST, &busConfig, SPI_DMA_CH_AUTO));
-    ESP_ERROR_CHECK(spi_bus_add_device(SPI3_HOST, &deviceConfig, &gSpi));
-    gBusReady = true;
+    ESP_ERROR_CHECK(spi_bus_add_device(SPI3_HOST, &deviceConfig, &context.spi));
+    context.busReady = true;
   }
 
   for (const auto &command : kQspiInit) {
-    sendCommand(command.cmd, command.data, command.len);
+    sendCommand(context, command.cmd, command.data, command.len);
     if (command.delayMs != 0) {
       delay(command.delayMs);
     }
@@ -133,35 +131,35 @@ void axs15231bInit() {
   ESP_LOGI(kAxs15231bTag, "AXS15231B QSPI init complete");
 }
 
-void axs15231bSetBacklight(bool on) { setBacklight(on); }
+void setBacklight(Context &context, bool on) { ::setBacklight(context, on); }
 
-void axs15231bSetBrightnessPercent(uint8_t percent) {
+void setBrightnessPercent(Context &context, uint8_t percent) {
   if (percent == 0) {
     percent = 1;
   } else if (percent > 100) {
     percent = 100;
   }
 
-  gBrightnessPercent = percent;
-  writeBacklightPwm();
+  context.brightnessPercent = percent;
+  writeBacklightPwm(context);
 }
 
-void axs15231bSleep() {
+void sleep(Context &context) {
   // The panel can wake to a lit-but-blank state after AXS15231B SLPIN on this board.
   // For light sleep, blank the frame before this call and only switch off the backlight.
-  setBacklight(false);
+  setBacklight(context, false);
 }
 
-void axs15231bWake() {
-  sendCommand(0x11, nullptr, 0);
+void wake(Context &context) {
+  sendCommand(context, 0x11, nullptr, 0);
   delay(100);
-  sendCommand(0x29, nullptr, 0);
-  setBacklight(true);
+  sendCommand(context, 0x29, nullptr, 0);
+  setBacklight(context, true);
 }
 
-void axs15231bPushColors(uint16_t x, uint16_t y, uint16_t width, uint16_t height,
-                         const uint16_t *data) {
-  if (gSpi == nullptr || data == nullptr || width == 0 || height == 0) {
+void pushColors(Context &context, uint16_t x, uint16_t y, uint16_t width, uint16_t height,
+                const uint16_t *data) {
+  if (context.spi == nullptr || data == nullptr || width == 0 || height == 0) {
     return;
   }
 
@@ -169,7 +167,7 @@ void axs15231bPushColors(uint16_t x, uint16_t y, uint16_t width, uint16_t height
   size_t pixelsRemaining = static_cast<size_t>(width) * height;
   const uint16_t *cursor = data;
 
-  setColumnWindow(x, x + width - 1);
+  setColumnWindow(context, x, x + width - 1);
 
   while (pixelsRemaining > 0) {
     size_t chunkPixels = pixelsRemaining;
@@ -196,9 +194,12 @@ void axs15231bPushColors(uint16_t x, uint16_t y, uint16_t width, uint16_t height
     transaction.base.length = chunkPixels * 16;
 
     ESP_ERROR_CHECK(
-        spi_device_polling_transmit(gSpi, reinterpret_cast<spi_transaction_t *>(&transaction)));
+        spi_device_polling_transmit(context.spi,
+                                    reinterpret_cast<spi_transaction_t *>(&transaction)));
 
     pixelsRemaining -= chunkPixels;
     cursor += chunkPixels;
   }
 }
+
+}  // namespace Axs15231b

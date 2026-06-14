@@ -8,7 +8,11 @@
 
 namespace {
 
-bool gBatteryPowerHoldEnabled = false;
+struct PowerContext {
+  bool batteryPowerHoldEnabled = false;
+};
+
+PowerContext gPower;
 
 bool configureOutputPin(uint8_t pin, bool high) {
   return BoardDrivers::Tca9554::configureOutputPin(
@@ -27,9 +31,9 @@ void begin() {
     analogSetPinAttenuation(Config::PIN_BATTERY_ADC, ADC_11db);
   }
 
-  if (!gBatteryPowerHoldEnabled &&
+  if (!gPower.batteryPowerHoldEnabled &&
       configureOutputPin(Config::TCA9554_PIN_SYS_EN, true)) {
-    gBatteryPowerHoldEnabled = true;
+    gPower.batteryPowerHoldEnabled = true;
     Serial.println("[board] Battery power hold enabled");
   }
 }
@@ -107,7 +111,7 @@ bool releaseBatteryPowerHold() {
     return false;
   }
 
-  gBatteryPowerHoldEnabled = false;
+  gPower.batteryPowerHoldEnabled = false;
   Serial.println("[board] Battery power hold released");
   return true;
 }

@@ -8,7 +8,7 @@
 
 namespace {
 
-const BoardDrivers::Es8311::Config kEs8311Config = {
+BoardDrivers::Es8311::Context gAudioContext = {
     &Wire1,
     Board::Config::ES8311_ADDRESS,
     I2S_NUM_0,
@@ -22,10 +22,10 @@ const BoardDrivers::Es8311::Config kEs8311Config = {
 
 namespace Board::Audio {
 
-bool begin() { return BoardPlatform::Es8311BoardAudio::begin(kEs8311Config); }
+bool begin() { return BoardPlatform::Es8311BoardAudio::begin(gAudioContext); }
 
-bool beep() { return BoardPlatform::Es8311BoardAudio::beep(); }
+bool beep() { return BoardPlatform::Es8311BoardAudio::beep(gAudioContext); }
 
-bool available() { return BoardPlatform::Es8311BoardAudio::available(); }
+bool available() { return BoardPlatform::Es8311BoardAudio::available(gAudioContext); }
 
 }  // namespace Board::Audio

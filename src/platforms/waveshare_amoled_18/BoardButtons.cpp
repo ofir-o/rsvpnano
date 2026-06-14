@@ -6,14 +6,18 @@
 
 namespace {
 
-bool gExpanderPowerButtonStableHeld = false;
-bool gExpanderPowerButtonRawHeld = false;
-uint32_t gExpanderPowerButtonRawChangedMs = 0;
-uint32_t gExpanderPowerButtonLastPollMs = 0;
-bool gExpanderPowerButtonSeen = false;
-
 constexpr uint32_t kExpanderPowerButtonPollIntervalMs = 25;
 constexpr uint32_t kExpanderPowerButtonDebounceMs = 70;
+
+struct ButtonContext {
+  bool stableHeld = false;
+  bool rawHeld = false;
+  uint32_t rawChangedMs = 0;
+  uint32_t lastPollMs = 0;
+  bool seen = false;
+};
+
+ButtonContext gPowerButton;
 
 }  // namespace
 
@@ -23,40 +27,39 @@ bool readVirtualBootHeld() { return false; }
 
 bool readVirtualPowerHeld() {
   const uint32_t nowMs = millis();
-  if (gExpanderPowerButtonSeen &&
-      nowMs - gExpanderPowerButtonLastPollMs < kExpanderPowerButtonPollIntervalMs) {
-    return gExpanderPowerButtonStableHeld;
+  if (gPowerButton.seen && nowMs - gPowerButton.lastPollMs < kExpanderPowerButtonPollIntervalMs) {
+    return gPowerButton.stableHeld;
   }
-  gExpanderPowerButtonLastPollMs = nowMs;
+  gPowerButton.lastPollMs = nowMs;
 
   bool held = false;
   if (!BoardDrivers::Tca9554::readInputPin(
           Wire1, static_cast<uint8_t>(Board::Config::TCA9554_ADDRESS),
           Board::Config::TCA9554_PIN_PWR_BUTTON, held,
           Board::Config::TCA9554_RELEASE_BUS_BEFORE_READ)) {
-    return gExpanderPowerButtonStableHeld;
+    return gPowerButton.stableHeld;
   }
 
-  if (!gExpanderPowerButtonSeen) {
-    gExpanderPowerButtonSeen = true;
-    gExpanderPowerButtonRawHeld = held;
-    gExpanderPowerButtonStableHeld = held;
-    gExpanderPowerButtonRawChangedMs = nowMs;
-    return gExpanderPowerButtonStableHeld;
+  if (!gPowerButton.seen) {
+    gPowerButton.seen = true;
+    gPowerButton.rawHeld = held;
+    gPowerButton.stableHeld = held;
+    gPowerButton.rawChangedMs = nowMs;
+    return gPowerButton.stableHeld;
   }
 
-  if (held != gExpanderPowerButtonRawHeld) {
-    gExpanderPowerButtonRawHeld = held;
-    gExpanderPowerButtonRawChangedMs = nowMs;
-    return gExpanderPowerButtonStableHeld;
+  if (held != gPowerButton.rawHeld) {
+    gPowerButton.rawHeld = held;
+    gPowerButton.rawChangedMs = nowMs;
+    return gPowerButton.stableHeld;
   }
 
-  if (held != gExpanderPowerButtonStableHeld &&
-      nowMs - gExpanderPowerButtonRawChangedMs >= kExpanderPowerButtonDebounceMs) {
-    gExpanderPowerButtonStableHeld = held;
+  if (held != gPowerButton.stableHeld &&
+      nowMs - gPowerButton.rawChangedMs >= kExpanderPowerButtonDebounceMs) {
+    gPowerButton.stableHeld = held;
   }
 
-  return gExpanderPowerButtonStableHeld;
+  return gPowerButton.stableHeld;
 }
 
 bool consumeVirtualPowerShortPress() { return false; }

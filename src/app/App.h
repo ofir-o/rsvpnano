@@ -11,7 +11,8 @@
 #include "board/Board.h"
 #include "book/BookMetadata.h"
 #include "display/DisplayManager.h"
-#include "input/ButtonHandler.h"
+#include "input/InputButtons.h"
+#include "input/InputTouch.h"
 #include "reader/ReadingLoop.h"
 #include "rss/RssFeedManager.h"
 #include "storage/index/IndexedBookStore.h"
@@ -22,8 +23,8 @@
 #include "update/OtaUpdater.h"
 #include "usb/UsbMassStorageManager.h"
 
-using TouchEvent = Board::Touch::Event;
-using TouchPhase = Board::Touch::Phase;
+using TouchEvent = Input::Touch::Event;
+using TouchPhase = Input::Touch::Phase;
 
 class App {
  public:
@@ -451,9 +452,9 @@ class App {
   DisplayManager display_;
   FocusTimer focusTimer_;
   ReadingLoop reader_;
-  ButtonHandler button_;
-  ButtonHandler powerButton_;
-  ButtonHandler keyButton_;
+  Input::Buttons::Button button_;
+  Input::Buttons::Button powerButton_;
+  Input::Buttons::Button keyButton_;
   StorageManager storage_;
   IndexedBookStore activeBookStore_;
   OtaUpdater otaUpdater_;

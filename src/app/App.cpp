@@ -953,7 +953,7 @@ void App::begin() {
     Serial.println("[app] Display init failed");
   }
 
-  touchInitialized_ = Board::Touch::begin();
+  touchInitialized_ = Input::Touch::begin();
   Board::Audio::begin();
   focusTimer_.begin();
 
@@ -2422,7 +2422,7 @@ void App::handleTouch(uint32_t nowMs) {
   if (state_ == AppState::Booting || state_ == AppState::UsbTransfer ||
       state_ == AppState::Standby ||
       state_ == AppState::Sleeping) {
-    Board::Touch::cancel();
+    Input::Touch::cancel();
     pausedTouch_.active = false;
     pausedTouchIntent_ = TouchIntent::None;
     touchPlayHeld_ = false;
@@ -2431,7 +2431,7 @@ void App::handleTouch(uint32_t nowMs) {
   }
 
   TouchEvent ev;
-  if (!Board::Touch::readEvent(ev)) {
+  if (!Input::Touch::readEvent(ev)) {
     return;
   }
   lastActivityMs_ = nowMs;
@@ -5856,7 +5856,7 @@ void App::enterPowerOff(uint32_t nowMs) {
 
   activeBookStore_.close();
   storage_.end();
-  Board::Touch::end();
+  Input::Touch::end();
   touchInitialized_ = false;
   if (!useRecoverableSoftOff) {
     Serial.flush();
@@ -5923,7 +5923,7 @@ void App::enterSleep(uint32_t nowMs) {
   display_.prepareForSleep();
   activeBookStore_.close();
   storage_.end();
-  Board::Touch::end();
+  Input::Touch::end();
   touchInitialized_ = false;
 
   Board::System::lightSleepUntilBootButton();
@@ -5971,7 +5971,7 @@ void App::wakeFromSleep(bool fullPeripheralReset) {
   state_ = AppState::Paused;
 
   const bool displayReady = fullPeripheralReset ? display_.begin() : display_.wakeFromSleep();
-  touchInitialized_ = Board::Touch::begin();
+  touchInitialized_ = Input::Touch::begin();
   storageReady_ = storage_.begin();
 
   if (storageReady_ && usingStorageBook_ && !currentBookPath_.isEmpty()) {
@@ -7058,7 +7058,7 @@ bool App::isFocusTimerMenuScreen(MenuScreen screen) const {
 }
 
 void App::applyUiOrientation(Board::Config::UiOrientation orientation) {
-  Board::Touch::setUiOrientation(orientation);
+  Input::Touch::setUiOrientation(orientation);
   display_.setUiOrientation(orientation);
 }
 
