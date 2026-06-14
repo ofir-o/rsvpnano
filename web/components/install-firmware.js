@@ -89,15 +89,6 @@ class InstallFirmware extends HTMLElement {
             </ol>
           </div>
           <div class="section-body-inner">
-            <div class="device-picker">
-              <label class="device-select-label" for="firmware-device-select">Device to flash</label>
-              <select class="device-select" id="firmware-device-select">
-                ${firmwareOptions.map((option) => `
-                <option value="${option.manifest}">${option.title}</option>
-                `).join("")}
-              </select>
-              <p class="install-option-note">Choose the board that matches the device connected over USB.</p>
-            </div>
             <div class="affiliate-links">
               <p class="affiliate-disclosure">
                 Hardware links below are affiliate links. Buying through them may support RSVP Nano at no extra cost to you.
@@ -143,7 +134,6 @@ class InstallFirmware extends HTMLElement {
 
     this._section = this.querySelector("#install-section");
     this._historyEl = this.querySelector("#flash-history");
-    this._deviceSelect = this.querySelector("#firmware-device-select");
 
     const toggle = this.querySelector("#install-toggle");
     const content = this.querySelector("#install-content");
@@ -152,16 +142,6 @@ class InstallFirmware extends HTMLElement {
       this._section.classList.toggle("is-collapsed", collapsed);
       toggle.setAttribute("aria-expanded", collapsed ? "false" : "true");
       content.hidden = collapsed;
-    });
-
-    const lastFlash = this._readFlashData();
-    const initialManifest =
-      lastFlash?.manifest && firmwareOptions.some((option) => option.manifest === lastFlash.manifest)
-        ? lastFlash.manifest
-        : firmwareOptions[0].manifest;
-    this._setSelectedManifest(initialManifest);
-    this._deviceSelect.addEventListener("change", () => {
-      this._setSelectedManifest(this._deviceSelect.value);
     });
 
     this._showFlashHistory();
@@ -202,15 +182,6 @@ class InstallFirmware extends HTMLElement {
           ul.innerHTML = "<li>Not available in the latest published release yet.</li>";
           this._refreshInstallOption(option);
         });
-    });
-  }
-
-  _setSelectedManifest(manifest) {
-    if (this._deviceSelect.value !== manifest) {
-      this._deviceSelect.value = manifest;
-    }
-    this.querySelectorAll(".install-option").forEach((option) => {
-      option.hidden = option.dataset.manifest !== manifest;
     });
   }
 
