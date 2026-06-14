@@ -282,7 +282,7 @@ namespace SdDiagnostics {
             return true;
         }
 
-        if (!SD_MMC.setPins(BoardConfig::PIN_SD_CLK, BoardConfig::PIN_SD_CMD, BoardConfig::PIN_SD_D0)) {
+        if (!SD_MMC.setPins(Board::Config::PIN_SD_CLK, Board::Config::PIN_SD_CMD, Board::Config::PIN_SD_D0)) {
             Serial.println("[sd-check] SD_MMC pin setup failed");
             return false;
         }

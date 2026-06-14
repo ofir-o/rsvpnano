@@ -6,6 +6,7 @@
 #include <esp_heap_caps.h>
 #include <esp_log.h>
 
+#include "board/BoardDisplay.h"
 #include "board/BoardConfig.h"
 #include "display/EmbeddedAtkinsonFont.h"
 #include "display/EmbeddedAtkinsonFont70.h"
@@ -13,14 +14,13 @@
 #include "display/EmbeddedOpenDyslexicFont70.h"
 #include "display/EmbeddedSerifFont.h"
 #include "display/EmbeddedSerifFont70.h"
-#include "display/BoardDisplay.h"
 #include "text/LatinText.h"
 
 namespace {
-constexpr int kDisplayWidth = BoardConfig::DISPLAY_WIDTH;
-constexpr int kDisplayHeight = BoardConfig::DISPLAY_HEIGHT;
-constexpr int kPanelNativeWidth = BoardConfig::PANEL_NATIVE_WIDTH;
-constexpr int kPanelNativeHeight = BoardConfig::PANEL_NATIVE_HEIGHT;
+constexpr int kDisplayWidth = Board::Config::DISPLAY_WIDTH;
+constexpr int kDisplayHeight = Board::Config::DISPLAY_HEIGHT;
+constexpr int kPanelNativeWidth = Board::Config::PANEL_NATIVE_WIDTH;
+constexpr int kPanelNativeHeight = Board::Config::PANEL_NATIVE_HEIGHT;
 
 constexpr int kMinTextScale = 1;
 constexpr int kMaxTextScale = 1;
@@ -47,11 +47,11 @@ constexpr int kTinyGlyphWidth = 5;
 constexpr int kTinyGlyphHeight = 7;
 constexpr int kTinyGlyphSpacing = 1;
 constexpr int kTinyScale = 2;
-constexpr int kReaderChromeMarginX = BoardConfig::READER_CHROME_MARGIN_X;
-constexpr int kReaderChromeMarginTop = BoardConfig::READER_CHROME_MARGIN_TOP;
-constexpr int kReaderChromeMarginBottom = BoardConfig::READER_CHROME_MARGIN_BOTTOM;
-constexpr int kReaderBatteryMarginX = BoardConfig::READER_BATTERY_MARGIN_X;
-constexpr int kReaderBatteryMarginTop = BoardConfig::READER_BATTERY_MARGIN_TOP;
+constexpr int kReaderChromeMarginX = Board::Config::READER_CHROME_MARGIN_X;
+constexpr int kReaderChromeMarginTop = Board::Config::READER_CHROME_MARGIN_TOP;
+constexpr int kReaderChromeMarginBottom = Board::Config::READER_CHROME_MARGIN_BOTTOM;
+constexpr int kReaderBatteryMarginX = Board::Config::READER_BATTERY_MARGIN_X;
+constexpr int kReaderBatteryMarginTop = Board::Config::READER_BATTERY_MARGIN_TOP;
 constexpr int kCompactMenuRowHeight = 22;
 constexpr int kCompactMenuX = 28;
 constexpr int kLibraryRowHeight = 38;
@@ -91,58 +91,58 @@ constexpr int kVirtualBufferWidth = kDisplayWidth;
 constexpr int kVirtualBufferHeight = kPanelNativeHeight;
 
 constexpr size_t kBytesPerPixel = sizeof(uint16_t);
-constexpr size_t kMaxChunkBytes = BoardConfig::DISPLAY_TX_CHUNK_BYTES;
+constexpr size_t kMaxChunkBytes = Board::Config::DISPLAY_TX_CHUNK_BYTES;
 constexpr int kTxBufferWidth = kDisplayWidth > kPanelNativeWidth ? kDisplayWidth : kPanelNativeWidth;
 constexpr int kMaxChunkPhysicalRows = kMaxChunkBytes / (kTxBufferWidth * kBytesPerPixel);
 static_assert(kMaxChunkPhysicalRows > 0, "Display chunk buffer must hold at least one row");
 
 constexpr size_t kTxBufferPixels = static_cast<size_t>(kTxBufferWidth) * kMaxChunkPhysicalRows;
 
-int logicalWidthForOrientation(BoardConfig::UiOrientation orientation) {
+int logicalWidthForOrientation(Board::Config::UiOrientation orientation) {
   switch (orientation) {
-    case BoardConfig::UiOrientation::Portrait:
-    case BoardConfig::UiOrientation::PortraitFlipped:
+    case Board::Config::UiOrientation::Portrait:
+    case Board::Config::UiOrientation::PortraitFlipped:
       return kPanelNativeWidth;
-    case BoardConfig::UiOrientation::Landscape:
-    case BoardConfig::UiOrientation::LandscapeFlipped:
+    case Board::Config::UiOrientation::Landscape:
+    case Board::Config::UiOrientation::LandscapeFlipped:
     default:
       return kDisplayWidth;
   }
 }
 
-int logicalHeightForOrientation(BoardConfig::UiOrientation orientation) {
+int logicalHeightForOrientation(Board::Config::UiOrientation orientation) {
   switch (orientation) {
-    case BoardConfig::UiOrientation::Portrait:
-    case BoardConfig::UiOrientation::PortraitFlipped:
+    case Board::Config::UiOrientation::Portrait:
+    case Board::Config::UiOrientation::PortraitFlipped:
       return kPanelNativeHeight;
-    case BoardConfig::UiOrientation::Landscape:
-    case BoardConfig::UiOrientation::LandscapeFlipped:
+    case Board::Config::UiOrientation::Landscape:
+    case Board::Config::UiOrientation::LandscapeFlipped:
     default:
       return kDisplayHeight;
   }
 }
 
-bool isPortraitOrientation(BoardConfig::UiOrientation orientation) {
-  return orientation == BoardConfig::UiOrientation::Portrait ||
-         orientation == BoardConfig::UiOrientation::PortraitFlipped;
+bool isPortraitOrientation(Board::Config::UiOrientation orientation) {
+  return orientation == Board::Config::UiOrientation::Portrait ||
+         orientation == Board::Config::UiOrientation::PortraitFlipped;
 }
 
-void mapPhysicalToLogical(BoardConfig::UiOrientation orientation, int physicalX, int physicalY,
+void mapPhysicalToLogical(Board::Config::UiOrientation orientation, int physicalX, int physicalY,
                           int &logicalX, int &logicalY) {
   switch (orientation) {
-    case BoardConfig::UiOrientation::Portrait:
+    case Board::Config::UiOrientation::Portrait:
       logicalX = physicalX;
       logicalY = physicalY;
       break;
-    case BoardConfig::UiOrientation::PortraitFlipped:
+    case Board::Config::UiOrientation::PortraitFlipped:
       logicalX = kPanelNativeWidth - 1 - physicalX;
       logicalY = kPanelNativeHeight - 1 - physicalY;
       break;
-    case BoardConfig::UiOrientation::Landscape:
+    case Board::Config::UiOrientation::Landscape:
       logicalX = kDisplayWidth - 1 - physicalY;
       logicalY = physicalX;
       break;
-    case BoardConfig::UiOrientation::LandscapeFlipped:
+    case Board::Config::UiOrientation::LandscapeFlipped:
     default:
       logicalX = physicalY;
       logicalY = kDisplayHeight - 1 - physicalX;
@@ -904,7 +904,7 @@ void DisplayManager::setNightMode(bool nightMode) {
   lastRenderKey_ = "";
 }
 
-void DisplayManager::setUiOrientation(BoardConfig::UiOrientation orientation) {
+void DisplayManager::setUiOrientation(Board::Config::UiOrientation orientation) {
   if (uiOrientation_ == orientation) {
     return;
   }
@@ -915,8 +915,8 @@ void DisplayManager::setUiOrientation(BoardConfig::UiOrientation orientation) {
 }
 
 void DisplayManager::setUiRotated180(bool rotated180) {
-  setUiOrientation(rotated180 ? BoardConfig::ROTATED_UI_ORIENTATION
-                              : BoardConfig::DEFAULT_UI_ORIENTATION);
+  setUiOrientation(rotated180 ? Board::Config::ROTATED_UI_ORIENTATION
+                              : Board::Config::DEFAULT_UI_ORIENTATION);
 }
 
 void DisplayManager::setTypographyConfig(const TypographyConfig &config) {
@@ -969,7 +969,7 @@ bool DisplayManager::begin() {
   lastRenderKey_ = "";
   fillScreen(backgroundColor());
   applyBrightness();
-  ESP_LOGI(kDisplayTag, "Display initialized for %s", BoardConfig::BOARD_LABEL);
+  ESP_LOGI(kDisplayTag, "Display initialized for %s", Board::Config::BOARD_LABEL);
   return true;
 }
 
@@ -979,7 +979,7 @@ void DisplayManager::prepareForSleep() {
   }
 
   fillScreen(kTrueBlack);
-  boardDisplaySleep();
+  Board::Display::sleep();
   initialized_ = false;
   tickerPlaybackFrameActive_ = false;
   lastRenderKey_ = "";
@@ -991,7 +991,7 @@ bool DisplayManager::wakeFromSleep() {
     return false;
   }
 
-  boardDisplayWake();
+  Board::Display::wake();
   initialized_ = true;
   tickerPlaybackFrameActive_ = false;
   lastRenderKey_ = "";
@@ -1021,7 +1021,7 @@ bool DisplayManager::allocateBuffers() {
 }
 
 bool DisplayManager::initPanel() {
-  if (!boardDisplayInit()) {
+  if (!Board::Display::begin()) {
     return false;
   }
   ESP_LOGI(kDisplayTag, "Panel init sequence complete");
@@ -1033,10 +1033,11 @@ bool DisplayManager::drawBitmap(int xStart, int yStart, int xEnd, int yEnd, cons
     return false;
   }
 
-  return boardDisplayPushColors(static_cast<uint16_t>(xStart), static_cast<uint16_t>(yStart),
-                                static_cast<uint16_t>(xEnd - xStart),
-                                static_cast<uint16_t>(yEnd - yStart),
-                                static_cast<const uint16_t *>(colorData));
+  return Board::Display::pushColors(static_cast<uint16_t>(xStart),
+                                    static_cast<uint16_t>(yStart),
+                                    static_cast<uint16_t>(xEnd - xStart),
+                                    static_cast<uint16_t>(yEnd - yStart),
+                                    static_cast<const uint16_t *>(colorData));
 }
 
 void DisplayManager::fillScreen(uint16_t color) {
@@ -1734,8 +1735,8 @@ void DisplayManager::drawMenuItem(const String &item, int y, bool selected) {
 }
 
 void DisplayManager::applyBrightness() {
-  boardDisplaySetBrightnessPercent(brightnessPercent_);
-  boardDisplaySetBacklight(true);
+  Board::Display::setBrightness(brightnessPercent_);
+  Board::Display::setBacklight(true);
 }
 
 void DisplayManager::flushScaledFrame(int scale, int virtualWidth, int virtualHeight) {
@@ -1784,7 +1785,7 @@ void DisplayManager::flushFullWidthLogicalBand(int yStart, int yEnd) {
     return;
   }
 
-  const bool flipped = uiOrientation_ == BoardConfig::UiOrientation::LandscapeFlipped;
+  const bool flipped = uiOrientation_ == Board::Config::UiOrientation::LandscapeFlipped;
   const int physicalXStart = flipped ? (kDisplayHeight - yEnd) : yStart;
   const int physicalXEnd = flipped ? (kDisplayHeight - yStart) : yEnd;
   const int physicalWidth = physicalXEnd - physicalXStart;

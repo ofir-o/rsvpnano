@@ -8,11 +8,10 @@
 #include <vector>
 
 #include "app/AppState.h"
-#include "audio/AudioManager.h"
+#include "board/Board.h"
 #include "book/BookMetadata.h"
 #include "display/DisplayManager.h"
 #include "input/ButtonHandler.h"
-#include "input/TouchHandler.h"
 #include "reader/ReadingLoop.h"
 #include "rss/RssFeedManager.h"
 #include "storage/index/IndexedBookStore.h"
@@ -22,6 +21,9 @@
 #include "ui/Localization.h"
 #include "update/OtaUpdater.h"
 #include "usb/UsbMassStorageManager.h"
+
+using TouchEvent = Board::Touch::Event;
+using TouchPhase = Board::Touch::Phase;
 
 class App {
  public:
@@ -432,10 +434,10 @@ class App {
   const char *touchPhaseName(TouchPhase phase) const;
   bool isFocusTimerMenuScreen(MenuScreen screen) const;
   bool scrollModeEnabled() const;
-  void applyUiOrientation(BoardConfig::UiOrientation orientation);
+  void applyUiOrientation(Board::Config::UiOrientation orientation);
   void applyReaderUiOrientation();
   void reloadRuntimePreferences(uint32_t nowMs, bool rerender);
-  BoardConfig::UiOrientation readerUiOrientation() const;
+  Board::Config::UiOrientation readerUiOrientation() const;
   bool uiRotated180() const;
   uint8_t effectiveAnchorPercent() const;
   DisplayManager::TypographyConfig effectiveTypographyConfig() const;
@@ -447,13 +449,11 @@ class App {
   AppState state_ = AppState::Booting;
   AppState standbyReturnState_ = AppState::Paused;
   DisplayManager display_;
-  AudioManager audio_;
   FocusTimer focusTimer_;
   ReadingLoop reader_;
   ButtonHandler button_;
   ButtonHandler powerButton_;
   ButtonHandler keyButton_;
-  TouchHandler touch_;
   StorageManager storage_;
   IndexedBookStore activeBookStore_;
   OtaUpdater otaUpdater_;

@@ -14,7 +14,7 @@ class OtaUpdater {
     String wifiPassword;
     String githubOwner = "ionutdecebal";
     String githubRepo = "rsvpnano";
-    String assetName = BoardConfig::OTA_ASSET_NAME;
+    String assetName = Board::Config::OTA_ASSET_NAME;
     bool autoCheck = false;
   };
 

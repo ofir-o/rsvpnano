@@ -41,7 +41,7 @@ class FocusTimer {
   bool isActiveTimerRunning() const;
   State state() const;
   Genre genre() const;
-  BoardConfig::UiOrientation uiOrientation() const;
+  Board::Config::UiOrientation uiOrientation() const;
   uint32_t remainingMs(uint32_t nowMs) const;
   uint8_t progressPercent(uint32_t nowMs) const;
   uint8_t completedTouchBlocks() const;
@@ -87,11 +87,11 @@ class FocusTimer {
   bool timerExpired(uint32_t nowMs) const;
   static bool isShortSide(OrientationState orientation);
   static OrientationState oppositeShortSide(OrientationState orientation);
-  static BoardConfig::UiOrientation portraitOrientationForShortSide(
+  static Board::Config::UiOrientation portraitOrientationForShortSide(
       OrientationState orientation);
 
   bool imuAvailable_ = false;
-  uint8_t imuAddress_ = BoardConfig::IMU_I2C_ADDRESS;
+  uint8_t imuAddress_ = Board::Config::IMU_I2C_ADDRESS;
   float accelScale_ = 4.0f / 32768.0f;
   OrientationState rawOrientation_ = OrientationState::Unknown;
   OrientationState stableOrientation_ = OrientationState::Unknown;

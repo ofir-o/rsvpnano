@@ -225,18 +225,10 @@ bool assetNameLooksCompatibleWithBoard(const String &assetName, String &errorDet
     return false;
   }
 
-#if defined(RSVP_BOARD_WAVESHARE_ESP32S3_TOUCH_AMOLED_241)
-  if (trimmed == "rsvp-nano-ota.bin" || trimmed.indexOf("touch-lcd-3.49") >= 0) {
-    errorDetail = "Asset targets Touch LCD 3.49";
+  if (trimmed != Board::Config::OTA_ASSET_NAME) {
+    errorDetail = "Asset does not match " + String(Board::Config::BOARD_LABEL);
     return false;
   }
-#elif defined(RSVP_BOARD_WAVESHARE_ESP32S3_TOUCH_LCD_349) || \
-    defined(RSVP_BOARD_WAVESHARE_ESP32S3_TOUCH_LCD_349_GPIO42)
-  if (trimmed.indexOf("touch-amoled-2.41") >= 0) {
-    errorDetail = "Asset targets Touch AMOLED 2.41";
-    return false;
-  }
-#endif
 
   return true;
 }
