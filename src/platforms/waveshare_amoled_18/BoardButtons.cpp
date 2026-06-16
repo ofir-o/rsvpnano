@@ -34,7 +34,7 @@ bool readVirtualPowerHeld() {
 
   bool held = false;
   if (!BoardDrivers::Tca9554::readInputPin(
-          Wire1, static_cast<uint8_t>(Board::Config::TCA9554_ADDRESS),
+          Wire, static_cast<uint8_t>(Board::Config::TCA9554_ADDRESS),
           Board::Config::TCA9554_PIN_PWR_BUTTON, held,
           Board::Config::TCA9554_RELEASE_BUS_BEFORE_READ)) {
     return gPowerButton.stableHeld;

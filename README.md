@@ -2,7 +2,7 @@
 
 RSVP Nano is an open-source ESP32-S3 reading device that shows text one word at a time using RSVP, Rapid Serial Visual Presentation. It is designed for small screens, SD card libraries, fast reading, and a simple browser-first workflow for converting and uploading books.
 
-This README is written for the current release, `v0.0.6`.
+This README is written for the current release, `v0.0.7`.
 
 ## What You Need
 
@@ -18,7 +18,8 @@ The browser flasher supports these device targets:
 
 - Waveshare ESP32-S3 Touch LCD 3.49 rev1.
 - Waveshare ESP32-S3 Touch LCD 3.49 rev2.
-- Waveshare ESP32-S3 Touch AMOLED 1.8.
+- Waveshare ESP32-S3 Touch AMOLED 1.8 V1.
+- Waveshare ESP32-S3 Touch AMOLED 1.8 V2 Test.
 - Waveshare ESP32-S3 Touch AMOLED 2.16.
 - Waveshare ESP32-S3 Touch AMOLED 2.41.
 
@@ -52,9 +53,12 @@ Most ESP32-S3 Touch LCD 3.49 devices should use the default rev1 firmware option
 Waveshare batch boots but brightness or backlight control does not respond, try the rev2 firmware
 option instead; it uses the alternate GPIO42 backlight profile.
 
-The hosted flasher installs the latest published GitHub Release. For `v0.0.6`, that means the
+For Waveshare Touch AMOLED 1.8 boards, choose the V1 option for SH8601 display / FT3168 touch
+hardware. Choose the V2 Test option only for newer CO5300 display / CST816 touch hardware.
+
+The hosted flasher installs the latest published GitHub Release. For `v0.0.7`, that means the
 release build includes the firmware, SD card, RSS, companion sync, USB transfer, quick settings,
-browser flasher, menu, input, battery, and display work described below.
+browser flasher, menu, input, battery, display, multi-board, and compact timer work described below.
 
 Make sure your USB cable is a data cable.
 
@@ -74,7 +78,7 @@ Create these folders on the card:
 /config
 ```
 
-Books go in `/books/books`. Articles go in `/books/articles`. Older libraries with files directly inside `/books` are still read for compatibility, but the split folders are the recommended layout for `v0.0.6`.
+Books go in `/books/books`. Articles go in `/books/articles`. Older libraries with files directly inside `/books` are still read for compatibility, but the split folders are the recommended layout for `v0.0.7`.
 
 If the device cannot see the SD card, the most common causes are:
 
@@ -184,7 +188,7 @@ You can set Wi-Fi credentials from:
 RSS feeds are managed from the web companion or the native app, then checked from the device with
 `Articles -> Update RSS`. New articles are saved into `/books/articles`.
 
-RSS support in `v0.0.6` includes:
+RSS support in `v0.0.7` includes:
 
 - RSS and Atom feed parsing.
 - Redirect handling for common `301`, `302`, `303`, `307`, and `308` responses.
@@ -396,7 +400,7 @@ If the old folder layout needs repair, the device now asks before changing the c
 
 ## Character Support
 
-`v0.0.6` improves support for long books and unsupported characters. Common punctuation is normalized, ellipses and hyphenated sentence breaks are handled more carefully, and many accented Latin characters render directly or fall back to readable plain Latin equivalents.
+`v0.0.7` includes the long-book and unsupported-character improvements from earlier releases. Common punctuation is normalized, ellipses and hyphenated sentence breaks are handled more carefully, and many accented Latin characters render directly or fall back to readable plain Latin equivalents.
 
 The current renderer is best for English and European Latin-script languages. Complex scripts still need additional font and shaping work.
 
@@ -434,6 +438,7 @@ rev1 target; use explicit targets for other boards:
 ```bash
 pio run -e waveshare_esp32s3_rev2
 pio run -e waveshare_esp32s3_touch_amoled_18
+pio run -e waveshare_esp32s3_touch_amoled_18_v2
 pio run -e waveshare_esp32s3_touch_amoled_241
 pio run -e waveshare_esp32s3_touch_amoled_216
 ```
@@ -461,7 +466,7 @@ Open the Xcode project from that folder when installing the app locally.
 To export browser-flasher and OTA firmware assets for a release:
 
 ```bash
-python3 tools/export_web_firmware.py --version v0.0.6
+python3 tools/export_web_firmware.py --version v0.0.7
 ```
 
 That writes:
@@ -475,6 +480,8 @@ web/firmware/rsvp-nano-rev2-ota.bin
 web/firmware/rsvp-nano-esp32-s3-touch-lcd-3.49-rev2-ota.bin
 web/firmware/rsvp-nano-esp32-s3-touch-amoled-1.8.bin
 web/firmware/rsvp-nano-esp32-s3-touch-amoled-1.8-ota.bin
+web/firmware/rsvp-nano-esp32-s3-touch-amoled-1.8-v2.bin
+web/firmware/rsvp-nano-esp32-s3-touch-amoled-1.8-v2-ota.bin
 web/firmware/rsvp-nano-esp32-s3-touch-amoled-2.16.bin
 web/firmware/rsvp-nano-esp32-s3-touch-amoled-2.16-ota.bin
 web/firmware/rsvp-nano-esp32-s3-touch-amoled-2.41.bin
@@ -482,16 +489,35 @@ web/firmware/rsvp-nano-esp32-s3-touch-amoled-2.41-ota.bin
 web/firmware/manifest.json
 web/firmware/manifest-rev2.json
 web/firmware/manifest-esp32-s3-touch-amoled-1.8.json
+web/firmware/manifest-esp32-s3-touch-amoled-1.8-v2.json
 web/firmware/manifest-esp32-s3-touch-amoled-2.16.json
 web/firmware/manifest-esp32-s3-touch-amoled-2.41.json
 ```
 
 ## Project Status
 
-`v0.0.6` is the first release with the new cross-device input model, restructured menu,
-bottom-edge quick settings, Wi-Fi/USB Sync picker, browser flasher device dropdown, AMOLED 1.8,
-2.16, and 2.41 web-flash assets, USB transfer enabled across the firmware targets, battery and
-auto-dim settings, and the paused-reader edge handles that hint at the swipe menus.
+`v0.0.7` focuses on multi-board release polish and the fixes found during hardware testing:
+
+- Adds the Waveshare Touch AMOLED 1.8 V2 Test firmware target for newer CO5300 display / CST816
+  touch hardware.
+- Keeps the original Touch AMOLED 1.8 target labeled as V1, for SH8601 display / FT3168 touch
+  hardware.
+- Adds the 1.8 V2 Test target to the hosted browser flasher, release asset export, release
+  download helper, and GitHub release workflows.
+- Enables USB SD-card transfer mode across all firmware targets and fixes the transfer path to use
+  the mounted FatFS SD drive.
+- Fixes Touch AMOLED 2.16 touch input by polling the CST92xx controller instead of depending on the
+  unreliable interrupt line.
+- Improves the focus timer layout on compact AMOLED screens, including centered countdown text,
+  non-overlapping Restart text on 1.8, and clearer break placement instructions.
+- Adds benchmark firmware targets for display, touch, audio, SD, and EPUB conversion checks.
+- Shares board display, storage, IMU, and GPIO-expander helper code so board profiles stay more
+  consistent.
+
+`v0.0.6` introduced the new cross-device input model, restructured menu, bottom-edge quick
+settings, Wi-Fi/USB Sync picker, browser flasher device dropdown, AMOLED 1.8, 2.16, and 2.41
+web-flash assets, USB transfer across firmware targets, battery and auto-dim settings, and the
+paused-reader edge handles that hint at the swipe menus.
 
 The next areas of work are:
 

@@ -76,10 +76,6 @@ class FocusTimer {
   };
 
   bool initImu();
-  bool probeImuAddress(uint8_t address);
-  bool readRegister(uint8_t reg, uint8_t &value);
-  bool writeRegister(uint8_t reg, uint8_t value);
-  bool readRegisters(uint8_t startReg, uint8_t *buffer, size_t len);
   bool updateRegister(uint8_t reg, uint8_t mask, uint8_t value);
   bool readAccelerometer(float &x, float &y, float &z);
   void updateOrientation(uint32_t nowMs);

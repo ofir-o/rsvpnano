@@ -5474,14 +5474,14 @@ void App::enterUsbTransfer(uint32_t nowMs) {
   pausedTouchIntent_ = TouchIntent::None;
   wpmFeedbackVisible_ = false;
   const size_t resumeIndex = reader_.currentIndex();
+  const bool storageWasReady = storageReady_;
   setState(AppState::UsbTransfer, nowMs);
 
   activeBookStore_.close();
-  storage_.end();
   if (!usbTransfer_.begin(true)) {
     Serial.printf("[app] USB transfer failed: %s\n", usbTransfer_.statusMessage());
-    display_.renderStatus("USB", "SD not ready", "Returning");
-    storageReady_ = storage_.begin();
+    display_.renderStatus("USB", usbTransfer_.statusMessage(), "Returning");
+    storageReady_ = storageWasReady ? true : storage_.begin();
     if (storageReady_ && usingStorageBook_ && !currentBookPath_.isEmpty()) {
       const int refreshedBookIndex = findBookIndexByPath(currentBookPath_);
       BookOpenOptions reloadOptions;
@@ -5530,6 +5530,7 @@ void App::exitUsbTransfer(uint32_t nowMs) {
   Serial.println("[app] USB transfer ejected; remounting SD");
   display_.renderStatus("USB", "Remounting SD", "");
   usbTransfer_.end();
+  storage_.end();
 
   storageReady_ = storage_.begin();
   if (storageReady_) {
@@ -6434,7 +6435,7 @@ void App::renderFocusTimerSession() {
                                       "", focusTimer_.progressPercent(millis()), true);
       return;
     case FocusTimer::State::WaitAfterWork:
-      display_.renderFocusTimerScreen("BREAK", "", "", "Turn for break", "",
+      display_.renderFocusTimerScreen("BREAK", "", "", "Place on side\nfor break", "",
                                       -1, true);
       return;
     case FocusTimer::State::WaitAfterBreak:

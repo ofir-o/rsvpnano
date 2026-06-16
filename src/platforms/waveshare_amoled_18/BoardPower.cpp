@@ -14,12 +14,12 @@ struct PowerContext {
 PowerContext gPower;
 
 bool tcaRead(uint8_t reg, uint8_t &value) {
-  return BoardDrivers::Tca9554::read(Wire1, static_cast<uint8_t>(Board::Config::TCA9554_ADDRESS),
+  return BoardDrivers::Tca9554::read(Wire, static_cast<uint8_t>(Board::Config::TCA9554_ADDRESS),
                                      reg, value, Board::Config::TCA9554_RELEASE_BUS_BEFORE_READ);
 }
 
 bool tcaWrite(uint8_t reg, uint8_t value) {
-  return BoardDrivers::Tca9554::write(Wire1, static_cast<uint8_t>(Board::Config::TCA9554_ADDRESS),
+  return BoardDrivers::Tca9554::write(Wire, static_cast<uint8_t>(Board::Config::TCA9554_ADDRESS),
                                       reg, value);
 }
 

@@ -8,7 +8,7 @@
 #include <cstring>
 #include <driver/sdmmc_types.h>
 
-#include "board/BoardConfig.h"
+#include "board/BoardStorage.h"
 #include "storage/fs/StorageFiles.h"
 #include "storage/fs/StoragePaths.h"
 
@@ -282,7 +282,7 @@ namespace SdDiagnostics {
             return true;
         }
 
-        if (!SD_MMC.setPins(Board::Config::PIN_SD_CLK, Board::Config::PIN_SD_CMD, Board::Config::PIN_SD_D0)) {
+        if (!Board::Storage::setSdMmcPins()) {
             Serial.println("[sd-check] SD_MMC pin setup failed");
             return false;
         }

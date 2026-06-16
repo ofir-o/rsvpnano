@@ -9,6 +9,9 @@ namespace Board::Display {
 bool begin();
 void enablePowerIfAvailable();
 void holdBacklightOffForDeepSleep();
+uint16_t nativeWidth();
+uint16_t nativeHeight();
+size_t txChunkBytes();
 void setBacklight(bool on);
 void flashBacklight(uint8_t count, uint32_t onMs, uint32_t offMs);
 void setBrightness(uint8_t percent);

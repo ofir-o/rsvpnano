@@ -3494,45 +3494,85 @@ void DisplayManager::renderFocusTimerScreen(const String &mode, const String &ge
     return std::max(blockX, blockX + ((blockWidth - textWidth) / 2));
   };
 
+  auto tinyTextHeight = [](int scale) { return kTinyGlyphHeight * scale; };
+
+  auto fitTinyScale = [&](const String &text, int scale, int maxWidth) {
+    while (scale > 1 && measureTinyTextWidth(text, scale) > maxWidth) {
+      --scale;
+    }
+    return scale;
+  };
+
+  auto clampTextY = [&](int y, int scale) {
+    return std::max(0, std::min(y, virtualHeight - tinyTextHeight(scale)));
+  };
+
+  const bool compactTimerLayout = virtualWidth <= 480 && virtualHeight <= 480;
   const bool portraitFocusLayout = portrait && !breakAccent && (mode == "BEGIN" || mode == "WORK");
   int titleScale = portrait ? 5 : 7;
   if (portraitFocusLayout && timerRunning) {
     titleScale = 4;
   }
-  while (titleScale > 1 && measureTinyTextWidth(mode, titleScale) > contentWidth) {
-    --titleScale;
+  if (compactTimerLayout) {
+    titleScale = portrait ? 4 : 5;
+    if (timerRunning && !portrait && virtualWidth >= 470 && virtualHeight >= 470) {
+      titleScale = 6;
+    }
   }
+  titleScale = fitTinyScale(mode, titleScale, contentWidth);
 
   if (timerRunning) {
     int timerScale = portrait ? 5 : 7;
-    while (timerScale > 1 && measureTinyTextWidth(timer, timerScale) > contentWidth) {
-      --timerScale;
+    if (compactTimerLayout) {
+      timerScale = portrait ? 5 : 6;
+      if (virtualWidth >= 470 && virtualHeight >= 470) {
+        timerScale = portrait ? 6 : 7;
+      }
     }
+    timerScale = fitTinyScale(timer, timerScale, contentWidth);
 
     int titleY = portrait ? 120 : 24;
     int timerY = portrait ? 352 : 88;
+    int footerScale = titleScale;
+    int footerY = -1;
+    int footerX = 0;
     if (portraitFocusLayout) {
       titleY = 92;
       timerY = 306;
+    }
+    if (compactTimerLayout) {
+      titleY = std::max(26, virtualHeight / (portrait ? 6 : 9));
+      timerY = (virtualHeight - tinyTextHeight(timerScale)) / 2;
+    }
+    if (!footer.isEmpty()) {
+      footerScale = fitTinyScale(footer, footerScale, contentWidth);
+      footerY = virtualHeight - titleY - tinyTextHeight(footerScale);
+      footerY = clampTextY(footerY, footerScale);
+      footerX = centeredXForTiny(footer, footerScale);
+    }
+    if (compactTimerLayout && footerY >= 0) {
+      const int minTimerFooterGap = portrait ? 34 : 24;
+      timerY = std::min(timerY, footerY - minTimerFooterGap - tinyTextHeight(timerScale));
+    }
+    timerY = clampTextY(timerY, timerScale);
+    titleY = clampTextY(titleY, titleScale);
+
+    if (portraitFocusLayout) {
       const int dividerWidth =
           std::min(contentWidth, 40 + (static_cast<int>(mode.length()) * 12));
       const int dividerX = contentX + ((contentWidth - dividerWidth) / 2);
-      const int dividerY = titleY + (kTinyGlyphHeight * titleScale) + 20;
+      const int dividerY =
+          titleY + tinyTextHeight(titleScale) + (compactTimerLayout ? 16 : 20);
       fillVirtualRect(dividerX, dividerY, dividerWidth, 2, accent);
     }
+
     const int titleX = centeredXForTiny(mode, titleScale);
     const int timerX = centeredXForTiny(timer, timerScale);
 
     drawTinyTextAt(mode, titleX, titleY, baseTextColor, titleScale);
     drawTinyTextAt(timer, timerX, timerY, accent, timerScale);
 
-    if (!footer.isEmpty()) {
-      int footerScale = titleScale;
-      while (footerScale > 1 && measureTinyTextWidth(footer, footerScale) > contentWidth) {
-        --footerScale;
-      }
-      const int footerY = virtualHeight - titleY - (kTinyGlyphHeight * footerScale);
-      const int footerX = centeredXForTiny(footer, footerScale);
+    if (footerY >= 0) {
       drawTinyTextAt180(footer, footerX, footerY, baseTextColor, footerScale);
       if (fillWidth > 0 && fillHeight > 0) {
         drawTinyTextAt180Clipped(footer, footerX, footerY, inverseTextColor, footerScale,
@@ -3542,7 +3582,7 @@ void DisplayManager::renderFocusTimerScreen(const String &mode, const String &ge
         const int footerDividerWidth =
             std::min(contentWidth, 40 + (static_cast<int>(footer.length()) * 12));
         const int footerDividerX = contentX + ((contentWidth - footerDividerWidth) / 2);
-        const int footerDividerY = footerY - 22;
+        const int footerDividerY = footerY - (compactTimerLayout ? 16 : 22);
         fillVirtualRect(footerDividerX, footerDividerY, footerDividerWidth, 2, accent);
       }
     }
@@ -3554,44 +3594,17 @@ void DisplayManager::renderFocusTimerScreen(const String &mode, const String &ge
                             fillWidth, fillHeight);
     }
   } else {
-    int titleY = portrait ? 176 : 42;
-    int dividerY = 0;
-    int instructionScale = portrait ? 2 : 3;
-    int instructionBlockWidth = contentWidth;
-    int instructionBlockX = contentX;
-
-    if (portraitFocusLayout) {
-      titleY = 126;
-      instructionScale = 2;
-      instructionBlockWidth = std::max(96, contentWidth - 18);
-      instructionBlockX = contentX + ((contentWidth - instructionBlockWidth) / 2);
-      dividerY = titleY + (kTinyGlyphHeight * titleScale) + 22;
-      const int dividerWidth =
-          std::min(contentWidth, 40 + (static_cast<int>(mode.length()) * 12));
-      const int dividerX = contentX + ((contentWidth - dividerWidth) / 2);
-      fillVirtualRect(dividerX, dividerY, dividerWidth, 2, accent);
-    }
-
-    drawTinyTextAt(mode, centeredXForTiny(mode, titleScale), titleY, baseTextColor, titleScale);
-
-    const int lineHeight = (kTinyGlyphHeight * instructionScale) + instructionScale + 4;
-    int y = titleY + (kTinyGlyphHeight * titleScale) + (portrait ? 42 : 28);
-    if (portraitFocusLayout) {
-      y = dividerY + 66;
-    }
-
-    if (!timer.isEmpty()) {
-      int timerStaticScale = portrait ? 4 : 5;
-      while (timerStaticScale > 1 &&
-             measureTinyTextWidth(timer, timerStaticScale) > contentWidth) {
-        --timerStaticScale;
+    if (compactTimerLayout) {
+      int instructionScale = portrait ? 2 : 3;
+      int instructionBlockWidth = contentWidth;
+      int instructionBlockX = contentX;
+      if (portraitFocusLayout) {
+        instructionBlockWidth = std::max(96, contentWidth - 18);
+        instructionBlockX = contentX + ((contentWidth - instructionBlockWidth) / 2);
       }
-      drawTinyTextAt(timer, centeredXForTiny(timer, timerStaticScale), y, accent,
-                     timerStaticScale);
-      y += (kTinyGlyphHeight * timerStaticScale) + timerStaticScale + 20;
-    }
 
-    if (!instruction.isEmpty()) {
+      int timerStaticScale = portrait ? 4 : 5;
+      timerStaticScale = fitTinyScale(timer, timerStaticScale, contentWidth);
       const std::vector<String> lines =
           wrapTinyLines(instruction, instructionBlockWidth, instructionScale);
       const int newlinePos = instruction.indexOf('\n');
@@ -3600,6 +3613,40 @@ void DisplayManager::renderFocusTimerScreen(const String &mode, const String &ge
       const std::vector<String> firstLines =
           wrapTinyLines(firstInstruction, instructionBlockWidth, instructionScale);
       const size_t firstLineCount = newlinePos >= 0 ? firstLines.size() : 0;
+      const int lineHeight = tinyTextHeight(instructionScale) + instructionScale + 4;
+      const int titleHeight = tinyTextHeight(titleScale);
+      const int timerHeight = timer.isEmpty() ? 0 : tinyTextHeight(timerStaticScale);
+      const int dividerHeight = portraitFocusLayout ? 2 : 0;
+      const int titleDividerGap = portraitFocusLayout ? 16 : 0;
+      const int dividerContentGap = portraitFocusLayout ? 36 : 0;
+      const int titleContentGap = portraitFocusLayout ? 0 : (portrait ? 30 : 28);
+      const int timerInstructionGap = timer.isEmpty() ? 0 : 18;
+      const int instructionHeight =
+          lines.empty() ? 0 : static_cast<int>(lines.size()) * lineHeight;
+      const int blockHeight = titleHeight + titleDividerGap + dividerHeight + dividerContentGap +
+                              titleContentGap + timerHeight + timerInstructionGap +
+                              instructionHeight;
+      int y = std::max(24, (virtualHeight - blockHeight) / 2);
+
+      drawTinyTextAt(mode, centeredXForTiny(mode, titleScale), y, baseTextColor, titleScale);
+      y += titleHeight;
+
+      if (portraitFocusLayout) {
+        y += titleDividerGap;
+        const int dividerWidth =
+            std::min(contentWidth, 40 + (static_cast<int>(mode.length()) * 12));
+        const int dividerX = contentX + ((contentWidth - dividerWidth) / 2);
+        fillVirtualRect(dividerX, y, dividerWidth, dividerHeight, accent);
+        y += dividerHeight + dividerContentGap;
+      } else {
+        y += titleContentGap;
+      }
+
+      if (!timer.isEmpty()) {
+        drawTinyTextAt(timer, centeredXForTiny(timer, timerStaticScale), y, accent,
+                       timerStaticScale);
+        y += timerHeight + timerInstructionGap;
+      }
 
       for (size_t i = 0; i < lines.size(); ++i) {
         const String &line = lines[i];
@@ -3609,6 +3656,65 @@ void DisplayManager::renderFocusTimerScreen(const String &mode, const String &ge
                                        instructionBlockWidth),
                        y, lineColor, instructionScale);
         y += lineHeight;
+      }
+    } else {
+      int titleY = portrait ? 176 : 42;
+      int dividerY = 0;
+      int instructionScale = portrait ? 2 : 3;
+      int instructionBlockWidth = contentWidth;
+      int instructionBlockX = contentX;
+
+      if (portraitFocusLayout) {
+        titleY = 126;
+        instructionScale = 2;
+        instructionBlockWidth = std::max(96, contentWidth - 18);
+        instructionBlockX = contentX + ((contentWidth - instructionBlockWidth) / 2);
+        dividerY = titleY + (kTinyGlyphHeight * titleScale) + 22;
+        const int dividerWidth =
+            std::min(contentWidth, 40 + (static_cast<int>(mode.length()) * 12));
+        const int dividerX = contentX + ((contentWidth - dividerWidth) / 2);
+        fillVirtualRect(dividerX, dividerY, dividerWidth, 2, accent);
+      }
+
+      drawTinyTextAt(mode, centeredXForTiny(mode, titleScale), titleY, baseTextColor,
+                     titleScale);
+
+      const int lineHeight = (kTinyGlyphHeight * instructionScale) + instructionScale + 4;
+      int y = titleY + (kTinyGlyphHeight * titleScale) + (portrait ? 42 : 28);
+      if (portraitFocusLayout) {
+        y = dividerY + 66;
+      }
+
+      if (!timer.isEmpty()) {
+        int timerStaticScale = portrait ? 4 : 5;
+        while (timerStaticScale > 1 &&
+               measureTinyTextWidth(timer, timerStaticScale) > contentWidth) {
+          --timerStaticScale;
+        }
+        drawTinyTextAt(timer, centeredXForTiny(timer, timerStaticScale), y, accent,
+                       timerStaticScale);
+        y += (kTinyGlyphHeight * timerStaticScale) + timerStaticScale + 20;
+      }
+
+      if (!instruction.isEmpty()) {
+        const std::vector<String> lines =
+            wrapTinyLines(instruction, instructionBlockWidth, instructionScale);
+        const int newlinePos = instruction.indexOf('\n');
+        const String firstInstruction =
+            newlinePos >= 0 ? instruction.substring(0, newlinePos) : instruction;
+        const std::vector<String> firstLines =
+            wrapTinyLines(firstInstruction, instructionBlockWidth, instructionScale);
+        const size_t firstLineCount = newlinePos >= 0 ? firstLines.size() : 0;
+
+        for (size_t i = 0; i < lines.size(); ++i) {
+          const String &line = lines[i];
+          const uint16_t lineColor = i < firstLineCount ? baseTextColor : instructionColor;
+          drawTinyTextAt(line,
+                         centeredXWithin(line, instructionScale, instructionBlockX,
+                                         instructionBlockWidth),
+                         y, lineColor, instructionScale);
+          y += lineHeight;
+        }
       }
     }
   }

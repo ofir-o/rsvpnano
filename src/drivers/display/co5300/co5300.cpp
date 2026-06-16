@@ -97,13 +97,15 @@ void applyBrightness(Co5300::Context &context) {
 namespace Co5300 {
 
 void init(Context &context) {
-  pinMode(Board::Config::PIN_LCD_RST, OUTPUT);
-  digitalWrite(Board::Config::PIN_LCD_RST, HIGH);
-  delay(10);
-  digitalWrite(Board::Config::PIN_LCD_RST, LOW);
-  delay(200);
-  digitalWrite(Board::Config::PIN_LCD_RST, HIGH);
-  delay(200);
+  if (Board::Config::PIN_LCD_RST >= 0) {
+    pinMode(Board::Config::PIN_LCD_RST, OUTPUT);
+    digitalWrite(Board::Config::PIN_LCD_RST, HIGH);
+    delay(10);
+    digitalWrite(Board::Config::PIN_LCD_RST, LOW);
+    delay(200);
+    digitalWrite(Board::Config::PIN_LCD_RST, HIGH);
+    delay(200);
+  }
 
   if (!context.busReady) {
     spi_bus_config_t busConfig = {};

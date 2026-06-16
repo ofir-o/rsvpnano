@@ -32,3 +32,4 @@ RSVPNanoCompanion/web/generated/
 web/generated/
 .cache/
 compile_commands.json
+logs/

@@ -4,24 +4,47 @@ This board was added as a separate target on the `v0.0.5` multi-board integratio
 
 ## Target
 
-- PlatformIO env: `waveshare_esp32s3_touch_amoled_18`
+- PlatformIO envs:
+  - `waveshare_esp32s3_touch_amoled_18` for V1 boards
+  - `waveshare_esp32s3_touch_amoled_18_v2` for V2 test boards
 - USB MSC transfer is enabled in this env for Quick Settings `USB Sync`.
 - Board profile: `src/board/profiles/WaveshareEsp32S3TouchAmoled18Profile.h`
-- Display driver: `src/display/sh8601.cpp`
+- Display drivers:
+  - V1: `src/drivers/display/sh8601`
+  - V2: `src/drivers/display/co5300`
 
 ## Hardware mapping used
 
 - SoC: `ESP32-S3R8`
-- Display: `SH8601`
+- Display:
+  - V1: `SH8601`
+  - V2: `CO5300`
 - Native panel geometry: `368x448`
 - App/UI geometry: `448x368` landscape
-- Touch: `FT3168` on I2C `0x38`
+- Touch:
+  - V1: `FT3168` on I2C `0x38`
+  - V2: `CST816` on I2C `0x15`
 - IMU: `QMI8658` on shared I2C `0x6B`
 - PMU: `AXP2101`
 - GPIO expander: `TCA9554` at `0x20`
 - SDMMC 1-bit: `CLK=2`, `CMD=1`, `D0=3`
 - Shared I2C: `SDA=15`, `SCL=14`
 - Display QSPI: `CS=12`, `SCLK=11`, `D0..D3=4,5,6,7`
+
+## V1/V2 difference notes
+
+- Waveshare's official Arduino examples now split this product into `Arduino-v3.3.5` and
+  `Arduino-v3.3.5-v2`.
+- The exported pin macro file is effectively unchanged between those trees: display QSPI remains
+  `CS=12`, `SCLK=11`, `D0..D3=4,5,6,7`; shared I2C remains `SDA=15`, `SCL=14`; `TP_INT`
+  remains `GPIO21`.
+- The meaningful hardware/backend changes are the display controller and touch controller:
+  V1 uses `Arduino_SH8601` plus `Arduino_FT3x68` / `FT3168_DEVICE_ADDRESS` (`0x38`), while
+  V2 uses `Arduino_CO5300` plus `Arduino_CST816x` / `CST816T_DEVICE_ADDRESS` (`0x15`).
+- The V2 firmware target is intentionally labeled as a test build until it has been confirmed on
+  physical V2 hardware.
+- The V2 firmware target keeps polling touch instead of depending on `TP_INT`, because CST816
+  interrupt pulses can be shorter than this app's normal polling cadence.
 
 ## Important board-specific behavior
 
@@ -57,8 +80,11 @@ This board was added as a separate target on the `v0.0.5` multi-board integratio
 
 ## Reuse / assumptions
 
-- `FT3168` is currently routed through the existing `Ft6336` touch path because Waveshare's demo and the FT3x68 register layout line up closely enough for a first pass.
+- `FT3168` and the V2 `CST816` are both routed through the existing `Ft6336` packet reader for
+  coordinate polling, because their basic finger-count and X/Y coordinate registers line up for
+  this app's single-touch needs.
 - After controller detection, the port now applies Waveshare's demo init write of `0xA5 = 0x01` so the `FT3168` stays in monitor mode.
+- The V2 target applies Waveshare's CST816 interrupt-mode write of `0xFA = 0x40`.
 - Repeated touch read failures now trigger automatic re-initialization instead of permanently disabling touch polling.
 - Recoverable soft-off wake re-runs the expander-controlled display/touch release sequence and then performs a full SH8601 init, because the lighter wake path could leave touch and SD unavailable after `PWR` wake.
 - The AXP2101 power key is explicitly configured for `128ms` power-on and `6s` PMU fallback power-off, matching Waveshare's documented "click to power on / hold >6s to power off" model more closely.

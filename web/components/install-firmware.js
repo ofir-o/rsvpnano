@@ -28,9 +28,15 @@ class InstallFirmware extends HTMLElement {
       },
       {
         manifest: "firmware/manifest-esp32-s3-touch-amoled-1.8.json",
-        title: "Waveshare Touch AMOLED 1.8",
-        badge: "AMOLED",
-        note: "Use this for the compact 1.8 inch AMOLED board.",
+        title: "Waveshare Touch AMOLED 1.8 V1",
+        badge: "FT3168",
+        note: "Use this for 1.8 boards with SH8601 display and FT3168 touch.",
+      },
+      {
+        manifest: "firmware/manifest-esp32-s3-touch-amoled-1.8-v2.json",
+        title: "Waveshare Touch AMOLED 1.8 V2 Test",
+        badge: "Test",
+        note: "Experimental build for 1.8 V2 boards with CO5300 display and CST816 touch.",
       },
       {
         manifest: "firmware/manifest-esp32-s3-touch-amoled-2.16.json",
