@@ -212,33 +212,44 @@ def main() -> int:
         help="Use existing .pio build outputs instead of running PlatformIO first.",
     )
     parser.add_argument("--version", default=git_version(), help="Version string for manifests.")
+    parser.add_argument(
+        "--only",
+        action="append",
+        dest="only_envs",
+        help="Limit build/export to these PlatformIO env names. Repeatable. "
+        "Useful for forks that only ship one board.",
+    )
     args = parser.parse_args()
+
+    flash_exports = FLASH_EXPORTS
+    ota_exports = OTA_EXPORTS
+    if args.only_envs:
+        only = set(args.only_envs)
+        flash_exports = tuple(export for export in FLASH_EXPORTS if export["env"] in only)
+        ota_exports = tuple(export for export in OTA_EXPORTS if export["env"] in only)
+        if not flash_exports and not ota_exports:
+            known = sorted({export["env"] for export in FLASH_EXPORTS})
+            raise SystemExit(f"--only matched no known envs: {sorted(only)}; known: {known}")
 
     pio = None if args.skip_build else pio_command()
     WEB_FIRMWARE_DIR.mkdir(parents=True, exist_ok=True)
 
     if not args.skip_build:
         required_envs = sorted(
-            {
-                export["env"]
-                for export in FLASH_EXPORTS
-            }
-            | {
-                export["env"]
-                for export in OTA_EXPORTS
-            }
+            {export["env"] for export in flash_exports}
+            | {export["env"] for export in ota_exports}
         )
         for env in required_envs:
             assert pio is not None
             run([pio, "run", "-e", env], args.version)
 
-    for export in FLASH_EXPORTS:
+    for export in flash_exports:
         output = WEB_FIRMWARE_DIR / export["binary"]
         print(f"Exporting {export['label']} -> {output}")
         merge_firmware(export["env"], output)
         update_manifest(WEB_FIRMWARE_DIR / export["manifest"], args.version)
 
-    for export in OTA_EXPORTS:
+    for export in ota_exports:
         ota_output = WEB_FIRMWARE_DIR / export["binary"]
         print(f"Exporting {export['label']} -> {ota_output}")
         export_ota_binary(export["env"], ota_output)

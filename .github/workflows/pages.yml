@@ -44,12 +44,13 @@ jobs:
         run: python tools/fetch_release_firmware.py --repo "${{ github.repository }}"
 
       # Forks have no published release to pull from, so build the firmware images directly and
-      # let the flasher serve them. This also validates that every board target compiles.
+      # let the flasher serve them. This fork only ships the AMOLED 1.75 board, so build just that
+      # target instead of every board.
       - name: Build firmware from source (forks)
         if: github.repository != 'ionutdecebal/rsvpnano'
         run: |
           pip install platformio
-          python tools/export_web_firmware.py --version "pages-${GITHUB_SHA::7}"
+          python tools/export_web_firmware.py --version "pages-${GITHUB_SHA::7}" --only waveshare_esp32s3_touch_amoled_175
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
