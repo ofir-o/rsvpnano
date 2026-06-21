@@ -12,7 +12,9 @@ using PowerDiagnosticSnapshot = Board::PowerDiagnosticSnapshot;
 constexpr const char *BOARD_ID = "waveshare_esp32s3_touch_amoled_1_75";
 constexpr const char *BOARD_LABEL = "Waveshare ESP32-S3-Touch-AMOLED-1.75";
 constexpr const char *OTA_ASSET_NAME = "rsvp-nano-esp32-s3-touch-amoled-1.75-ota.bin";
-constexpr StorageBusKind STORAGE_BUS = StorageBusKind::SdMmc1Bit;
+// This SKU has no microSD slot, so the library lives on an internal-flash FAT partition
+// (see partitions_16MB_ffat.csv) instead of a removable card.
+constexpr StorageBusKind STORAGE_BUS = StorageBusKind::InternalFlashFat;
 constexpr PowerManagerKind POWER_MANAGER = PowerManagerKind::Axp2101;
 constexpr bool HAS_LCD_BACKLIGHT = false;
 constexpr bool HAS_AUDIO_OUTPUT = true;
@@ -96,9 +98,10 @@ constexpr UiOrientation DEFAULT_UI_ORIENTATION =
 constexpr UiOrientation ROTATED_UI_ORIENTATION =
     UI_ROTATED_180 ? UiOrientation::Landscape : UiOrientation::LandscapeFlipped;
 
-constexpr int PIN_SD_CLK = 2;
-constexpr int PIN_SD_CMD = 1;
-constexpr int PIN_SD_D0 = 3;
+// No microSD slot on this board; the SD-MMC pins are unused (library is on internal flash).
+constexpr int PIN_SD_CLK = -1;
+constexpr int PIN_SD_CMD = -1;
+constexpr int PIN_SD_D0 = -1;
 constexpr int PIN_I2C_SDA = 15;
 constexpr int PIN_I2C_SCL = 14;
 constexpr int PIN_TOUCH_SDA = 15;

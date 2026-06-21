@@ -15,7 +15,7 @@ flash as bring-up.
 - PMU: `AXP2101`
 - IMU: `QMI8658` on I2C address `0x6B`
 - Audio: `ES8311` codec
-- Storage: `SD_MMC` 1-bit
+- Storage: **internal-flash FAT (FFat)** — this SKU has no microSD slot
 
 ## Pins Used
 
@@ -55,6 +55,29 @@ Pin source: `waveshareteam/ESP32-S3-Touch-AMOLED-1.75`
   manifest and wired the target into `install-firmware.js`,
   `export_web_firmware.py`, `fetch_release_firmware.py`, and the release /
   preview workflows.
+
+## Storage Notes (no SD slot)
+
+This board has **no microSD slot**, so the library cannot live on a card. Instead it lives on an
+**internal-flash FAT (FFat) partition** carved out of the 16 MB flash:
+
+- New `StorageBusKind::InternalFlashFat` selects the flash backend; the 1.75 `BoardConfig.h` sets it
+  and marks the SD-MMC pins unused.
+- A custom partition table `partitions_16MB_ffat.csv` keeps dual 5 MB OTA app slots and reserves a
+  ~5.9 MB `ffat` data partition for the library.
+- All library file I/O now goes through a `Board::Storage::fs()` accessor (returns `SD_MMC` for
+  card boards, `FFat` here), so the storage code is otherwise shared. SD boards are unchanged.
+- `FFat.begin(formatOnFail=true, ...)` formats the partition on first boot, then `StorageManager`
+  creates the `/books/books`, `/books/articles`, and `/config` layout automatically.
+- **Capacity is small:** ~5.9 MB total. Plain-text `.rsvp`/`.txt` books and articles are tiny, so
+  many fit, but it is not a large library and there is no removable expansion.
+- **USB mass-storage transfer is disabled** on this target (`RSVP_USB_TRANSFER_ENABLED=0`), because
+  it bridges raw SD/FatFS sectors. **Load books over Wi-Fi** instead: quick settings -> Sync ->
+  Wi-Fi Sync, then the web companion or native app. RSS also writes straight to flash.
+- Known wart: the quick-settings Sync menu still lists "USB Sync"; selecting it does nothing on this
+  board. (Left as-is to avoid risky menu-index changes; can be hidden later.)
+- `Settings -> SD card check` runs a flash-friendly diagnostic (folder layout + capacity + book
+  count) instead of card frequency/type probing.
 
 ## Display Notes
 

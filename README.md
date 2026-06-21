@@ -20,7 +20,7 @@ The browser flasher supports these device targets:
 - Waveshare ESP32-S3 Touch LCD 3.49 rev2.
 - Waveshare ESP32-S3 Touch AMOLED 1.8 V1.
 - Waveshare ESP32-S3 Touch AMOLED 1.8 V2 Test.
-- Waveshare ESP32-S3 Touch AMOLED 1.75 round (experimental, untested on hardware).
+- Waveshare ESP32-S3 Touch AMOLED 1.75 round (experimental, untested on hardware; no SD slot — library lives on internal flash, load books over Wi-Fi).
 - Waveshare ESP32-S3 Touch AMOLED 2.16.
 - Waveshare ESP32-S3 Touch AMOLED 2.41.
 

@@ -7,7 +7,7 @@
     "Books and articles library",
     "Device-hosted web companion",
     "RSS feed downloads",
-    "USB SD-card transfer mode",
+    "Internal-flash library (no SD slot) — load books over Wi-Fi",
     "Touch AMOLED 1.75 round profile"
   ],
   "builds": [

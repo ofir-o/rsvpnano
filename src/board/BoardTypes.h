@@ -15,6 +15,9 @@ enum class UiOrientation : uint8_t {
 enum class StorageBusKind : uint8_t {
   SdMmc1Bit = 0,
   SdSpi,
+  // Library lives on an internal-flash FAT (FFat) partition instead of a removable SD card.
+  // For boards with no SD slot (e.g. the cased Waveshare AMOLED 1.75).
+  InternalFlashFat,
 };
 
 enum class PowerManagerKind : uint8_t {

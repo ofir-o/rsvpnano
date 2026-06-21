@@ -1,8 +1,8 @@
 #include "storage/StorageManager.h"
 
-#include <SD_MMC.h>
 #include <cstdint>
 
+#include "board/BoardStorage.h"
 #include "book/BookMetadata.h"
 #include "storage/fs/SdDiagnostics.h"
 #include "storage/fs/StorageFiles.h"
@@ -16,6 +16,13 @@
 namespace {
 
     constexpr uint64_t kBytesPerMegabyte = 1024ULL * 1024ULL;
+
+    bool ensureLibraryFolderLayout() {
+        return StorageFiles::ensureDirectory(StoragePaths::kBooksPath, "storage")
+            && StorageFiles::ensureDirectory(StoragePaths::kBookFilesPath, "storage")
+            && StorageFiles::ensureDirectory(StoragePaths::kArticleFilesPath, "storage")
+            && StorageFiles::ensureDirectory(StoragePaths::kConfigPath, "storage");
+    }
 
 } // namespace
 
@@ -38,10 +45,27 @@ bool StorageManager::begin() {
     listedOnce_ = false;
     clearBookCache();
 
+    if (!Board::Storage::usesRemovableCard()) {
+        // Internal-flash (FFat) library: no removable card, so mount the flash partition and make
+        // sure the library folder layout exists (it is empty on a freshly formatted partition).
+        statusCallback_(statusContext_, "Storage", "Mounting flash", "", 5);
+        if (Board::Storage::mountInternalFlash()) {
+            mounted_ = true;
+            ensureLibraryFolderLayout();
+            const uint64_t sizeMb = Board::Storage::totalBytes() / kBytesPerMegabyte;
+            Serial.printf("[storage] internal flash initialized (%llu MB)\n", sizeMb);
+            statusCallback_(statusContext_, "Storage", "Scanning books", "", 10);
+            refreshBookPaths(false);
+            return true;
+        }
+        Serial.println("[storage] internal flash init failed");
+        return false;
+    }
+
     statusCallback_(statusContext_, "SD", "Mounting card", "", 5);
     int mountedFrequencyKhz = 0;
     if (SdDiagnostics::mountCard(mounted_, &mountedFrequencyKhz)) {
-        const uint64_t sizeMb = SD_MMC.cardSize() / kBytesPerMegabyte;
+        const uint64_t sizeMb = Board::Storage::totalBytes() / kBytesPerMegabyte;
         Serial.printf("[storage] SD initialized (%llu MB, %d kHz)\n", sizeMb, mountedFrequencyKhz);
         statusCallback_(statusContext_, "SD", "Scanning books", "EPUB converts on open", 10);
         refreshBookPaths(false);
@@ -54,7 +78,7 @@ bool StorageManager::begin() {
 
 void StorageManager::end() {
     if (mounted_) {
-        SD_MMC.end();
+        Board::Storage::unmount();
     }
     mounted_ = false;
     listedOnce_ = false;
@@ -126,6 +150,47 @@ bool StorageManager::loadIndexedBook(size_t index, IndexedBookStore& store, Book
 }
 
 StorageManager::DiagnosticResult StorageManager::diagnoseSdCard() {
+    if (!Board::Storage::usesRemovableCard()) {
+        // Internal-flash storage has no card type/frequency to probe; just confirm the volume is
+        // mounted, the folder layout exists, and report capacity plus the book count.
+        DiagnosticResult result;
+        result.mounted = mounted_;
+        if (!mounted_) {
+            result.summary = "Flash not mounted";
+            result.detail = "Reflash firmware";
+            return result;
+        }
+        ensureLibraryFolderLayout();
+        result.booksDirectory = StorageFiles::directoryExists(StoragePaths::kBooksPath);
+        result.bookFilesDirectory = StorageFiles::directoryExists(StoragePaths::kBookFilesPath);
+        result.articleFilesDirectory = StorageFiles::directoryExists(StoragePaths::kArticleFilesPath);
+        result.configDirectory = StorageFiles::directoryExists(StoragePaths::kConfigPath);
+        const bool layoutOk = result.booksDirectory && result.bookFilesDirectory
+                           && result.articleFilesDirectory && result.configDirectory;
+        result.writable = layoutOk;
+        result.booksWritable = layoutOk;
+        result.articlesWritable = layoutOk;
+        result.configWritable = layoutOk;
+        BookLibrary::refresh(library_, true, RSVP_ON_DEVICE_EPUB_CONVERSION);
+        result.bookCount = library_.paths.size();
+        result.unsupportedCount = BookLibrary::unsupportedFileCount();
+        result.cardType = "Flash";
+        result.sizeMb = Board::Storage::totalBytes() / kBytesPerMegabyte;
+        const uint64_t usedMb = Board::Storage::usedBytes() / kBytesPerMegabyte;
+        if (!layoutOk) {
+            result.summary = "Folders missing";
+            result.detail = "Reflash firmware";
+        } else if (result.bookCount == 0) {
+            result.summary = "No books found";
+            result.detail = "Upload over Wi-Fi";
+        } else {
+            result.summary = String(result.bookCount) + " books OK";
+            result.detail = String("Flash ") + String(static_cast<unsigned int>(usedMb)) + "/"
+                          + String(static_cast<unsigned int>(result.sizeMb)) + " MB";
+        }
+        return result;
+    }
+
     DiagnosticResult result = SdDiagnostics::diagnoseCard(mounted_, statusCallback_, statusContext_);
     if (!result.booksDirectory || !result.bookFilesDirectory || !result.articleFilesDirectory
         || !result.configDirectory) {
