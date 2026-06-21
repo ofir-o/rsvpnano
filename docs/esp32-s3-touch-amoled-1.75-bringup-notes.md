@@ -71,11 +71,17 @@ This board has **no microSD slot**, so the library cannot live on a card. Instea
   creates the `/books/books`, `/books/articles`, and `/config` layout automatically.
 - **Capacity is small:** ~5.9 MB total. Plain-text `.rsvp`/`.txt` books and articles are tiny, so
   many fit, but it is not a large library and there is no removable expansion.
-- **USB mass-storage transfer is disabled** on this target (`RSVP_USB_TRANSFER_ENABLED=0`), because
-  it bridges raw SD/FatFS sectors. **Load books over Wi-Fi** instead: quick settings -> Sync ->
-  Wi-Fi Sync, then the web companion or native app. RSS also writes straight to flash.
-- Known wart: the quick-settings Sync menu still lists "USB Sync"; selecting it does nothing on this
-  board. (Left as-is to avoid risky menu-index changes; can be hidden later.)
+- **USB mass-storage transfer stays enabled** (`RSVP_USB_TRANSFER_ENABLED=1`) and exposes the FFat
+  partition to the host. The USB-MSC bridge is generic (it discovers the FatFS volume and
+  reads/writes 512-byte sectors), and FFat registers as a FatFS volume over the wear-leveling
+  layer, so the host sees a ~5.9 MB FAT drive. Copy `.rsvp` files to `/books/books`, eject, and the
+  device remounts FFat and refreshes the library — no Wi-Fi needed. (Wi-Fi sync and RSS still work
+  if you want them, but USB is the primary, offline transfer path.)
+  - The exit/recovery flow already handles flush + remount generically: `CTRL_SYNC` ->
+    `storage_.end()` (FFat.end) -> `storage_.begin()` (fresh FFat mount + library refresh).
+  - **This is the main thing to verify on hardware.** Exposing a wear-leveled FFat partition over
+    USB-MSC is untested here; if the host cannot read/write the volume, fall back to Wi-Fi sync
+    while the bridge is debugged.
 - `Settings -> SD card check` runs a flash-friendly diagnostic (folder layout + capacity + book
   count) instead of card frequency/type probing.
 
@@ -128,8 +134,10 @@ This board has **no microSD slot**, so the library cannot live on a card. Instea
 2. No bright/dark seam at the panel edges.
 3. Touch responds and coordinates are not inverted/mirrored.
 4. Battery percentage reads sensibly via AXP2101.
-5. SD card mounts and the library loads.
-6. BOOT tap toggles play/pause; BOOT hold enters standby; PWR powers off.
+5. Internal flash (FFat) mounts, formats on first boot, and the library loads.
+6. USB transfer: quick settings -> Sync -> USB Sync shows the flash partition as a FAT drive on
+   the host; copying a `.rsvp` and ejecting makes it appear in the library after remount.
+7. BOOT tap toggles play/pause; BOOT hold enters standby; PWR powers off.
 
 ## Source References
 
