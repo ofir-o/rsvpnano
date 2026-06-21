@@ -28,6 +28,8 @@ DEFAULT_OPTIONAL_ASSETS = (
     "rsvp-nano-esp32-s3-touch-amoled-1.8-ota.bin",
     "rsvp-nano-esp32-s3-touch-amoled-1.8-v2.bin",
     "rsvp-nano-esp32-s3-touch-amoled-1.8-v2-ota.bin",
+    "rsvp-nano-esp32-s3-touch-amoled-1.75.bin",
+    "rsvp-nano-esp32-s3-touch-amoled-1.75-ota.bin",
     "rsvp-nano-esp32-s3-touch-amoled-2.16.bin",
     "rsvp-nano-esp32-s3-touch-amoled-2.16-ota.bin",
     "rsvp-nano-esp32-s3-touch-amoled-2.41.bin",
@@ -91,6 +93,14 @@ FLASH_MANIFESTS = {
             "RSVP Nano Touch AMOLED 1.8 V2 Test",
             "rsvp-nano-esp32-s3-touch-amoled-1.8-v2.bin",
             COMMON_FEATURES + ["Touch AMOLED 1.8 V2 test profile"],
+        ),
+    },
+    "rsvp-nano-esp32-s3-touch-amoled-1.75.bin": {
+        "path": WEB_FIRMWARE_DIR / "manifest-esp32-s3-touch-amoled-1.75.json",
+        "fallback": default_manifest(
+            "RSVP Nano Touch AMOLED 1.75",
+            "rsvp-nano-esp32-s3-touch-amoled-1.75.bin",
+            COMMON_FEATURES + ["Touch AMOLED 1.75 round profile"],
         ),
     },
     "rsvp-nano-esp32-s3-touch-amoled-2.16.bin": {

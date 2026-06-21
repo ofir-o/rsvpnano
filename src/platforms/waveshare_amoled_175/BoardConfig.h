@@ -9,9 +9,9 @@ using StorageBusKind = Board::StorageBusKind;
 using PowerManagerKind = Board::PowerManagerKind;
 using BatteryStatus = Board::BatteryStatus;
 using PowerDiagnosticSnapshot = Board::PowerDiagnosticSnapshot;
-constexpr const char *BOARD_ID = "waveshare_esp32s3_touch_amoled_2_16";
-constexpr const char *BOARD_LABEL = "Waveshare ESP32-S3-Touch-AMOLED-2.16";
-constexpr const char *OTA_ASSET_NAME = "rsvp-nano-esp32-s3-touch-amoled-2.16-ota.bin";
+constexpr const char *BOARD_ID = "waveshare_esp32s3_touch_amoled_1_75";
+constexpr const char *BOARD_LABEL = "Waveshare ESP32-S3-Touch-AMOLED-1.75";
+constexpr const char *OTA_ASSET_NAME = "rsvp-nano-esp32-s3-touch-amoled-1.75-ota.bin";
 constexpr StorageBusKind STORAGE_BUS = StorageBusKind::SdMmc1Bit;
 constexpr PowerManagerKind POWER_MANAGER = PowerManagerKind::Axp2101;
 constexpr bool HAS_LCD_BACKLIGHT = false;
@@ -27,16 +27,18 @@ constexpr bool BOOT_BUTTON_WAKES_STANDBY = true;
 constexpr bool ENABLE_TOP_EDGE_MENU_SWIPE = true;
 constexpr bool ENABLE_BOTTOM_EDGE_QUICK_SETTINGS_SWIPE = true;
 constexpr bool FIRMWARE_POWER_BUTTON_ENABLED = true;
-constexpr bool BOOT_BUTTON_TOGGLES_READER = false;
-constexpr bool BOOT_BUTTON_BACKS_OUT_OF_MENU = false;
-constexpr bool BOOT_BUTTON_HOLD_STARTS_STANDBY = false;
+// The 1.75 round board has no dedicated KEY button (unlike the 2.16), so BOOT carries the
+// play/pause, Back, and standby shortcuts just like the 1.8 V2 profile.
+constexpr bool BOOT_BUTTON_TOGGLES_READER = true;
+constexpr bool BOOT_BUTTON_BACKS_OUT_OF_MENU = true;
+constexpr bool BOOT_BUTTON_HOLD_STARTS_STANDBY = true;
 constexpr bool ENABLE_RESTRUCTURED_MENU = true;
 
-// BOOT is a standard ESP32 GPIO button, PWR is handled by the AXP2101 PMU, and the board exposes
-// an additional custom-function button on GPIO18.
+// BOOT is the standard ESP32 GPIO0 button. PWR is handled by the AXP2101 PMU. The round 1.75
+// board does not expose the 2.16's extra custom-function button.
 constexpr int PIN_BOOT_BUTTON = 0;
 constexpr int PIN_PWR_BUTTON = -1;
-constexpr int PIN_KEY_BUTTON = 18;
+constexpr int PIN_KEY_BUTTON = -1;
 constexpr int PIN_BATTERY_ADC = -1;
 constexpr int PIN_BATTERY_HOLD = -1;
 
@@ -49,17 +51,22 @@ constexpr int PIN_LCD_DATA3 = 7;
 constexpr int PIN_LCD_RST = 39;
 constexpr int PIN_LCD_BACKLIGHT = -1;
 
-constexpr int PANEL_NATIVE_WIDTH = 480;
-constexpr int PANEL_NATIVE_HEIGHT = 480;
-constexpr int DISPLAY_WIDTH = 480;
-constexpr int DISPLAY_HEIGHT = 480;
-constexpr int DISPLAY_COL_OFFSET = 0;
+// The 1.75 is a 466x466 round AMOLED. The CO5300 controller addresses the panel with a six
+// column start offset; rows start at zero.
+constexpr int PANEL_NATIVE_WIDTH = 466;
+constexpr int PANEL_NATIVE_HEIGHT = 466;
+constexpr int DISPLAY_WIDTH = 466;
+constexpr int DISPLAY_HEIGHT = 466;
+constexpr int DISPLAY_COL_OFFSET = 6;
 constexpr int DISPLAY_ROW_OFFSET = 0;
-constexpr int READER_CHROME_MARGIN_X = 48;
-constexpr int READER_CHROME_MARGIN_TOP = 24;
-constexpr int READER_CHROME_MARGIN_BOTTOM = 24;
-constexpr int READER_BATTERY_MARGIN_X = 72;
-constexpr int READER_BATTERY_MARGIN_TOP = 36;
+// Round panel: keep reader text and corner chrome comfortably inside the inscribed circle so the
+// curved bezel does not clip battery, footer, or menu labels. These margins are intentionally
+// larger than the square 2.16 profile and may want fine tuning during hardware bring-up.
+constexpr int READER_CHROME_MARGIN_X = 64;
+constexpr int READER_CHROME_MARGIN_TOP = 56;
+constexpr int READER_CHROME_MARGIN_BOTTOM = 56;
+constexpr int READER_BATTERY_MARGIN_X = 104;
+constexpr int READER_BATTERY_MARGIN_TOP = 52;
 constexpr int PIN_DEEP_SLEEP_WAKE = PIN_BOOT_BUTTON;
 constexpr bool SUPPORTS_SOFTWARE_POWEROFF = true;
 constexpr bool RELEASE_BATTERY_HOLD_BEFORE_DEEP_SLEEP = false;
@@ -81,8 +88,7 @@ constexpr bool TCA9554_RELEASE_BUS_BEFORE_READ = false;
 constexpr uint8_t PMU_POWER_KEY_ON_TIME_VALUE = 0x00;
 constexpr uint8_t PMU_POWER_KEY_OFF_TIME_VALUE = 0x00;
 constexpr uint32_t PMU_BOOT_BUTTON_IGNORE_MS = 1200;
-// Keep the 2.16 DMA flush buffer near the original working size, but the CO5300 driver now
-// rounds transfers down to whole rows to avoid fixed seam artifacts.
+// Match the 2.16 DMA flush buffer size; the CO5300 driver rounds transfers to whole rows.
 constexpr size_t DISPLAY_TX_CHUNK_BYTES = 32 * 1024;
 constexpr bool UI_ROTATED_180 = false;
 constexpr UiOrientation DEFAULT_UI_ORIENTATION =
@@ -97,8 +103,8 @@ constexpr int PIN_I2C_SDA = 15;
 constexpr int PIN_I2C_SCL = 14;
 constexpr int PIN_TOUCH_SDA = 15;
 constexpr int PIN_TOUCH_SCL = 14;
-// Poll CST92xx instead of gating reads on TP_INT. Some 2.16 boards do not
-// reliably assert the interrupt line, which leaves the app with no touch events.
+// TP_INT is GPIO11, but as on the 2.16 we poll the CST92xx-family controller rather than gate
+// reads on the interrupt line, which some samples do not assert reliably.
 constexpr int PIN_TOUCH_IRQ = -1;
 constexpr int PIN_TOUCH_RST = 40;
 constexpr uint8_t TOUCH_I2C_ADDRESS = 0x5A;
@@ -122,7 +128,8 @@ constexpr uint8_t TCA9554_PIN_BATTERY_ADC_ENABLE = 0;
 constexpr uint8_t TCA9554_PIN_SYS_EN = 0;
 constexpr uint8_t TCA9554_PIN_AUDIO_ENABLE = 0;
 
-constexpr int PIN_AUDIO_MCLK = 42;
+// I2S audio (ES8311). The active Waveshare 1.75 demo drives MCLK on GPIO16.
+constexpr int PIN_AUDIO_MCLK = 16;
 constexpr int PIN_AUDIO_BCLK = 9;
 constexpr int PIN_AUDIO_WS = 45;
 constexpr int PIN_AUDIO_DIN = 10;

@@ -40,6 +40,12 @@ FLASH_EXPORTS = (
         "label": "RSVP Nano Touch AMOLED 1.8 V2 Test firmware",
     },
     {
+        "env": "waveshare_esp32s3_touch_amoled_175",
+        "binary": "rsvp-nano-esp32-s3-touch-amoled-1.75.bin",
+        "manifest": "manifest-esp32-s3-touch-amoled-1.75.json",
+        "label": "RSVP Nano Touch AMOLED 1.75 firmware",
+    },
+    {
         "env": "waveshare_esp32s3_touch_amoled_216",
         "binary": "rsvp-nano-esp32-s3-touch-amoled-2.16.bin",
         "manifest": "manifest-esp32-s3-touch-amoled-2.16.json",
@@ -83,6 +89,11 @@ OTA_EXPORTS = (
         "env": "waveshare_esp32s3_touch_amoled_18_v2",
         "binary": "rsvp-nano-esp32-s3-touch-amoled-1.8-v2-ota.bin",
         "label": "RSVP Nano Touch AMOLED 1.8 V2 Test OTA firmware",
+    },
+    {
+        "env": "waveshare_esp32s3_touch_amoled_175",
+        "binary": "rsvp-nano-esp32-s3-touch-amoled-1.75-ota.bin",
+        "label": "RSVP Nano Touch AMOLED 1.75 OTA firmware",
     },
     {
         "env": "waveshare_esp32s3_touch_amoled_216",

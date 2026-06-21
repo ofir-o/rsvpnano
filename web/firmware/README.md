@@ -12,6 +12,8 @@ This directory contains the browser-flasher image plus the published OTA binarie
 - `rsvp-nano-esp32-s3-touch-amoled-1.8-ota.bin` is the board-specific Touch AMOLED 1.8 V1 OTA binary.
 - `rsvp-nano-esp32-s3-touch-amoled-1.8-v2.bin` is the full browser-flasher image for Touch AMOLED 1.8 V2 test boards.
 - `rsvp-nano-esp32-s3-touch-amoled-1.8-v2-ota.bin` is the board-specific Touch AMOLED 1.8 V2 test OTA binary.
+- `rsvp-nano-esp32-s3-touch-amoled-1.75.bin` is the full browser-flasher image for Touch AMOLED 1.75 round boards.
+- `rsvp-nano-esp32-s3-touch-amoled-1.75-ota.bin` is the board-specific Touch AMOLED 1.75 OTA binary.
 - `rsvp-nano-esp32-s3-touch-amoled-2.16.bin` is the full browser-flasher image for Touch AMOLED 2.16 boards.
 - `rsvp-nano-esp32-s3-touch-amoled-2.16-ota.bin` is the board-specific Touch AMOLED 2.16 OTA binary.
 - `rsvp-nano-esp32-s3-touch-amoled-2.41.bin` is the full browser-flasher image for Touch AMOLED 2.41 boards.

@@ -184,8 +184,12 @@ void pushColors(Context &context, uint16_t x, uint16_t y, uint16_t width, uint16
   size_t pixelsRemaining = static_cast<size_t>(width) * height;
   const uint16_t *cursor = data;
 
-  setColumnWindow(context, x, static_cast<uint16_t>(x + width - 1));
-  setRowWindow(context, y, static_cast<uint16_t>(y + height - 1));
+  // Round panels such as the 1.75 address the CO5300 RAM with a non-zero column start; existing
+  // square panels keep both offsets at zero so their windows are unchanged.
+  const uint16_t colStart = static_cast<uint16_t>(x + Board::Config::DISPLAY_COL_OFFSET);
+  const uint16_t rowStart = static_cast<uint16_t>(y + Board::Config::DISPLAY_ROW_OFFSET);
+  setColumnWindow(context, colStart, static_cast<uint16_t>(colStart + width - 1));
+  setRowWindow(context, rowStart, static_cast<uint16_t>(rowStart + height - 1));
   sendCommand(context, kRamWriteCommand, nullptr, 0);
 
   while (pixelsRemaining > 0) {
