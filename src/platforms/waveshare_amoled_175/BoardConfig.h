@@ -138,4 +138,6 @@ constexpr int PIN_AUDIO_WS = 45;
 constexpr int PIN_AUDIO_DIN = 10;
 constexpr int PIN_AUDIO_DOUT = 8;
 constexpr uint8_t ES8311_ADDRESS = 0x18;
+// The 1.75 touch layer is mounted 180 degrees relative to the display, so flip both touch axes.
+constexpr bool TOUCH_ROTATED_180 = true;
 }  // namespace Board::Config

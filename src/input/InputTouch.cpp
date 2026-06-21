@@ -67,8 +67,16 @@ bool releaseTouchIfNeeded(Event &event) {
 }
 
 void mapSampleToEvent(const BoardDrivers::Touch::Sample &sample, Event &event) {
-  const uint16_t physicalX = sample.physicalX;
-  const uint16_t physicalY = sample.physicalY;
+  uint16_t physicalX = sample.physicalX;
+  uint16_t physicalY = sample.physicalY;
+
+  // Some panels mount the touch layer rotated 180 degrees relative to the display, which inverts
+  // both screen axes (swipe right reads as left, up as down). Flip the raw coordinates first so
+  // the orientation mapping below lands the same way as the rendered image.
+  if (Board::Config::TOUCH_ROTATED_180) {
+    physicalX = static_cast<uint16_t>(Board::Config::PANEL_NATIVE_WIDTH - 1 - physicalX);
+    physicalY = static_cast<uint16_t>(Board::Config::PANEL_NATIVE_HEIGHT - 1 - physicalY);
+  }
 
   switch (gTouch.uiOrientation) {
     case Board::Config::UiOrientation::Portrait:
