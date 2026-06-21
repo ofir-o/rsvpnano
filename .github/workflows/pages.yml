@@ -43,18 +43,24 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: python tools/fetch_release_firmware.py --repo "${{ github.repository }}"
 
+      # Forks have no published release to pull from, so build the firmware images directly and
+      # let the flasher serve them. This also validates that every board target compiles.
+      - name: Build firmware from source (forks)
+        if: github.repository != 'ionutdecebal/rsvpnano'
+        run: |
+          pip install platformio
+          python tools/export_web_firmware.py --version "pages-${GITHUB_SHA::7}"
+
       - name: Configure GitHub Pages
-        if: github.repository == 'ionutdecebal/rsvpnano'
         uses: actions/configure-pages@v5
 
       - name: Upload GitHub Pages artifact
-        if: github.repository == 'ionutdecebal/rsvpnano'
         uses: actions/upload-pages-artifact@v3
         with:
           path: web
 
   deploy:
-    if: github.repository == 'ionutdecebal/rsvpnano' && (github.ref == 'refs/heads/main' || github.event_name == 'release' || github.event_name == 'workflow_dispatch')
+    if: github.ref == 'refs/heads/main' || github.event_name == 'release' || github.event_name == 'workflow_dispatch'
     needs: build
     runs-on: ubuntu-latest
 

@@ -20,6 +20,7 @@ The browser flasher supports these device targets:
 - Waveshare ESP32-S3 Touch LCD 3.49 rev2.
 - Waveshare ESP32-S3 Touch AMOLED 1.8 V1.
 - Waveshare ESP32-S3 Touch AMOLED 1.8 V2 Test.
+- Waveshare ESP32-S3 Touch AMOLED 1.75 round (experimental, untested on hardware; no SD slot — library on internal flash, exposed over USB transfer).
 - Waveshare ESP32-S3 Touch AMOLED 2.16.
 - Waveshare ESP32-S3 Touch AMOLED 2.41.
 
@@ -28,6 +29,7 @@ extra cost to you:
 
 - [ESP32-S3 Touch LCD 3.49](https://www.waveshare.com/esp32-s3-touch-lcd-3.49.htm?&aff_id=ionutdecebal)
 - [ESP32-S3 Touch AMOLED 1.8](https://www.waveshare.com/esp32-s3-touch-amoled-1.8.htm?&aff_id=ionutdecebal)
+- [ESP32-S3 Touch AMOLED 1.75](https://www.waveshare.com/esp32-s3-touch-amoled-1.75.htm?&aff_id=ionutdecebal)
 - [ESP32-S3 Touch AMOLED 2.16](https://www.waveshare.com/esp32-s3-touch-amoled-2.16.htm?&aff_id=ionutdecebal)
 - [ESP32-S3 Touch AMOLED 2.41](https://www.waveshare.com/esp32-s3-touch-amoled-2.41.htm?&aff_id=ionutdecebal)
 
@@ -445,6 +447,7 @@ rev1 target; use explicit targets for other boards:
 pio run -e waveshare_esp32s3_rev2
 pio run -e waveshare_esp32s3_touch_amoled_18
 pio run -e waveshare_esp32s3_touch_amoled_18_v2
+pio run -e waveshare_esp32s3_touch_amoled_175
 pio run -e waveshare_esp32s3_touch_amoled_241
 pio run -e waveshare_esp32s3_touch_amoled_216
 ```
@@ -488,6 +491,8 @@ web/firmware/rsvp-nano-esp32-s3-touch-amoled-1.8.bin
 web/firmware/rsvp-nano-esp32-s3-touch-amoled-1.8-ota.bin
 web/firmware/rsvp-nano-esp32-s3-touch-amoled-1.8-v2.bin
 web/firmware/rsvp-nano-esp32-s3-touch-amoled-1.8-v2-ota.bin
+web/firmware/rsvp-nano-esp32-s3-touch-amoled-1.75.bin
+web/firmware/rsvp-nano-esp32-s3-touch-amoled-1.75-ota.bin
 web/firmware/rsvp-nano-esp32-s3-touch-amoled-2.16.bin
 web/firmware/rsvp-nano-esp32-s3-touch-amoled-2.16-ota.bin
 web/firmware/rsvp-nano-esp32-s3-touch-amoled-2.41.bin
@@ -496,6 +501,7 @@ web/firmware/manifest.json
 web/firmware/manifest-rev2.json
 web/firmware/manifest-esp32-s3-touch-amoled-1.8.json
 web/firmware/manifest-esp32-s3-touch-amoled-1.8-v2.json
+web/firmware/manifest-esp32-s3-touch-amoled-1.75.json
 web/firmware/manifest-esp32-s3-touch-amoled-2.16.json
 web/firmware/manifest-esp32-s3-touch-amoled-2.41.json
 ```
