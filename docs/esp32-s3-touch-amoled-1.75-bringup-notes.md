@@ -92,6 +92,13 @@ This board has **no microSD slot**, so the library cannot live on a card. Instea
   6** (`col_offset=6, row_offset=0`, matching Waveshare's
   `Arduino_CO5300(..., 466, 466, 6, 0, 0, 0)` constructor). Existing square
   panels (2.16, 1.8 V2) set both offsets to 0, so their behavior is unchanged.
+- The shared CO5300 init carried a page-`0x20` source/gate tuning block
+  (`0xFE 0x20` / `0x19 0x10` / `0x1C 0xA0`) borrowed from the 480-class panels.
+  On the 466 round panel that block caused **evenly-spaced vertical stripes**, so
+  it is now gated behind `CO5300_EXTRA_PANEL_TUNING` (true for 2.16 / 1.8 V2,
+  false for the 1.75). The 1.75 uses the plain CO5300 init that matches
+  Waveshare's own driver, and the power-on address window is derived from the
+  native resolution + offset (columns 6..471, rows 0..465).
 - Orientation: native, `UI_ROTATED_180=false`. If the panel comes up mirrored or
   rotated on hardware, adjust `UI_ROTATED_180` and/or the column offset.
 

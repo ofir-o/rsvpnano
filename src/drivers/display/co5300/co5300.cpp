@@ -29,23 +29,6 @@ struct LcdCommand {
 // Keep the panel memory in its native orientation and let the shared mapping layer handle the
 // landscape transform, just like the stabilized 2.41 port.
 constexpr uint8_t kDefaultMadctl = Board::Config::UI_ROTATED_180 ? 0xC0 : 0x00;
-constexpr LcdCommand kQspiInit[] = {
-    {0x11, {0x00}, 0, 120},
-    {0xFE, {0x20}, 1, 0},
-    {0x19, {0x10}, 1, 0},
-    {0x1C, {0xA0}, 1, 0},
-    {0xFE, {0x00}, 1, 0},
-    {0xC4, {0x80}, 1, 0},
-    {0x3A, {0x55}, 1, 0},
-    {0x35, {0x00}, 1, 0},
-    {0x53, {0x20}, 1, 0},
-    {0x51, {0xFF}, 1, 0},
-    {0x63, {0xFF}, 1, 0},
-    {0x2A, {0x00, 0x00, 0x01, 0xDF}, 4, 0},
-    {0x2B, {0x00, 0x00, 0x01, 0xDF}, 4, 0},
-    {0x36, {kDefaultMadctl}, 1, 0},
-    {0x29, {0x00}, 0, 10},
-};
 
 void sendCommand(Co5300::Context &context, uint8_t command, const uint8_t *data,
                  uint32_t length) {
@@ -131,12 +114,43 @@ void init(Context &context) {
     context.busReady = true;
   }
 
-  for (const auto &command : kQspiInit) {
-    sendCommand(context, command.cmd, command.data, command.len);
-    if (command.delayMs != 0) {
-      delay(command.delayMs);
-    }
+  const auto cmd1 = [&](uint8_t command, uint8_t value) {
+    const uint8_t data = value;
+    sendCommand(context, command, &data, 1);
+  };
+
+  sendCommand(context, 0x11, nullptr, 0);  // Sleep out
+  delay(120);
+
+  if (Board::Config::CO5300_EXTRA_PANEL_TUNING) {
+    // Page-0x20 source/gate tuning required by the 480-class CO5300 panels (2.16 / 1.8 V2).
+    // The 466 round 1.75 panel must NOT receive these or it renders evenly-spaced vertical
+    // stripes; it uses the plain CO5300 init below.
+    cmd1(0xFE, 0x20);
+    cmd1(0x19, 0x10);
+    cmd1(0x1C, 0xA0);
   }
+
+  cmd1(0xFE, 0x00);  // Command page 0
+  cmd1(0xC4, 0x80);  // QSPI write mode
+  cmd1(0x3A, 0x55);  // 16bpp RGB565
+  cmd1(0x35, 0x00);  // Tearing effect on
+  cmd1(0x53, 0x20);  // Brightness control block on
+  cmd1(0x51, 0xFF);  // Display brightness
+  cmd1(0x63, 0xFF);  // HBM brightness
+
+  // Power-on address window from the panel's native resolution and column/row offset. The 466
+  // round panel starts at column 6; square panels keep offset 0. pushColors re-sets this per frame.
+  setColumnWindow(context, Board::Config::DISPLAY_COL_OFFSET,
+                  static_cast<uint16_t>(Board::Config::DISPLAY_COL_OFFSET +
+                                        Board::Config::PANEL_NATIVE_WIDTH - 1));
+  setRowWindow(context, Board::Config::DISPLAY_ROW_OFFSET,
+               static_cast<uint16_t>(Board::Config::DISPLAY_ROW_OFFSET +
+                                     Board::Config::PANEL_NATIVE_HEIGHT - 1));
+
+  cmd1(0x36, kDefaultMadctl);              // MADCTL
+  sendCommand(context, 0x29, nullptr, 0);  // Display on
+  delay(10);
 
   context.displayOn = true;
   applyBrightness(context);

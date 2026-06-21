@@ -140,4 +140,6 @@ constexpr int PIN_AUDIO_DOUT = 8;
 constexpr uint8_t ES8311_ADDRESS = 0x18;
 // The 1.75 touch layer is mounted 180 degrees relative to the display, so flip both touch axes.
 constexpr bool TOUCH_ROTATED_180 = true;
+// The 466 round panel must skip the 480-class page-0x20 source/gate tuning (causes vertical stripes).
+constexpr bool CO5300_EXTRA_PANEL_TUNING = false;
 }  // namespace Board::Config
