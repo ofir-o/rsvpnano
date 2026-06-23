@@ -2016,6 +2016,14 @@ void App::handleBatteryProtection(uint32_t nowMs) {
     return;
   }
 
+  // Never auto-power-off (or warn) for low battery while on external/USB power: the pack is
+  // charging, and some PMUs (e.g. the AXP2101 on the 1.75) report a misleadingly low pack voltage
+  // while plugged in, which otherwise triggers a false critical shutdown a few seconds after boot.
+  if (Board::Power::externalPowerPresent()) {
+    batteryCriticalSampleCount_ = 0;
+    return;
+  }
+
   const bool critical = batteryFilteredVoltage_ <= kBatteryCriticalVoltage ||
                         batteryDisplayedPercent_ <= kBatteryCriticalPercent;
   if (critical) {
