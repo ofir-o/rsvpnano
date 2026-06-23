@@ -74,6 +74,9 @@ hold must mean "keep reading," not standby — so the two can't both use PWR-hol
   say, BOOT or is disabled); when OFF, current behavior.
 - Or a separate momentary mode you enter from a menu.
 Tell me which feels right and I'll spec it precisely.
+**Decided:** "both at once" — tap PWR toggles play/pause; press-and-hold PWR runs the words while
+held, stops on release. NOTE: a PWR (large button) hold currently **cycles the theme** — move that
+to **Settings only** (not needed on a hold) so the hold is free for run-while-held.
 
 ### 4. Pastel color themes  — READY-ish
 **My understanding:** add new selectable color palettes in Settings → Display → Theme, alongside the
@@ -113,6 +116,12 @@ gamified reading-streak companion.
   hint lines? (Could make this 1.75-only so other boards keep the hints.)
 - After removing three corners, should the remaining bottom-center area show anything (e.g. reading
   progress), or stay clean?
+
+### 9. Remove the Articles section  — READY, easy
+**My understanding:** you don't use Articles — remove the Articles entry/submenu from the device UI
+(and likely the RSS "Update RSS" flow that feeds it). Books still work as normal.
+**Questions for you:** hide it from the on-device menu only (simplest), or also strip RSS fetching
+and the companion/web "Articles" pages? Keep already-saved article files on storage, or ignore them?
 
 ### 8. Battery-life improvement audit  — IDEA, audit-first
 **My understanding:** review the whole firmware for ways to extend battery life, then implement the
