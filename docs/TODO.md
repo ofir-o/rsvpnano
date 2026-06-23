@@ -5,6 +5,20 @@ buildable), `IN PROGRESS`, `DONE (verify)` (code done, needs on-device check), `
 
 When a piece of work finishes, pick the next item from here.
 
+## Difficulty order (easiest → hardest)
+1. **#4 Pastel themes** — easiest. Pure UI palette additions, no hardware/time deps.
+2. **#3 Hold-to-read mode** — easy. One localized input-mode change + a settings toggle.
+3. **#6 Round chrome cleanup** — easy *if split*: removing the clipped corner labels + edge lines is
+   trivial; the **clock** part is medium because it needs a time source (RTC/Wi-Fi/manual).
+4. **#1 Gyro auto-level** — medium-hard. Renderer already supports 4 orientations, so it's IMU →
+   orientation wiring + debounce + on-device tuning.
+5. **#5 Reading Tamagotchi** — hardest. New subsystem: daily-goal tracking, persistence, time/day
+   source, pet states/art, a screen, and death/revive logic.
+- (#2 button roles — DONE, pending flash verify.)
+
+Shared dependency: #6 (clock) and #5 (Tamagotchi) both need a real time source; wiring the onboard
+PCF85063 RTC once unblocks both.
+
 ---
 
 ## Recently finished (pending a flash to verify)
