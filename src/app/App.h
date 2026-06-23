@@ -18,6 +18,7 @@
 #include "input/InputTouch.h"
 #include "reader/ReadingLoop.h"
 #include "rss/RssFeedManager.h"
+#include "sensors/AutoLevel.h"
 #include "standby/Screensaver.h"
 #include "storage/index/IndexedBookStore.h"
 #include "storage/StorageManager.h"
@@ -40,6 +41,15 @@ class App {
   enum class HandednessMode : uint8_t {
     Right = 0,
     Left = 1,
+  };
+
+  // Auto-rotate (gyro/IMU auto-level) mode.
+  // Continuous is treated as 4-way snap for now -- the renderer only supports
+  // the four cardinal orientations. See AutoLevel.h for the TODO.
+  enum class AutoRotateMode : uint8_t {
+    Continuous = 0,
+    FourWaySnap = 1,
+    Off = 2,
   };
 
   App();
@@ -206,6 +216,7 @@ class App {
   void cycleUiLanguage(uint32_t nowMs);
   void cycleReaderMode(uint32_t nowMs);
   void cycleHandednessMode(uint32_t nowMs);
+  void cycleAutoRotateMode(uint32_t nowMs);
   void toggleReaderControlsLayout(uint32_t nowMs);
   void togglePhantomWords(uint32_t nowMs);
   void cycleReaderFontSize(uint32_t nowMs);
@@ -318,6 +329,7 @@ class App {
   String readerModeLabel() const;
   String pauseModeLabel() const;
   String handednessLabel() const;
+  String autoRotateModeLabel() const;
   String readerControlsLayoutLabel() const;
   String readerFontSizeLabel() const;
   String readerTypefaceLabel() const;
@@ -458,6 +470,8 @@ class App {
   bool scrollModeEnabled() const;
   void applyUiOrientation(Board::Config::UiOrientation orientation);
   void applyReaderUiOrientation();
+  void updateAutoRotate(uint32_t nowMs);
+  bool autoRotateEnabled() const;
   void reloadRuntimePreferences(uint32_t nowMs, bool rerender);
   Board::Config::UiOrientation readerUiOrientation() const;
   bool uiRotated180() const;
@@ -636,5 +650,10 @@ class App {
   UiLanguage uiLanguage_ = UiLanguage::English;
   ReaderMode readerMode_ = ReaderMode::Rsvp;
   HandednessMode handednessMode_ = HandednessMode::Right;
+  // Default auto-rotate to 4-way snap ON for boards with an IMU.
+  AutoRotateMode autoRotateMode_ = AutoRotateMode::FourWaySnap;
+  AutoLevel autoLevel_;
+  bool autoRotateActive_ = false;
+  Board::Config::UiOrientation autoRotateOrientation_ = Board::Config::DEFAULT_UI_ORIENTATION;
   DisplayManager::TypographyConfig typographyConfig_;
 };
