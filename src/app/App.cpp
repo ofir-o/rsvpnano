@@ -103,6 +103,7 @@ namespace {
 enum MenuItem : size_t {
   MenuResume,
   MenuChapters,
+  MenuBookmarks,
   MenuBooks,
   MenuShuli,
   MenuFocusTimer,
@@ -120,6 +121,7 @@ enum MenuItem : size_t {
 enum RestructuredMenuItem : size_t {
   RestructuredMenuResume,
   RestructuredMenuChapters,
+  RestructuredMenuBookmarks,
   RestructuredMenuBooks,
   RestructuredMenuShuli,
   RestructuredMenuSettings,
@@ -3289,6 +3291,11 @@ bool App::navigateBackInMenu(uint32_t nowMs) {
       renderMainMenu();
       return true;
 
+    case MenuScreen::Bookmarks:
+      menuScreen_ = MenuScreen::Main;
+      renderMainMenu();
+      return true;
+
     case MenuScreen::SettingsHome:
       menuScreen_ = MenuScreen::Main;
       renderMainMenu();
@@ -3420,6 +3427,9 @@ bool App::moveMenuSelection(int direction, bool wrap) {
   } else if (menuScreen_ == MenuScreen::Articles) {
     selectedIndex = &articlesSelectedIndex_;
     itemCount = ArticlesItemCount;
+  } else if (menuScreen_ == MenuScreen::Bookmarks) {
+    selectedIndex = &bookmarksSelectedIndex_;
+    itemCount = bookmarksMenuItems_.size();
   } else if (menuScreen_ == MenuScreen::WifiNetworks) {
     selectedIndex = &wifiNetworkSelectedIndex_;
     itemCount = wifiNetworkMenuItems_.size();
@@ -3552,6 +3562,9 @@ bool App::moveMenuSelection(int direction, bool wrap) {
         case RestructuredMenuChapters:
           selectedLabel = uiText(UiText::Chapters);
           break;
+        case RestructuredMenuBookmarks:
+          selectedLabel = "Bookmarks";
+          break;
         case RestructuredMenuBooks:
           selectedLabel = "Books";
           break;
@@ -3574,6 +3587,9 @@ bool App::moveMenuSelection(int direction, bool wrap) {
           break;
         case MenuChapters:
           selectedLabel = uiText(UiText::Chapters);
+          break;
+        case MenuBookmarks:
+          selectedLabel = "Bookmarks";
           break;
         case MenuBooks:
           selectedLabel = "Books";
@@ -3670,6 +3686,10 @@ void App::selectMenuItem(uint32_t nowMs) {
   if (menuScreen_ == MenuScreen::FocusTimerSession) {
     return;
   }
+  if (menuScreen_ == MenuScreen::Bookmarks) {
+    selectBookmarksItem(nowMs);
+    return;
+  }
   if (menuScreen_ == MenuScreen::Shuli) {
     // The Shuli screen isn't a list; a tap cycles her daily word goal.
     shuli_.cycleGoal();
@@ -3685,6 +3705,9 @@ void App::selectMenuItem(uint32_t nowMs) {
         return;
       case RestructuredMenuChapters:
         openChapterPicker();
+        return;
+      case RestructuredMenuBookmarks:
+        openBookmarks();
         return;
       case RestructuredMenuBooks:
         openBookPicker(false);
@@ -3727,6 +3750,9 @@ void App::selectMenuItem(uint32_t nowMs) {
     case MenuChapters:
       openChapterPicker();
       return;
+    case MenuBookmarks:
+      openBookmarks();
+      return;
     case MenuBooks:
       openBookPicker(false);
       return;
@@ -3768,6 +3794,118 @@ void App::renderShuliView() {
   }
   display_.renderShuliScreen(static_cast<int>(shuli_.mood()), shuli_.statusLine(), stat,
                              shuli_.goalPercent());
+}
+
+String App::bookmarkKey(const String &bookPath) const {
+  char key[10];
+  std::snprintf(key, sizeof(key), "b%08lx", static_cast<unsigned long>(hashBookPath(bookPath)));
+  return String(key);
+}
+
+std::vector<uint32_t> App::loadBookmarks(const String &bookPath) {
+  std::vector<uint32_t> marks;
+  if (bookPath.isEmpty()) {
+    return marks;
+  }
+  const String key = bookmarkKey(bookPath);
+  if (!preferences_.isKey(key.c_str())) {
+    return marks;
+  }
+  const size_t len = preferences_.getBytesLength(key.c_str());
+  if (len == 0 || (len % sizeof(uint32_t)) != 0) {
+    return marks;
+  }
+  marks.resize(len / sizeof(uint32_t));
+  preferences_.getBytes(key.c_str(), marks.data(), len);
+  return marks;
+}
+
+void App::saveBookmarks(const String &bookPath, const std::vector<uint32_t> &marks) {
+  if (bookPath.isEmpty()) {
+    return;
+  }
+  const String key = bookmarkKey(bookPath);
+  if (marks.empty()) {
+    preferences_.remove(key.c_str());
+    return;
+  }
+  preferences_.putBytes(key.c_str(), marks.data(), marks.size() * sizeof(uint32_t));
+}
+
+void App::openBookmarks() {
+  bookmarksSelectedIndex_ = 0;
+  rebuildBookmarksMenu();
+  menuScreen_ = MenuScreen::Bookmarks;
+  renderBookmarks();
+}
+
+void App::rebuildBookmarksMenu() {
+  bookmarksMenuItems_.clear();
+  bookmarksMenuItems_.push_back(uiText(UiText::Back));
+  const bool inBook =
+      usingStorageBook_ && !currentBookPath_.isEmpty() && reader_.wordCount() > 0;
+  if (inBook) {
+    bookmarksMenuItems_.push_back("+ Bookmark here");
+  }
+  bookmarkPositions_ = currentBookPath_.isEmpty() ? std::vector<uint32_t>()
+                                                  : loadBookmarks(currentBookPath_);
+  const size_t wordCount = reader_.wordCount();
+  for (size_t i = 0; i < bookmarkPositions_.size(); ++i) {
+    const uint32_t idx = bookmarkPositions_[i];
+    String label = "@ ";
+    if (wordCount > 1) {
+      const uint32_t clamped =
+          static_cast<uint32_t>(std::min<size_t>(idx, wordCount - 1));
+      label += String((clamped * 100u) / (wordCount - 1)) + "%";
+    } else {
+      label += "word " + String(idx);
+    }
+    bookmarksMenuItems_.push_back(label);
+  }
+  if (!inBook && bookmarkPositions_.empty()) {
+    bookmarksMenuItems_.push_back("(open a book first)");
+  }
+}
+
+void App::renderBookmarks() { display_.renderMenu(bookmarksMenuItems_, bookmarksSelectedIndex_); }
+
+void App::selectBookmarksItem(uint32_t nowMs) {
+  if (bookmarksSelectedIndex_ == 0) {
+    menuScreen_ = MenuScreen::Main;
+    renderMainMenu();
+    return;
+  }
+  const bool inBook =
+      usingStorageBook_ && !currentBookPath_.isEmpty() && reader_.wordCount() > 0;
+  size_t firstBookmarkRow = 1;
+  if (inBook) {
+    if (bookmarksSelectedIndex_ == 1) {
+      const uint32_t here = static_cast<uint32_t>(reader_.currentIndex());
+      bool exists = false;
+      for (uint32_t m : bookmarkPositions_) {
+        if (m == here) {
+          exists = true;
+          break;
+        }
+      }
+      if (!exists && bookmarkPositions_.size() < 10) {
+        bookmarkPositions_.push_back(here);
+        std::sort(bookmarkPositions_.begin(), bookmarkPositions_.end());
+        saveBookmarks(currentBookPath_, bookmarkPositions_);
+      }
+      rebuildBookmarksMenu();
+      renderBookmarks();
+      return;
+    }
+    firstBookmarkRow = 2;
+  }
+  const size_t markIdx = bookmarksSelectedIndex_ - firstBookmarkRow;
+  if (markIdx < bookmarkPositions_.size()) {
+    reader_.seekTo(bookmarkPositions_[markIdx]);
+    saveReadingPosition(true);
+    playLocked_ = false;
+    setState(AppState::Paused, nowMs);
+  }
 }
 
 void App::selectArticlesItem(uint32_t nowMs) {
@@ -6757,6 +6895,8 @@ void App::renderMenu() {
     renderArticlesMenu();
   } else if (menuScreen_ == MenuScreen::Shuli) {
     renderShuliView();
+  } else if (menuScreen_ == MenuScreen::Bookmarks) {
+    renderBookmarks();
   } else if (menuScreen_ == MenuScreen::WifiNetworks) {
     renderWifiNetworks();
   } else if (menuScreen_ == MenuScreen::TextEntry) {
@@ -6795,6 +6935,7 @@ void App::renderMainMenu() {
                     : static_cast<size_t>(MenuItemCount));
   items.push_back(uiText(UiText::Resume));
   items.push_back(uiText(UiText::Chapters));
+  items.push_back("Bookmarks");
   items.push_back("Books");
   items.push_back("Shuli");
   if (Board::Config::ENABLE_RESTRUCTURED_MENU) {

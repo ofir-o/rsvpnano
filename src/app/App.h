@@ -100,6 +100,7 @@ class App {
     Main,
     Articles,
     Shuli,
+    Bookmarks,
     SettingsHome,
     SettingsDisplay,
     SettingsPacing,
@@ -391,6 +392,13 @@ class App {
                        const BookOpenOptions &options = BookOpenOptions());
   String bookPositionKey(const String &bookPath) const;
   String bookWordCountKey(const String &bookPath) const;
+  String bookmarkKey(const String &bookPath) const;
+  std::vector<uint32_t> loadBookmarks(const String &bookPath);
+  void saveBookmarks(const String &bookPath, const std::vector<uint32_t> &marks);
+  void openBookmarks();
+  void renderBookmarks();
+  void rebuildBookmarksMenu();
+  void selectBookmarksItem(uint32_t nowMs);
   String bookRecentKey(const String &bookPath) const;
   uint32_t nextRecentSequence();
   uint32_t bookRecentSequence(const String &bookPath);
@@ -536,6 +544,9 @@ class App {
   size_t pendingBootBookIndex_ = 0;
   size_t menuSelectedIndex_ = 0;
   size_t articlesSelectedIndex_ = 0;
+  size_t bookmarksSelectedIndex_ = 0;
+  std::vector<String> bookmarksMenuItems_;
+  std::vector<uint32_t> bookmarkPositions_;
   size_t settingsSelectedIndex_ = 0;
   size_t wifiNetworkSelectedIndex_ = 0;
   size_t bookPickerSelectedIndex_ = 0;
