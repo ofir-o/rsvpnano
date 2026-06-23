@@ -606,6 +606,7 @@ class App {
   bool autoDimActive_ = false;
   bool bootButtonReleasedSinceBoot_ = false;
   bool bootButtonLongPressHandled_ = false;
+  bool holdToReadActive_ = false;
   bool powerButtonReleasedSinceBoot_ = false;
   bool powerButtonLongPressHandled_ = false;
   bool keyButtonReleasedSinceBoot_ = false;
