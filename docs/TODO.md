@@ -5,6 +5,36 @@ buildable), `IN PROGRESS`, `DONE (verify)` (code done, needs on-device check), `
 
 When a piece of work finishes, pick the next item from here.
 
+## Difficulty order (easiest → hardest)
+1. **#4 Pastel themes** — easiest. Pure UI palette additions, no hardware/time deps.
+2. **#3 Hold-to-read mode** — easy. One localized input-mode change + a settings toggle.
+3. **#6 Round chrome cleanup** — easy *if split*: removing the clipped corner labels + edge lines is
+   trivial; the **clock** part is medium because it needs a time source (RTC/Wi-Fi/manual).
+4. **#7 Multiple bookmarks** — medium. Persistence (sidecar file) + create/list/jump UI, but no
+   hardware or time deps.
+   - **#8 Battery-life audit** — the audit/report is easy; implementing findings ranges from easy
+     (timings/CPU freq) to medium. Slot it wherever; the report can be done anytime.
+5. **#1 Gyro auto-level** — medium-hard. Renderer already supports 4 orientations, so it's IMU →
+   orientation wiring + debounce + on-device tuning.
+6. **#5 Reading Tamagotchi** — hardest. New subsystem: daily-goal tracking, persistence, time/day
+   source, pet states/art, a screen, and death/revive logic.
+- (#2 button roles — DONE, pending flash verify.)
+
+Shared dependency: #6 (clock) and #5 (Tamagotchi) both need a real time source; wiring the onboard
+PCF85063 RTC once unblocks both.
+
+## Decisions so far (from clarifications)
+- **Time source:** onboard **PCF85063 RTC** (accurate offline, negligible battery draw, no Wi-Fi).
+  Wire it once; it unblocks the clock (#6) and Tamagotchi day-tracking (#5).
+- **Hold-to-read (#3):** "both at once" — a **tap** on PWR toggles play/pause as today, AND
+  **press-and-hold** PWR runs the words while held / stops on release. PWR-hold is currently unused
+  on the 1.75 (standby was disabled there), so no conflict to resolve.
+- **Bookmarks (#7):** **per-book** lists.
+- **Gyro auto-level (#1):** default **continuous smooth** rotation, with a Settings option to switch
+  to **4-way snap** or **off**. NOTE: continuous arbitrary-angle text is the hard part — the
+  renderer currently only does 90° orientations, so smooth rotation needs real new rendering work;
+  4-way and off are cheap. May ship 4-way first, then smooth.
+
 ---
 
 ## Recently finished (pending a flash to verify)
@@ -44,17 +74,20 @@ hold must mean "keep reading," not standby — so the two can't both use PWR-hol
   say, BOOT or is disabled); when OFF, current behavior.
 - Or a separate momentary mode you enter from a menu.
 Tell me which feels right and I'll spec it precisely.
+**Decided:** "both at once" — tap PWR toggles play/pause; press-and-hold PWR runs the words while
+held, stops on release. NOTE: a PWR (large button) hold currently **cycles the theme** — move that
+to **Settings only** (not needed on a hold) so the hold is free for run-while-held.
 
 ### 4. Pastel color themes  — READY-ish
-**My understanding:** add new selectable color palettes in Settings → Display → Theme, with cute
-pastel options (e.g. pink, sage green, beige), keeping text/background contrast high enough to stay
-comfortably readable.
-**Questions for you:**
-- How many palettes to start with? I'd suggest 3 (pink, sage, beige) plus the existing dark/light.
-- Each palette = a background color + a text color + the red focus-letter color. Want the focus
-  letter to stay red, or tint it to match each palette?
-- The display is AMOLED (true black saves power); pastel backgrounds are bright/always-lit — fine
-  for you? (Just flagging battery/burn-in, not a blocker.)
+**My understanding:** add new selectable color palettes in Settings → Display → Theme, alongside the
+existing dark/light. Confirmed palettes wanted:
+- **Terracotta + beige** (warm) — likely beige background with deep terracotta/brown text.
+- **Baby pastel pink** (light) — soft pink background with a dark contrasting text (e.g. deep plum).
+- **Matcha / sage green** — soft matcha-green background with dark green/brown text.
+Keep contrast high enough to stay comfortably readable on each.
+**Open questions:** focus-letter color per palette (see clarifications); exact fg/bg hex pairs (I'll
+propose readable ones and you can tweak).
+**Note:** AMOLED true-black saves power; pastel (bright) backgrounds are always-lit — fine per you.
 
 ### 5. Reading Tamagotchi (virtual pet fed by reading)  — IDEA / big, fun
 **My understanding:** a little virtual creature that you must "feed" by reading a daily goal (e.g.
@@ -83,6 +116,37 @@ gamified reading-streak companion.
   hint lines? (Could make this 1.75-only so other boards keep the hints.)
 - After removing three corners, should the remaining bottom-center area show anything (e.g. reading
   progress), or stay clean?
+
+### 9. Remove the Articles section  — READY, easy
+**My understanding:** you don't use Articles — remove the Articles entry/submenu from the device UI
+(and likely the RSS "Update RSS" flow that feeds it). Books still work as normal.
+**Questions for you:** hide it from the on-device menu only (simplest), or also strip RSS fetching
+and the companion/web "Articles" pages? Keep already-saved article files on storage, or ignore them?
+
+### 8. Battery-life improvement audit  — IDEA, audit-first
+**My understanding:** review the whole firmware for ways to extend battery life, then implement the
+worthwhile ones. Areas to check: CPU frequency per state (RSVP/scroll/paused/menu/standby — already
+configurable), display brightness + auto-dim timing, AMOLED true-black usage (pastel themes cost
+power), touch/IMU/battery polling intervals, Wi-Fi radio left on, light vs deep sleep in standby,
+and the OLED refresh/flush rate. Deliver a findings list first, then targeted changes.
+**Questions for you:**
+- Priority: maximize battery even if it makes the UI slightly less snappy, or keep it snappy and
+  only take "free" wins?
+- Is idle standby/auto-off something you want re-enabled (it's currently effectively off on the
+  1.75 per your earlier request)? A screen-off-after-N-minutes is one of the biggest savers.
+
+### 7. Multiple bookmarks  — IDEA, medium
+**My understanding:** beyond the automatic "resume where I left off," let me save several named/marked
+positions in a book and jump back to any of them later.
+**Questions for you:**
+- Bookmarks per-book (most common) or a global list across all books?
+- How do you create one while reading — a menu item, or a gesture/button? (On the round 1.75 the
+  inputs are limited: PWR=play/pause, BOOT=power; we'd likely add a "Bookmark here" entry in the
+  main menu, plus a "Bookmarks" list to jump from.)
+- Auto-label each bookmark with the surrounding words + % progress, or let you type a name? (Typing
+  on this device is slow; auto-label is probably nicer.)
+- How many max per book (e.g. 10)? Stored as a small sidecar file next to the book in flash.
+- Should removing/clearing bookmarks be easy (swipe/Back on the list)?
 
 ---
 
