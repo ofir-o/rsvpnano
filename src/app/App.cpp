@@ -4173,10 +4173,10 @@ void App::selectRestructuredSettingsItem(uint32_t nowMs) {
         return;
       default:
         if (Board::Config::READER_SHOW_CLOCK &&
-            selectedIndex == kSettingsDisplayRestructuredSetClockIndex) {
+            settingsSelectedIndex_ == kSettingsDisplayRestructuredSetClockIndex) {
           openClockTimeEntry();
         } else if (Board::Config::HAS_IMU &&
-                   selectedIndex == kSettingsDisplayRestructuredAutoRotateIndex) {
+                   settingsSelectedIndex_ == kSettingsDisplayRestructuredAutoRotateIndex) {
           cycleAutoRotateMode(nowMs);
         }
         return;
