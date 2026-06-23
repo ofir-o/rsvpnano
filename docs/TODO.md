@@ -149,6 +149,18 @@ positions in a book and jump back to any of them later.
 - How many max per book (e.g. 10)? Stored as a small sidecar file next to the book in flash.
 - Should removing/clearing bookmarks be easy (swipe/Back on the list)?
 
+### 10. Selectable fonts in Settings  — IDEA, medium
+**My understanding:** let the user choose between several reading fonts from Settings → Display (the
+RSVP word is currently drawn with one built-in serif). Offer a few distinct options (e.g. the serif,
+a clean sans, maybe a mono/dyslexia-friendly face) and persist the choice per device.
+**Notes / questions:**
+- The reader renders glyphs from a built-in font table (`serifWordLayout*` in DisplayManager); adding
+  fonts means bundling extra glyph tables, which costs flash — keep the set small and check the
+  ~5.9 MB library budget on the 1.75 (flash-only).
+- Which specific fonts do you want? (serif + sans is the easy starting pair.)
+- Apply the font to just the big RSVP word, or also the menus/chrome?
+- Per-book or one global setting?
+
 ---
 
 ## Notes
