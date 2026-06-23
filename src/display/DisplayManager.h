@@ -13,6 +13,16 @@ class DisplayManager {
     AtkinsonHyperlegible = 2,
   };
 
+  // Optional pastel reading palettes. When set to anything other than None, the
+  // palette overrides the bg/text/focus colors derived from the dark/night/yellow
+  // booleans. None preserves the original Dark/Light/Night/Yellow behavior.
+  enum class ThemePalette : uint8_t {
+    None = 0,
+    Terracotta = 1,
+    BabyPink = 2,
+    Matcha = 3,
+  };
+
   struct TypographyConfig {
     ReaderTypeface typeface = ReaderTypeface::Standard;
     bool focusHighlight = true;
@@ -69,6 +79,8 @@ class DisplayManager {
   void setDarkMode(bool darkMode);
   void setNightMode(bool nightMode);
   void setYellowMode(bool enabled);
+  void setThemePalette(ThemePalette palette);
+  ThemePalette themePalette() const;
   void setUiOrientation(Board::Config::UiOrientation orientation);
   void setUiRotated180(bool rotated180);
   void setTypographyConfig(const TypographyConfig &config);
@@ -207,6 +219,7 @@ class DisplayManager {
   bool darkMode_ = true;
   bool nightMode_ = false;
   bool yellowMode_ = false;
+  ThemePalette themePalette_ = ThemePalette::None;
   Board::Config::UiOrientation uiOrientation_ = Board::Config::DEFAULT_UI_ORIENTATION;
   bool tickerPlaybackFrameActive_ = false;
   String lastRenderKey_;

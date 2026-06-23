@@ -35,6 +35,24 @@ constexpr uint16_t kNightWordColor = 0xFCE0;
 constexpr uint16_t kNightFocusColor = 0xFA80;
 constexpr uint16_t kYellowModeNightFocusColor = 0x7D7F;
 constexpr uint16_t kYellowModeBackground = 0xFF44;
+
+// Pastel reading palettes (recommended "A" variants). Each is background /
+// body-text / focus-letter, as RGB565. Body-text contrast vs background is well
+// above 4.5:1 on all three; the focus letter is a warm accent that sits among
+// the body text (same role as the red focus in Dark/Light). See
+// docs/palette-preview.html for the candidate variants and exact values.
+// Terracotta + beige: bg #E8DCC8, text #6B2F22, focus #B5532E.
+constexpr uint16_t kTerracottaBackground = 0xEEF9;
+constexpr uint16_t kTerracottaWordColor = 0x6964;
+constexpr uint16_t kTerracottaFocusColor = 0xB285;
+// Baby pastel pink: bg #F8D7E3, text #5E2A4E, focus #C0246A.
+constexpr uint16_t kBabyPinkBackground = 0xFEBC;
+constexpr uint16_t kBabyPinkWordColor = 0x5949;
+constexpr uint16_t kBabyPinkFocusColor = 0xC12D;
+// Matcha / sage green: bg #CBD8B0, text #2C3A22, focus #7A4A1E.
+constexpr uint16_t kMatchaBackground = 0xCED6;
+constexpr uint16_t kMatchaWordColor = 0x29C4;
+constexpr uint16_t kMatchaFocusColor = 0x7A43;
 constexpr uint16_t kDarkMenuDimColor = 0x8410;
 constexpr uint16_t kLightMenuDimColor = 0x6B4D;
 constexpr uint16_t kDarkFooterColor = 0x528A;
@@ -933,6 +951,18 @@ void DisplayManager::setYellowMode(bool enabled) {
   lastRenderKey_ = "";
 }
 
+void DisplayManager::setThemePalette(ThemePalette palette) {
+  if (themePalette_ == palette) {
+    return;
+  }
+
+  themePalette_ = palette;
+  tickerPlaybackFrameActive_ = false;
+  lastRenderKey_ = "";
+}
+
+DisplayManager::ThemePalette DisplayManager::themePalette() const { return themePalette_; }
+
 void DisplayManager::setUiOrientation(Board::Config::UiOrientation orientation) {
   if (uiOrientation_ == orientation) {
     return;
@@ -1095,6 +1125,16 @@ void DisplayManager::clearVirtualBuffer(int width, int height) {
 }
 
 uint16_t DisplayManager::backgroundColor() const {
+  switch (themePalette_) {
+    case ThemePalette::Terracotta:
+      return kTerracottaBackground;
+    case ThemePalette::BabyPink:
+      return kBabyPinkBackground;
+    case ThemePalette::Matcha:
+      return kMatchaBackground;
+    case ThemePalette::None:
+      break;
+  }
   if (nightMode_) {
     return kTrueBlack;
   }
@@ -1105,6 +1145,16 @@ uint16_t DisplayManager::backgroundColor() const {
 }
 
 uint16_t DisplayManager::wordColor() const {
+  switch (themePalette_) {
+    case ThemePalette::Terracotta:
+      return kTerracottaWordColor;
+    case ThemePalette::BabyPink:
+      return kBabyPinkWordColor;
+    case ThemePalette::Matcha:
+      return kMatchaWordColor;
+    case ThemePalette::None:
+      break;
+  }
   if (nightMode_) {
     return kNightWordColor;
   }
@@ -1115,6 +1165,16 @@ uint16_t DisplayManager::wordColor() const {
 }
 
 uint16_t DisplayManager::focusColor() const {
+  switch (themePalette_) {
+    case ThemePalette::Terracotta:
+      return kTerracottaFocusColor;
+    case ThemePalette::BabyPink:
+      return kBabyPinkFocusColor;
+    case ThemePalette::Matcha:
+      return kMatchaFocusColor;
+    case ThemePalette::None:
+      break;
+  }
   if (yellowMode_) {
     return nightMode_ ? kYellowModeNightFocusColor : kYellowModeFocusColor;
   }
@@ -1125,6 +1185,10 @@ uint16_t DisplayManager::focusColor() const {
 }
 
 uint16_t DisplayManager::dimColor() const {
+  if (themePalette_ != ThemePalette::None) {
+    // Derive a muted label color by blending the body text into the pastel bg.
+    return blendOverBackground(wordColor(), 150);
+  }
   if (nightMode_) {
     return blendOverBackground(wordColor(), kNightDimAlpha);
   }
@@ -1135,6 +1199,9 @@ uint16_t DisplayManager::dimColor() const {
 }
 
 uint16_t DisplayManager::footerColor() const {
+  if (themePalette_ != ThemePalette::None) {
+    return blendOverBackground(wordColor(), 120);
+  }
   if (nightMode_) {
     return blendOverBackground(wordColor(), kNightFooterAlpha);
   }
@@ -1145,6 +1212,9 @@ uint16_t DisplayManager::footerColor() const {
 }
 
 uint16_t DisplayManager::selectedBarColor() const {
+  if (themePalette_ != ThemePalette::None) {
+    return focusColor();
+  }
   return nightMode_ ? focusColor() : kFocusLetterColor;
 }
 

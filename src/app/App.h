@@ -622,6 +622,7 @@ class App {
   bool darkMode_ = true;
   bool nightMode_ = false;
   bool yellowModeEnabled_ = false;
+  DisplayManager::ThemePalette themePalette_ = DisplayManager::ThemePalette::None;
   UiLanguage uiLanguage_ = UiLanguage::English;
   ReaderMode readerMode_ = ReaderMode::Rsvp;
   HandednessMode handednessMode_ = HandednessMode::Right;
