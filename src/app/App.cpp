@@ -305,6 +305,12 @@ DisplayManager::ThemePalette themePaletteFromStored(uint8_t value) {
       return DisplayManager::ThemePalette::Peach;
     case static_cast<uint8_t>(DisplayManager::ThemePalette::Olive):
       return DisplayManager::ThemePalette::Olive;
+    case static_cast<uint8_t>(DisplayManager::ThemePalette::Sage):
+      return DisplayManager::ThemePalette::Sage;
+    case static_cast<uint8_t>(DisplayManager::ThemePalette::WarmGold):
+      return DisplayManager::ThemePalette::WarmGold;
+    case static_cast<uint8_t>(DisplayManager::ThemePalette::BeigeRose):
+      return DisplayManager::ThemePalette::BeigeRose;
     default:
       return DisplayManager::ThemePalette::None;
   }
@@ -1903,6 +1909,15 @@ void App::cycleThemeMode(uint32_t nowMs) {
         themePalette_ = DisplayManager::ThemePalette::Olive;
         break;
       case DisplayManager::ThemePalette::Olive:
+        themePalette_ = DisplayManager::ThemePalette::Sage;
+        break;
+      case DisplayManager::ThemePalette::Sage:
+        themePalette_ = DisplayManager::ThemePalette::WarmGold;
+        break;
+      case DisplayManager::ThemePalette::WarmGold:
+        themePalette_ = DisplayManager::ThemePalette::BeigeRose;
+        break;
+      case DisplayManager::ThemePalette::BeigeRose:
       default:
         // Leave the palettes; return to the standard Dark theme.
         themePalette_ = DisplayManager::ThemePalette::None;
@@ -5390,6 +5405,12 @@ String App::themeModeLabel() const {
       return "Peach";
     case DisplayManager::ThemePalette::Olive:
       return "Olive";
+    case DisplayManager::ThemePalette::Sage:
+      return "Sage";
+    case DisplayManager::ThemePalette::WarmGold:
+      return "Warm gold";
+    case DisplayManager::ThemePalette::BeigeRose:
+      return "Beige rose";
     case DisplayManager::ThemePalette::None:
       break;
   }

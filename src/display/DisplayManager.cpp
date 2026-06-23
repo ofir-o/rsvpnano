@@ -27,9 +27,9 @@ constexpr int kMaxTextScale = 1;
 constexpr uint8_t kGlyphAlphaThreshold = 16;
 constexpr uint16_t kTrueBlack = 0x0000;
 constexpr uint16_t kPureWhite = 0xFFFF;
-constexpr uint16_t kDarkWordColor = 0xFFFF;
+constexpr uint16_t kDarkWordColor = 0xEEB4;  // warm amber-cream (#EDD6A6), easy on the eyes
 constexpr uint16_t kLightWordColor = 0x0000;
-constexpr uint16_t kFocusLetterColor = 0xF800;
+constexpr uint16_t kFocusLetterColor = 0xFC2E;  // peachy-pink focus (#FF8674)
 constexpr uint16_t kYellowModeFocusColor = 0x001F;
 constexpr uint16_t kNightWordColor = 0xFCE0;
 constexpr uint16_t kNightFocusColor = 0xFA80;
@@ -53,6 +53,16 @@ constexpr uint16_t kPeachFocusColor = 0xAB24;
 constexpr uint16_t kOliveBackground = 0xEEF9;
 constexpr uint16_t kOliveWordColor = 0x39E5;
 constexpr uint16_t kOliveFocusColor = 0x8C4B;
+// Dark palettes (true-black background = best battery on AMOLED). word / focus as RGB565.
+// Sage: text #A8C0A0, focus #C9A86A.
+constexpr uint16_t kSageWordColor = 0xAE14;
+constexpr uint16_t kSageFocusColor = 0xCD4D;
+// Warm gold: text #E4C07A, focus #B5774A.
+constexpr uint16_t kWarmGoldWordColor = 0xE60F;
+constexpr uint16_t kWarmGoldFocusColor = 0xB3A9;
+// Beige rose: text #EAD2CB, focus #D99AA4.
+constexpr uint16_t kBeigeRoseWordColor = 0xEE99;
+constexpr uint16_t kBeigeRoseFocusColor = 0xDCD4;
 constexpr uint16_t kDarkMenuDimColor = 0x8410;
 constexpr uint16_t kLightMenuDimColor = 0x6B4D;
 constexpr uint16_t kDarkFooterColor = 0x528A;
@@ -1166,6 +1176,10 @@ uint16_t DisplayManager::backgroundColor() const {
       return kPeachBackground;
     case ThemePalette::Olive:
       return kOliveBackground;
+    case ThemePalette::Sage:
+    case ThemePalette::WarmGold:
+    case ThemePalette::BeigeRose:
+      return kTrueBlack;
     case ThemePalette::None:
       break;
   }
@@ -1186,6 +1200,12 @@ uint16_t DisplayManager::wordColor() const {
       return kPeachWordColor;
     case ThemePalette::Olive:
       return kOliveWordColor;
+    case ThemePalette::Sage:
+      return kSageWordColor;
+    case ThemePalette::WarmGold:
+      return kWarmGoldWordColor;
+    case ThemePalette::BeigeRose:
+      return kBeigeRoseWordColor;
     case ThemePalette::None:
       break;
   }
@@ -1206,6 +1226,12 @@ uint16_t DisplayManager::focusColor() const {
       return kPeachFocusColor;
     case ThemePalette::Olive:
       return kOliveFocusColor;
+    case ThemePalette::Sage:
+      return kSageFocusColor;
+    case ThemePalette::WarmGold:
+      return kWarmGoldFocusColor;
+    case ThemePalette::BeigeRose:
+      return kBeigeRoseFocusColor;
     case ThemePalette::None:
       break;
   }

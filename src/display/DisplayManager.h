@@ -21,6 +21,9 @@ class DisplayManager {
     Terracotta = 1,
     Peach = 2,
     Olive = 3,
+    Sage = 4,
+    WarmGold = 5,
+    BeigeRose = 6,
   };
 
   struct TypographyConfig {
