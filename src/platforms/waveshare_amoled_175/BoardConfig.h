@@ -157,4 +157,8 @@ constexpr bool DISPLAY_FLUSH_WHOLE_FRAME = true;
 // Round bezel clips the secondary corner labels, so hide the chapter label, the rewind hint, and
 // the swipe-handle edge lines on this board. Progress (top-left) and battery (top-right) stay.
 constexpr bool READER_HIDE_SECONDARY_CHROME = true;
+// This SKU ships with a 3.7V LiPo on the battery connector but no NTC thermistor. Enable and
+// configure the AXP2101 charger (4.2 V / 200 mA) and detach the TS pin, otherwise the PMU refuses
+// to charge and the device dies the instant USB is removed.
+constexpr bool AXP2101_CONFIGURE_CHARGER = true;
 }  // namespace Board::Config

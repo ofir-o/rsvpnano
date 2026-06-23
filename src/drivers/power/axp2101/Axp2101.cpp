@@ -20,6 +20,13 @@ constexpr uint8_t kBatteryVoltageHighReg = 0x34;
 constexpr uint8_t kBatteryVoltageLowReg = 0x35;
 constexpr uint8_t kBatteryDetectCtrlReg = 0x68;
 constexpr uint8_t kBatteryPercentReg = 0xA4;
+// Charger configuration registers (verified against XPowersLib AXP2101 constants).
+constexpr uint8_t kTsPinCtrlReg = 0x50;          // TS (battery temp) pin control
+constexpr uint8_t kChargerCtrlReg = 0x18;        // charge/gauge/watchdog control; bit1 = charge enable
+constexpr uint8_t kChargeVoltageReg = 0x64;      // constant-voltage target [2:0]
+constexpr uint8_t kChargeCurrentReg = 0x62;      // constant charge current [4:0]
+constexpr uint8_t kPrechargeCurrentReg = 0x61;   // precharge current [3:0]
+constexpr uint8_t kTerminationCurrentReg = 0x63; // termination current [3:0]
 constexpr uint8_t kPowerKeyIrqMask = 0x0F;
 constexpr uint8_t kPowerKeyPositiveIrqMask = 0x01;
 constexpr uint8_t kPowerKeyNegativeIrqMask = 0x02;
@@ -132,6 +139,22 @@ bool begin() {
   }
   if (!updateRegisterBits(kBatteryDetectCtrlReg, 0x01, 0x01)) {
     Serial.println("[board] AXP2101 battery detect enable failed");
+  }
+
+  if (Board::Config::AXP2101_CONFIGURE_CHARGER) {
+    // The board has a LiPo but no NTC thermistor on the TS pin. Detach the TS pin from the charger
+    // (matches XPowersLib disableTSPinMeasure: reg 0x50 = (val & 0xF0) | 0x10, and clear ADC bit1),
+    // otherwise the PMU reads an out-of-range temperature and refuses to charge.
+    updateRegisterBits(kTsPinCtrlReg, 0x1F, 0x10);
+    updateRegisterBits(kAdcChannelCtrlReg, 0x02, 0x00);
+    // Single-cell 4.2 V LiPo charge profile (CV 4.2 V, CC 200 mA, precharge 50 mA, term 25 mA).
+    updateRegisterBits(kChargeVoltageReg, 0x07, 0x03);
+    updateRegisterBits(kChargeCurrentReg, 0x1F, 0x08);
+    updateRegisterBits(kPrechargeCurrentReg, 0x0F, 0x02);
+    updateRegisterBits(kTerminationCurrentReg, 0x0F, 0x01);
+    if (!updateRegisterBits(kChargerCtrlReg, 0x02, 0x02)) {
+      Serial.println("[board] AXP2101 charge enable failed");
+    }
   }
 
   const uint8_t irqValue = Board::Config::AXP2101_ENABLE_POWER_KEY_IRQS ? kPowerKeyIrqMask : 0x00;
