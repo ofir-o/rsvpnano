@@ -104,7 +104,6 @@ enum MenuItem : size_t {
   MenuResume,
   MenuChapters,
   MenuBooks,
-  MenuArticles,
   MenuFocusTimer,
   MenuSettings,
   MenuSdCardCheck,
@@ -121,7 +120,6 @@ enum RestructuredMenuItem : size_t {
   RestructuredMenuResume,
   RestructuredMenuChapters,
   RestructuredMenuBooks,
-  RestructuredMenuArticles,
   RestructuredMenuSettings,
   RestructuredMenuPowerOff,
   RestructuredMenuItemCount,
@@ -3537,9 +3535,6 @@ bool App::moveMenuSelection(int direction, bool wrap) {
         case RestructuredMenuBooks:
           selectedLabel = "Books";
           break;
-        case RestructuredMenuArticles:
-          selectedLabel = "Articles";
-          break;
         case RestructuredMenuSettings:
           selectedLabel = uiText(UiText::Settings);
           break;
@@ -3559,9 +3554,6 @@ bool App::moveMenuSelection(int direction, bool wrap) {
           break;
         case MenuBooks:
           selectedLabel = "Books";
-          break;
-        case MenuArticles:
-          selectedLabel = "Articles";
           break;
         case MenuFocusTimer:
           selectedLabel = "Focus Timer";
@@ -3664,9 +3656,6 @@ void App::selectMenuItem(uint32_t nowMs) {
       case RestructuredMenuBooks:
         openBookPicker(false);
         return;
-      case RestructuredMenuArticles:
-        openArticlesMenu();
-        return;
       case RestructuredMenuSettings:
         openSettings();
         return;
@@ -3704,9 +3693,6 @@ void App::selectMenuItem(uint32_t nowMs) {
       return;
     case MenuBooks:
       openBookPicker(false);
-      return;
-    case MenuArticles:
-      openBookPicker(true);
       return;
     case MenuFocusTimer:
       openFocusTimer();
@@ -6747,7 +6733,6 @@ void App::renderMainMenu() {
   items.push_back(uiText(UiText::Resume));
   items.push_back(uiText(UiText::Chapters));
   items.push_back("Books");
-  items.push_back("Articles");
   if (Board::Config::ENABLE_RESTRUCTURED_MENU) {
     items.push_back(uiText(UiText::Settings));
     items.push_back(uiText(UiText::PowerOff));

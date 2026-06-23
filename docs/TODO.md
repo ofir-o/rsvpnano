@@ -166,6 +166,25 @@ a clean sans, maybe a mono/dyslexia-friendly face) and persist the choice per de
 - Apply the font to just the big RSVP word, or also the menus/chrome?
 - Per-book or one global setting?
 
+### 11. Hebrew + RTL support  — BIG, multi-part
+**Goal:** read Hebrew books, with correct right-to-left direction and all that entails.
+**Parts:**
+- **UTF-8 text** end to end (Hebrew is 2-byte, U+0590–U+05FF): tokenizer, storage, converter
+  (.epub/.txt → .rsvp), and the web converter must preserve UTF-8 (no ASCII assumptions).
+- **Hebrew glyphs:** the renderer draws from built-in Latin glyph tables; need a Hebrew bitmap font
+  (22 letters + 5 final forms, niqqud optional). Sourcing/generating quality glyphs is the long pole.
+- **RTL layout:** RSVP focus-letter placement, word advance order, and the context/scroll views all
+  assume LTR — must mirror for RTL runs. Mixed LTR/RTL (numbers, English words) needs handling.
+- **Direction detection:** per book/paragraph, choose LTR vs RTL (Hebrew range present).
+**Risk:** large; gate carefully so English is never regressed if Hebrew is incomplete.
+
+### 12. Pinch-to-zoom font size  — medium
+**Goal:** change reading font size with a two-finger pinch on the touchscreen (pinch out = larger).
+**Notes:** needs the touch controller to report **two touch points** — must verify the CST92xx
+driver/firmware exposes a second contact (current handling is single-touch). Then detect the change
+in finger distance and map to the existing reader font-size levels. Debounce so one pinch = one step
+(or smooth). Falls back gracefully on single-touch-only hardware.
+
 ---
 
 ## Notes
