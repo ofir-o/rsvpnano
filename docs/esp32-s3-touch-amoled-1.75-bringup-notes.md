@@ -123,9 +123,11 @@ This board has **no microSD slot**, so the library cannot live on a card. Instea
 
 ## Button Mapping Notes
 
-- `SWAP_APP_BOOT_AND_POWER_BUTTONS = true`: everyday reader controls (tap = play/pause, hold =
-  standby, Back) are driven by the larger **PWR** (AXP2101 power key), and the power-off flow moves
-  to the small **BOOT** (GPIO0) button. This makes the comfortable button the primary control.
+- `SWAP_APP_BOOT_AND_POWER_BUTTONS = true`: everyday reader controls (tap = play/pause, Back) are
+  driven by the larger **PWR** (AXP2101 power key); the power-off confirm menu is a hold on the small
+  **BOOT** (GPIO0) button, and a BOOT tap toggles the menu. `BOOT_BUTTON_HOLD_STARTS_STANDBY` is
+  disabled here so a PWR hold does nothing (no accidental standby; reserved for the planned
+  hold-to-read mode).
 - Default pause mode is **Instant** (firmware default changed from sentence-end) so a tap stops on
   the next word instead of waiting for the sentence to finish. Still switchable in
   `Settings -> Word pacing`.

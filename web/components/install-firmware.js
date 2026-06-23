@@ -429,6 +429,13 @@ class InstallFirmware extends HTMLElement {
       });
     }
 
+    // Only hook global console/window error sources once, even if this element is re-instantiated,
+    // so the console wrappers don't chain on top of each other.
+    if (window.__rsvpNanoErrorSurfaceHooked) {
+      return;
+    }
+    window.__rsvpNanoErrorSurfaceHooked = true;
+
     // Mirror console errors/warnings (where ESP Web Tools and esptool-js report failures) onto the
     // page so they are visible without opening devtools.
     const mirror = (level) => {

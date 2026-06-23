@@ -35,7 +35,10 @@ constexpr bool FIRMWARE_POWER_BUTTON_ENABLED = true;
 // play/pause, Back, and standby shortcuts just like the 1.8 V2 profile.
 constexpr bool BOOT_BUTTON_TOGGLES_READER = true;
 constexpr bool BOOT_BUTTON_BACKS_OUT_OF_MENU = true;
-constexpr bool BOOT_BUTTON_HOLD_STARTS_STANDBY = true;
+// With the PWR/BOOT swap, the reader-control ("logical boot") button is the large PWR key. Do NOT
+// start standby on its hold: that would make a PWR hold enter standby accidentally and collide with
+// the planned hold-to-read mode. Power-off lives on a BOOT hold instead.
+constexpr bool BOOT_BUTTON_HOLD_STARTS_STANDBY = false;
 constexpr bool ENABLE_RESTRUCTURED_MENU = true;
 
 // BOOT is the standard ESP32 GPIO0 button. PWR is handled by the AXP2101 PMU. The round 1.75

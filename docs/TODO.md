@@ -68,6 +68,22 @@ gamified reading-streak companion.
 - Needs a real-time clock to know "a day." The 1.75 has a PCF85063 RTC on board (not yet wired in
   firmware), or we can use Wi-Fi time / elapsed-time counting. Preference?
 
+### 6. Round-screen reader chrome cleanup  — READY-ish
+**My understanding:** on the round 1.75 the reader's corner labels get clipped by the bezel. Wanted:
+- **Remove** the labels at **top-left, bottom-left, and bottom-right** (the ones cut off / unreadable).
+- **Keep** the **battery percentage at top-right** (currently looks good, not clipped).
+- **Add a small clock at the top** of the screen.
+- **Remove the small edge lines at the top and bottom** (the paused-reader swipe-handle hints).
+**Questions for you:**
+- The clock needs the time from somewhere. Options: the onboard PCF85063 RTC (needs wiring in
+  firmware), Wi-Fi time sync (needs Wi-Fi at least once), or manual set in Settings. Which do you
+  want? (Ties into the Tamagotchi "what is a day" question.)
+- 12h or 24h format? Show it always, or only while paused / in menus?
+- Removing the top/bottom edge handles is cosmetic; the swipe menus still work — OK to just hide the
+  hint lines? (Could make this 1.75-only so other boards keep the hints.)
+- After removing three corners, should the remaining bottom-center area show anything (e.g. reading
+  progress), or stay clean?
+
 ---
 
 ## Notes
