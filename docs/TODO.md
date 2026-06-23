@@ -21,6 +21,18 @@ When a piece of work finishes, pick the next item from here.
 Shared dependency: #6 (clock) and #5 (Tamagotchi) both need a real time source; wiring the onboard
 PCF85063 RTC once unblocks both.
 
+## Decisions so far (from clarifications)
+- **Time source:** onboard **PCF85063 RTC** (accurate offline, negligible battery draw, no Wi-Fi).
+  Wire it once; it unblocks the clock (#6) and Tamagotchi day-tracking (#5).
+- **Hold-to-read (#3):** "both at once" — a **tap** on PWR toggles play/pause as today, AND
+  **press-and-hold** PWR runs the words while held / stops on release. PWR-hold is currently unused
+  on the 1.75 (standby was disabled there), so no conflict to resolve.
+- **Bookmarks (#7):** **per-book** lists.
+- **Gyro auto-level (#1):** default **continuous smooth** rotation, with a Settings option to switch
+  to **4-way snap** or **off**. NOTE: continuous arbitrary-angle text is the hard part — the
+  renderer currently only does 90° orientations, so smooth rotation needs real new rendering work;
+  4-way and off are cheap. May ship 4-way first, then smooth.
+
 ---
 
 ## Recently finished (pending a flash to verify)
@@ -62,15 +74,15 @@ hold must mean "keep reading," not standby — so the two can't both use PWR-hol
 Tell me which feels right and I'll spec it precisely.
 
 ### 4. Pastel color themes  — READY-ish
-**My understanding:** add new selectable color palettes in Settings → Display → Theme, with cute
-pastel options (e.g. pink, sage green, beige), keeping text/background contrast high enough to stay
-comfortably readable.
-**Questions for you:**
-- How many palettes to start with? I'd suggest 3 (pink, sage, beige) plus the existing dark/light.
-- Each palette = a background color + a text color + the red focus-letter color. Want the focus
-  letter to stay red, or tint it to match each palette?
-- The display is AMOLED (true black saves power); pastel backgrounds are bright/always-lit — fine
-  for you? (Just flagging battery/burn-in, not a blocker.)
+**My understanding:** add new selectable color palettes in Settings → Display → Theme, alongside the
+existing dark/light. Confirmed palettes wanted:
+- **Terracotta + beige** (warm) — likely beige background with deep terracotta/brown text.
+- **Baby pastel pink** (light) — soft pink background with a dark contrasting text (e.g. deep plum).
+- **Matcha / sage green** — soft matcha-green background with dark green/brown text.
+Keep contrast high enough to stay comfortably readable on each.
+**Open questions:** focus-letter color per palette (see clarifications); exact fg/bg hex pairs (I'll
+propose readable ones and you can tweak).
+**Note:** AMOLED true-black saves power; pastel (bright) backgrounds are always-lit — fine per you.
 
 ### 5. Reading Tamagotchi (virtual pet fed by reading)  — IDEA / big, fun
 **My understanding:** a little virtual creature that you must "feed" by reading a daily goal (e.g.
