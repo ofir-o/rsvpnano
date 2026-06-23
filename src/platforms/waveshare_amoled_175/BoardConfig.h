@@ -23,7 +23,9 @@ constexpr bool HAS_IMU = true;
 constexpr bool IMU_USES_WIRE1 = false;
 constexpr bool IMU_RELEASE_BUS_BEFORE_READ = true;
 constexpr uint8_t IMU_I2C_ADDRESS = 0x6B;
-constexpr bool SWAP_APP_BOOT_AND_POWER_BUTTONS = false;
+// Route everyday reader controls to the larger, easier-to-press PWR (AXP2101) key and move the
+// power-off flow to the small BOOT button.
+constexpr bool SWAP_APP_BOOT_AND_POWER_BUTTONS = true;
 constexpr bool APP_POWER_BUTTON_USES_PMU_EVENTS = false;
 constexpr bool BOOT_BUTTON_WAKES_STANDBY = true;
 constexpr bool ENABLE_TOP_EDGE_MENU_SWIPE = true;

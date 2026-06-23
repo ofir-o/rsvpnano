@@ -618,7 +618,7 @@ class App {
   FooterMetricMode footerMetricMode_ = FooterMetricMode::Percentage;
   BatteryLabelMode batteryLabelMode_ = BatteryLabelMode::Percent;
   ScreensaverMode screensaverMode_ = ScreensaverMode::Life;
-  PauseMode pauseMode_ = PauseMode::SentenceEnd;
+  PauseMode pauseMode_ = PauseMode::Instant;
   bool darkMode_ = true;
   bool nightMode_ = false;
   bool yellowModeEnabled_ = false;
