@@ -123,11 +123,18 @@ This board has **no microSD slot**, so the library cannot live on a card. Instea
 
 ## Button Mapping Notes
 
-- With no `KEY` button, `BOOT` carries the reader/menu shortcuts:
-  `BOOT_BUTTON_TOGGLES_READER`, `BOOT_BUTTON_BACKS_OUT_OF_MENU`, and
-  `BOOT_BUTTON_HOLD_STARTS_STANDBY` are all enabled (as on the 1.8 V2).
-- `PWR` (AXP2101 power key) handles power on/off; firmware power-button handling
-  stays enabled with PMU power-key IRQs.
+- `SWAP_APP_BOOT_AND_POWER_BUTTONS = true`: everyday reader controls (tap = play/pause, Back) are
+  driven by the larger **PWR** (AXP2101 power key); the power-off confirm menu is a hold on the small
+  **BOOT** (GPIO0) button, and a BOOT tap toggles the menu. `BOOT_BUTTON_HOLD_STARTS_STANDBY` is
+  disabled here so a PWR hold does nothing (no accidental standby; reserved for the planned
+  hold-to-read mode).
+- Default pause mode is **Instant** (firmware default changed from sentence-end) so a tap stops on
+  the next word instead of waiting for the sentence to finish. Still switchable in
+  `Settings -> Word pacing`.
+- **Verify on hardware (untested):** (1) the AXP2101 reports the PWR key held-level smoothly enough
+  for tap vs hold to separate cleanly; (2) a standby *hold* on PWR does not trip the PMU's hardware
+  power-off (watch `PMU_POWER_KEY_OFF_TIME_VALUE`); if it does, raise that value or shorten the
+  standby hold. No existing board enables this swap, so it is new ground.
 
 ## Build Verification
 

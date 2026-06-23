@@ -128,4 +128,5 @@ constexpr int PIN_AUDIO_DOUT = 8;
 constexpr uint8_t ES8311_ADDRESS = 0x18;
 constexpr bool TOUCH_ROTATED_180 = false;
 constexpr bool CO5300_EXTRA_PANEL_TUNING = true;
+constexpr int DISPLAY_QSPI_CLOCK_HZ = 20000000;
 }  // namespace Board::Config

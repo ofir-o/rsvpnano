@@ -23,7 +23,9 @@ constexpr bool HAS_IMU = true;
 constexpr bool IMU_USES_WIRE1 = false;
 constexpr bool IMU_RELEASE_BUS_BEFORE_READ = true;
 constexpr uint8_t IMU_I2C_ADDRESS = 0x6B;
-constexpr bool SWAP_APP_BOOT_AND_POWER_BUTTONS = false;
+// Route everyday reader controls to the larger, easier-to-press PWR (AXP2101) key and move the
+// power-off flow to the small BOOT button.
+constexpr bool SWAP_APP_BOOT_AND_POWER_BUTTONS = true;
 constexpr bool APP_POWER_BUTTON_USES_PMU_EVENTS = false;
 constexpr bool BOOT_BUTTON_WAKES_STANDBY = true;
 constexpr bool ENABLE_TOP_EDGE_MENU_SWIPE = true;
@@ -33,7 +35,10 @@ constexpr bool FIRMWARE_POWER_BUTTON_ENABLED = true;
 // play/pause, Back, and standby shortcuts just like the 1.8 V2 profile.
 constexpr bool BOOT_BUTTON_TOGGLES_READER = true;
 constexpr bool BOOT_BUTTON_BACKS_OUT_OF_MENU = true;
-constexpr bool BOOT_BUTTON_HOLD_STARTS_STANDBY = true;
+// With the PWR/BOOT swap, the reader-control ("logical boot") button is the large PWR key. Do NOT
+// start standby on its hold: that would make a PWR hold enter standby accidentally and collide with
+// the planned hold-to-read mode. Power-off lives on a BOOT hold instead.
+constexpr bool BOOT_BUTTON_HOLD_STARTS_STANDBY = false;
 constexpr bool ENABLE_RESTRUCTURED_MENU = true;
 
 // BOOT is the standard ESP32 GPIO0 button. PWR is handled by the AXP2101 PMU. The round 1.75
@@ -142,4 +147,7 @@ constexpr uint8_t ES8311_ADDRESS = 0x18;
 constexpr bool TOUCH_ROTATED_180 = true;
 // The 466 round panel must skip the 480-class page-0x20 source/gate tuning (causes vertical stripes).
 constexpr bool CO5300_EXTRA_PANEL_TUNING = false;
+// Waveshare's working 1.75 demo drives the CO5300 QSPI bus at 40 MHz; 20 MHz produces green
+// vertical stripes on this panel. (2.16 / 1.8 V2 stay at their validated 20 MHz.)
+constexpr int DISPLAY_QSPI_CLOCK_HZ = 40000000;
 }  // namespace Board::Config
