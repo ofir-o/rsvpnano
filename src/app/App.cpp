@@ -2220,6 +2220,12 @@ DisplayManager::ReaderChrome App::readerChrome() const {
   chrome.showPreviousSentenceHint = !contextViewVisible_ || scrollModeEnabled();
   chrome.showEdgeMenuHints = !reading;
   chrome.swapPreviousSentenceAndBattery = readerControlsSwapped_;
+  if (Board::Config::READER_HIDE_SECONDARY_CHROME) {
+    // Round bezel clips these; keep only progress (top-left) and battery (top-right).
+    chrome.showChapter = false;
+    chrome.showPreviousSentenceHint = false;
+    chrome.showEdgeMenuHints = false;
+  }
   return chrome;
 }
 

@@ -1678,12 +1678,41 @@ void DisplayManager::drawBatteryBadge(int logicalWidth, int logicalHeight,
     return;
   }
 
-  // Battery stays pinned to the top-right corner (progress occupies the top-left).
-  const int width = measureTinyTextWidth(batteryLabel_, kTinyScale);
-  const int x = std::max(kReaderBatteryMarginX, logicalWidth - kReaderBatteryMarginX - width);
+  // Battery stays pinned to the top-right corner (progress occupies the top-left): a percentage
+  // followed by a small phone-style battery icon whose fill tracks the charge level.
+  const uint16_t color = footerColor();
+  const int textWidth = measureTinyTextWidth(batteryLabel_, kTinyScale);
+  const int textHeight = kTinyGlyphHeight * kTinyScale;
+
+  const int bodyW = 22;
+  const int bodyH = 11;
+  const int nubW = 2;
+  const int nubH = 5;
+  const int gap = 5;
+  const int badgeWidth = textWidth + gap + bodyW + nubW;
+
+  const int x = std::max(kReaderBatteryMarginX, logicalWidth - kReaderBatteryMarginX - badgeWidth);
   const int y = logicalHeight > (kDisplayHeight * 2) ? kReaderBatteryMarginTop + 8
                                                       : kReaderBatteryMarginTop;
-  drawTinyTextAt(batteryLabel_, x, y, footerColor(), kTinyScale);
+
+  drawTinyTextAt(batteryLabel_, x, y, color, kTinyScale);
+
+  // Battery outline (vertically centred on the text) with a positive-terminal nub.
+  const int bx = x + textWidth + gap;
+  const int by = y + std::max(0, (textHeight - bodyH) / 2);
+  fillVirtualRect(bx, by, bodyW, 1, color);
+  fillVirtualRect(bx, by + bodyH - 1, bodyW, 1, color);
+  fillVirtualRect(bx, by, 1, bodyH, color);
+  fillVirtualRect(bx + bodyW - 1, by, 1, bodyH, color);
+  fillVirtualRect(bx + bodyW, by + (bodyH - nubH) / 2, nubW, nubH, color);
+
+  // Fill bar proportional to the reported percentage.
+  int percent = batteryLabel_.toInt();
+  percent = std::max(0, std::min(100, percent));
+  const int fillW = ((bodyW - 4) * percent) / 100;
+  if (fillW > 0) {
+    fillVirtualRect(bx + 2, by + 2, fillW, bodyH - 4, color);
+  }
 }
 
 void DisplayManager::drawBrightnessToastBadge(int logicalWidth, int logicalHeight) {
