@@ -154,4 +154,7 @@ constexpr int DISPLAY_QSPI_CLOCK_HZ = 40000000;
 // shows a steady seam line at every horizontal strip boundary otherwise. Requires a full-frame
 // PSRAM tx buffer; the CO5300 driver bounces each DMA chunk through internal RAM.
 constexpr bool DISPLAY_FLUSH_WHOLE_FRAME = true;
+// Round bezel clips the secondary corner labels, so hide the chapter label, the rewind hint, and
+// the swipe-handle edge lines on this board. Progress (top-left) and battery (top-right) stay.
+constexpr bool READER_HIDE_SECONDARY_CHROME = true;
 }  // namespace Board::Config

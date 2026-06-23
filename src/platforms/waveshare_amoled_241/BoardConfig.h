@@ -123,4 +123,5 @@ constexpr int PIN_AUDIO_DOUT = -1;
 constexpr uint8_t ES8311_ADDRESS = 0x00;
 constexpr bool TOUCH_ROTATED_180 = false;
 constexpr bool DISPLAY_FLUSH_WHOLE_FRAME = false;
+constexpr bool READER_HIDE_SECONDARY_CHROME = false;
 }  // namespace Board::Config
