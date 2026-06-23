@@ -89,17 +89,22 @@ Keep contrast high enough to stay comfortably readable on each.
 propose readable ones and you can tweak).
 **Note:** AMOLED true-black saves power; pastel (bright) backgrounds are always-lit — fine per you.
 
-### 5. Reading Tamagotchi (virtual pet fed by reading)  — IDEA / big, fun
-**My understanding:** a little virtual creature that you must "feed" by reading a daily goal (e.g.
-~10 pages/day). Meet the goal and it's happy/healthy; miss days and it gets sad / "dies." A
-gamified reading-streak companion.
-**Questions for you:**
-- What's "a page" here (RSVP has no pages)? Suggest defining the goal in **words/day** or
-  **minutes read/day** (e.g. 2,000 words ≈ "10 pages"). Which do you prefer?
-- Where does it live — a home-screen widget, a dedicated menu screen, or the standby/screensaver?
-- Death = permanent reset, or just "sick" until you read again (gentler)?
-- Needs a real-time clock to know "a day." The 1.75 has a PCF85063 RTC on board (not yet wired in
-  firmware), or we can use Wi-Fi time / elapsed-time counting. Preference?
+### 5. Reading Tamagotchi — "Shuli" the cat  — DECIDED, building
+**Character:** Shuli is a fluffy **orange-and-white** cat with a **snobby/posh** look, but her
+personality is **sweet and super needy** — she adores you and craves attention. You "feed" her by
+reading (hitting a daily reading goal).
+**Mood model (escalating):**
+- **Goal met today →** sweet, clingy, happy/needy (purring, hearts) — NOT smug.
+- **Miss a day →** angry / grumpy (offended you didn't feed her).
+- **Miss more days →** progressively **sick & miserable**: sad → unwell → sickly → very sick, each
+  stage sadder/droopier than the last.
+- **Read again →** she recovers back toward sweet/needy (gentle model, no permanent death — she
+  bounces back when you feed her).
+**Decisions (artistic freedom granted):**
+- Goal unit: **words/day** (default ~2,000; configurable in Settings).
+- Lives on a **dedicated screen** (menu entry "Shuli") plus a small mood glance elsewhere.
+- "A day" comes from the **PCF85063 RTC** (now wired for the clock) — roll over at local midnight.
+- Pixel/sprite art for each mood state, true-black background (battery friendly).
 
 ### 6. Round-screen reader chrome cleanup  — READY-ish
 **My understanding:** on the round 1.75 the reader's corner labels get clipped by the bezel. Wanted:
