@@ -1993,6 +1993,9 @@ bool App::updateBatteryStatus(uint32_t nowMs, bool force) {
     return false;
   }
 
+  // Show the charging bolt whenever a battery is present and the device is on external power.
+  display_.setBatteryCharging(batteryPresent_ && Board::Power::externalPowerPresent());
+
   const String nextLabel = currentBatteryLabel();
   if (nextLabel == batteryLabel_) {
     return false;

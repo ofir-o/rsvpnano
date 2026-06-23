@@ -887,6 +887,16 @@ void DisplayManager::setBatteryLabel(const String &label) {
   lastRenderKey_ = "";
 }
 
+void DisplayManager::setBatteryCharging(bool charging) {
+  if (batteryCharging_ == charging) {
+    return;
+  }
+
+  batteryCharging_ = charging;
+  tickerPlaybackFrameActive_ = false;
+  lastRenderKey_ = "";
+}
+
 void DisplayManager::setBrightnessOverlay(const String &text) {
   if (brightnessOverlayText_ == text) {
     return;
@@ -1706,12 +1716,27 @@ void DisplayManager::drawBatteryBadge(int logicalWidth, int logicalHeight,
   fillVirtualRect(bx + bodyW - 1, by, 1, bodyH, color);
   fillVirtualRect(bx + bodyW, by + (bodyH - nubH) / 2, nubW, nubH, color);
 
-  // Fill bar proportional to the reported percentage.
-  int percent = batteryLabel_.toInt();
-  percent = std::max(0, std::min(100, percent));
-  const int fillW = ((bodyW - 4) * percent) / 100;
-  if (fillW > 0) {
-    fillVirtualRect(bx + 2, by + 2, fillW, bodyH - 4, color);
+  if (batteryCharging_) {
+    // Charging: draw a small lightning bolt inside the battery instead of the level bar.
+    static const uint8_t kBolt[7] = {0b00110, 0b01100, 0b11000, 0b11110,
+                                     0b00110, 0b01100, 0b11000};
+    const int boltX = bx + (bodyW - 5) / 2;
+    const int boltY = by + (bodyH - 7) / 2;
+    for (int row = 0; row < 7; ++row) {
+      for (int col = 0; col < 5; ++col) {
+        if (kBolt[row] & (1 << (4 - col))) {
+          fillVirtualRect(boltX + col, boltY + row, 1, 1, color);
+        }
+      }
+    }
+  } else {
+    // Not charging: fill bar proportional to the reported percentage.
+    int percent = batteryLabel_.toInt();
+    percent = std::max(0, std::min(100, percent));
+    const int fillW = ((bodyW - 4) * percent) / 100;
+    if (fillW > 0) {
+      fillVirtualRect(bx + 2, by + 2, fillW, bodyH - 4, color);
+    }
   }
 }
 
