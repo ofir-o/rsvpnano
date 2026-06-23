@@ -10,9 +10,11 @@ When a piece of work finishes, pick the next item from here.
 2. **#3 Hold-to-read mode** — easy. One localized input-mode change + a settings toggle.
 3. **#6 Round chrome cleanup** — easy *if split*: removing the clipped corner labels + edge lines is
    trivial; the **clock** part is medium because it needs a time source (RTC/Wi-Fi/manual).
-4. **#1 Gyro auto-level** — medium-hard. Renderer already supports 4 orientations, so it's IMU →
+4. **#7 Multiple bookmarks** — medium. Persistence (sidecar file) + create/list/jump UI, but no
+   hardware or time deps.
+5. **#1 Gyro auto-level** — medium-hard. Renderer already supports 4 orientations, so it's IMU →
    orientation wiring + debounce + on-device tuning.
-5. **#5 Reading Tamagotchi** — hardest. New subsystem: daily-goal tracking, persistence, time/day
+6. **#5 Reading Tamagotchi** — hardest. New subsystem: daily-goal tracking, persistence, time/day
    source, pet states/art, a screen, and death/revive logic.
 - (#2 button roles — DONE, pending flash verify.)
 
@@ -97,6 +99,19 @@ gamified reading-streak companion.
   hint lines? (Could make this 1.75-only so other boards keep the hints.)
 - After removing three corners, should the remaining bottom-center area show anything (e.g. reading
   progress), or stay clean?
+
+### 7. Multiple bookmarks  — IDEA, medium
+**My understanding:** beyond the automatic "resume where I left off," let me save several named/marked
+positions in a book and jump back to any of them later.
+**Questions for you:**
+- Bookmarks per-book (most common) or a global list across all books?
+- How do you create one while reading — a menu item, or a gesture/button? (On the round 1.75 the
+  inputs are limited: PWR=play/pause, BOOT=power; we'd likely add a "Bookmark here" entry in the
+  main menu, plus a "Bookmarks" list to jump from.)
+- Auto-label each bookmark with the surrounding words + % progress, or let you type a name? (Typing
+  on this device is slow; auto-label is probably nicer.)
+- How many max per book (e.g. 10)? Stored as a small sidecar file next to the book in flash.
+- Should removing/clearing bookmarks be easy (swipe/Back on the list)?
 
 ---
 
