@@ -1,6 +1,7 @@
 #include "display/DisplayManager.h"
 
 #include <algorithm>
+#include <math.h>
 #include <cstring>
 
 #include <esp_heap_caps.h>
@@ -3461,6 +3462,218 @@ void DisplayManager::renderLifeScreensaver(const std::vector<uint32_t> &cells, u
   drawPackedCells(cells, lifeColor);
 
   flushScaledFrame(scale, virtualWidth, virtualHeight);
+}
+
+void DisplayManager::renderShuliScreen(int mood, const String &status, const String &stat,
+                                       uint8_t goalPercent) {
+  const int w = logicalWidth();
+  const int h = logicalHeight();
+
+  String key = "shuli|" + String(mood) + "|" + status + "|" + stat + "|" +
+               String(static_cast<int>(goalPercent)) + "|o:" +
+               String(static_cast<int>(uiOrientation_)) + "|b:" + batteryLabel_;
+  if (!initialized_ || key == lastRenderKey_) {
+    return;
+  }
+  lastRenderKey_ = key;
+
+  // Shuli's cozy room is always dark so her orange/white fur pops (and it saves AMOLED power).
+  fillVirtualRect(0, 0, w, h, kTrueBlack);
+
+  const uint16_t furOrange = rgb565(245, 150, 70);
+  const uint16_t furWhite = rgb565(245, 238, 226);
+  const uint16_t pink = rgb565(242, 158, 168);
+  const uint16_t pinkDk = rgb565(225, 120, 140);
+  const uint16_t dark = rgb565(35, 28, 24);
+  const uint16_t gold = rgb565(240, 200, 90);
+  const uint16_t tear = rgb565(120, 180, 235);
+  const uint16_t sickTint = rgb565(150, 200, 130);
+  const uint16_t whisker = rgb565(220, 220, 220);
+  const uint16_t bag = rgb565(120, 120, 140);
+
+  auto disc = [&](int cx, int cy, int r, uint16_t color) {
+    if (r < 1) r = 1;
+    for (int dy = -r; dy <= r; ++dy) {
+      const int half = static_cast<int>(sqrtf(static_cast<float>(r * r - dy * dy)));
+      fillVirtualRect(cx - half, cy + dy, 2 * half + 1, 1, color);
+    }
+  };
+  auto ellipse = [&](int cx, int cy, int rx, int ry, uint16_t color) {
+    if (rx < 1) rx = 1;
+    if (ry < 1) ry = 1;
+    for (int dy = -ry; dy <= ry; ++dy) {
+      float t = 1.0f - static_cast<float>(dy * dy) / static_cast<float>(ry * ry);
+      if (t < 0) t = 0;
+      const int half = static_cast<int>(rx * sqrtf(t));
+      fillVirtualRect(cx - half, cy + dy, 2 * half + 1, 1, color);
+    }
+  };
+  auto triUp = [&](int cx, int apexY, int hb, int height, uint16_t color) {
+    if (height < 1) height = 1;
+    for (int r = 0; r <= height; ++r) {
+      const int half = hb * r / height;
+      fillVirtualRect(cx - half, apexY + r, 2 * half + 1, 1, color);
+    }
+  };
+  auto triDown = [&](int cx, int topY, int hb, int height, uint16_t color) {
+    if (height < 1) height = 1;
+    for (int r = 0; r <= height; ++r) {
+      const int half = hb * (height - r) / height;
+      fillVirtualRect(cx - half, topY + r, 2 * half + 1, 1, color);
+    }
+  };
+  auto line = [&](int x0, int y0, int x1, int y1, int thick, uint16_t color) {
+    int dx = x1 - x0; if (dx < 0) dx = -dx;
+    int dy = y1 - y0; if (dy < 0) dy = -dy;
+    const int sx = x0 < x1 ? 1 : -1;
+    const int sy = y0 < y1 ? 1 : -1;
+    int err = dx - dy;
+    const int t = thick < 1 ? 1 : thick;
+    for (;;) {
+      fillVirtualRect(x0 - t / 2, y0 - t / 2, t, t, color);
+      if (x0 == x1 && y0 == y1) break;
+      const int e2 = 2 * err;
+      if (e2 > -dy) { err -= dy; x0 += sx; }
+      if (e2 < dx) { err += dx; y0 += sy; }
+    }
+  };
+  auto heart = [&](int hx, int hy, int s, uint16_t color) {
+    disc(hx - s / 2, hy, s / 2, color);
+    disc(hx + s / 2, hy, s / 2, color);
+    triDown(hx, hy, s, s * 3 / 2, color);
+  };
+
+  const int cx = w / 2;
+  const int R = std::max(28, static_cast<int>(w * 0.16f));
+  const int headY = static_cast<int>(h * 0.40f);
+  const int eo = static_cast<int>(R * 0.42f);
+  const int eyeY = headY - static_cast<int>(R * 0.05f);
+  const int er = std::max(4, static_cast<int>(R * 0.20f));
+  const int th = std::max(3, R / 12);
+  const int mx = cx;
+  const int my = headY + static_cast<int>(R * 0.5f);
+
+  drawTinyTextCentered("Shuli", static_cast<int>(h * 0.06f), gold, 3);
+
+  // Body, tail, then ears behind the head.
+  const int bodyCY = headY + static_cast<int>(R * 1.15f);
+  ellipse(cx + static_cast<int>(R * 1.15f), bodyCY + R / 3, static_cast<int>(R * 0.5f),
+          static_cast<int>(R * 0.22f), furOrange);
+  ellipse(cx, bodyCY, static_cast<int>(R * 1.25f), static_cast<int>(R * 0.95f), furWhite);
+  ellipse(cx + R / 2, bodyCY, static_cast<int>(R * 0.5f), static_cast<int>(R * 0.6f), furOrange);
+
+  const int earApexY = headY - static_cast<int>(R * 1.15f);
+  const int earH = static_cast<int>(R * 0.85f);
+  const int earHB = static_cast<int>(R * 0.55f);
+  triUp(cx - static_cast<int>(R * 0.62f), earApexY, earHB, earH, furOrange);
+  triUp(cx + static_cast<int>(R * 0.62f), earApexY, earHB, earH, furOrange);
+  triUp(cx - static_cast<int>(R * 0.62f), earApexY + earH / 4, earHB / 2, earH / 2, pink);
+  triUp(cx + static_cast<int>(R * 0.62f), earApexY + earH / 4, earHB / 2, earH / 2, pink);
+
+  // Head + white muzzle + forehead blaze.
+  disc(cx, headY, R, furOrange);
+  ellipse(cx, headY + static_cast<int>(R * 0.35f), static_cast<int>(R * 0.7f),
+          static_cast<int>(R * 0.5f), furWhite);
+  ellipse(cx, headY - static_cast<int>(R * 0.1f), static_cast<int>(R * 0.22f),
+          static_cast<int>(R * 0.6f), furWhite);
+
+  // Whiskers (both sides).
+  for (int i = -1; i <= 1; ++i) {
+    line(cx - er, my - er / 3 + i * er / 2, cx - eo - er, my - er / 2 + i * er, 2, whisker);
+    line(cx + er, my - er / 3 + i * er / 2, cx + eo + er, my - er / 2 + i * er, 2, whisker);
+  }
+
+  // Nose.
+  triDown(cx, headY + static_cast<int>(R * 0.26f), R / 12, R / 12, pinkDk);
+
+  const int eL = cx - eo;
+  const int eR = cx + eo;
+  switch (mood) {
+    case 0:  // Happy: closed ^^ eyes, big smile, blush, hearts
+      line(eL - er, eyeY + er / 3, eL, eyeY - er / 3, th, dark);
+      line(eL, eyeY - er / 3, eL + er, eyeY + er / 3, th, dark);
+      line(eR - er, eyeY + er / 3, eR, eyeY - er / 3, th, dark);
+      line(eR, eyeY - er / 3, eR + er, eyeY + er / 3, th, dark);
+      line(mx - er, my, mx, my + er / 2, th, dark);
+      line(mx, my + er / 2, mx + er, my, th, dark);
+      disc(eL - er / 2, my - er / 4, er / 2, pink);
+      disc(eR + er / 2, my - er / 4, er / 2, pink);
+      heart(cx - R, headY - R, R / 5, pinkDk);
+      heart(cx + R, headY - R, R / 5, pinkDk);
+      break;
+    case 1:  // Needy: big pleading eyes, tiny worried mouth, blush
+      disc(eL, eyeY, er, furWhite); disc(eL, eyeY, er * 7 / 10, dark);
+      disc(eL - er / 4, eyeY - er / 4, er * 3 / 10, furWhite);
+      disc(eR, eyeY, er, furWhite); disc(eR, eyeY, er * 7 / 10, dark);
+      disc(eR - er / 4, eyeY - er / 4, er * 3 / 10, furWhite);
+      disc(mx, my, er / 3, dark);
+      disc(eL - er / 2, my - er / 4, er / 2, pink);
+      disc(eR + er / 2, my - er / 4, er / 2, pink);
+      break;
+    case 2:  // Grumpy: angry brows, narrowed eyes, frown
+      line(eL - er, eyeY - er, eL + er / 2, eyeY - er / 3, th, dark);
+      line(eR + er, eyeY - er, eR - er / 2, eyeY - er / 3, th, dark);
+      fillVirtualRect(eL - er / 2, eyeY, er, th, dark);
+      fillVirtualRect(eR - er / 2, eyeY, er, th, dark);
+      line(mx - er, my + er / 3, mx, my - er / 4, th, dark);
+      line(mx, my - er / 4, mx + er, my + er / 3, th, dark);
+      break;
+    case 3:  // Sad: droopy eyes, raised-outer brows, tear, frown
+      disc(eL, eyeY + er / 4, er * 8 / 10, furWhite); disc(eL, eyeY + er / 4, er / 2, dark);
+      disc(eR, eyeY + er / 4, er * 8 / 10, furWhite); disc(eR, eyeY + er / 4, er / 2, dark);
+      line(eL - er, eyeY - er, eL, eyeY - er / 2, th, dark);
+      line(eR + er, eyeY - er, eR, eyeY - er / 2, th, dark);
+      triDown(eL, eyeY + er, er / 4, er * 3 / 4, tear);
+      line(mx - er, my + er / 3, mx, my - er / 4, th, dark);
+      line(mx, my - er / 4, mx + er, my + er / 3, th, dark);
+      break;
+    case 4:  // Sick: X eyes, greenish cheeks, flat mouth, sweat
+      line(eL - er / 2, eyeY - er / 2, eL + er / 2, eyeY + er / 2, th, dark);
+      line(eL - er / 2, eyeY + er / 2, eL + er / 2, eyeY - er / 2, th, dark);
+      line(eR - er / 2, eyeY - er / 2, eR + er / 2, eyeY + er / 2, th, dark);
+      line(eR - er / 2, eyeY + er / 2, eR + er / 2, eyeY - er / 2, th, dark);
+      disc(eL - er / 2, my - er / 4, er / 2, sickTint);
+      disc(eR + er / 2, my - er / 4, er / 2, sickTint);
+      fillVirtualRect(mx - er, my, 2 * er, th, dark);
+      triDown(cx + static_cast<int>(R * 0.55f), headY - R / 3, er / 4, er * 3 / 4, tear);
+      break;
+    default:  // 5 Miserable: X eyes, eyebags, big frown, sick cheeks
+      line(eL - er / 2, eyeY - er / 2, eL + er / 2, eyeY + er / 2, th, dark);
+      line(eL - er / 2, eyeY + er / 2, eL + er / 2, eyeY - er / 2, th, dark);
+      line(eR - er / 2, eyeY - er / 2, eR + er / 2, eyeY + er / 2, th, dark);
+      line(eR - er / 2, eyeY + er / 2, eR + er / 2, eyeY - er / 2, th, dark);
+      fillVirtualRect(eL - er, eyeY + er / 2, 2 * er, th, bag);
+      fillVirtualRect(eR - er, eyeY + er / 2, 2 * er, th, bag);
+      line(mx - er, my + er / 2, mx, my - er / 3, th, dark);
+      line(mx, my - er / 3, mx + er, my + er / 2, th, dark);
+      disc(eL - er / 2, my, er / 2, sickTint);
+      disc(eR + er / 2, my, er / 2, sickTint);
+      break;
+  }
+
+  // Posh little crown on top of her head (her snobby look), drawn last so it sits in front.
+  const int crownW = static_cast<int>(R * 0.7f);
+  const int bandH = std::max(3, R / 8);
+  const int bandY = headY - static_cast<int>(R * 0.82f);
+  fillVirtualRect(cx - crownW / 2, bandY, crownW, bandH, gold);
+  triUp(cx - crownW / 2 + crownW / 6, bandY - R / 5, crownW / 8, R / 5, gold);
+  triUp(cx, bandY - R / 4, crownW / 8, R / 4, gold);
+  triUp(cx + crownW / 2 - crownW / 6, bandY - R / 5, crownW / 8, R / 5, gold);
+  disc(cx, bandY + bandH / 2, std::max(2, R / 16), pinkDk);
+
+  // Status text + daily goal bar.
+  int ty = bodyCY + static_cast<int>(R * 1.1f);
+  drawTinyTextCentered(status, ty, furWhite, 2);
+  ty += kTinyGlyphHeight * 2 + 12;
+  drawTinyTextCentered(stat, ty, focusColor(), 2);
+  ty += kTinyGlyphHeight * 2 + 12;
+  const int barW = static_cast<int>(w * 0.5f);
+  const int barX = cx - barW / 2;
+  const int barH = std::max(6, R / 12);
+  fillVirtualRect(barX, ty, barW, barH, rgb565(60, 60, 60));
+  fillVirtualRect(barX, ty, barW * std::min<int>(goalPercent, 100) / 100, barH, gold);
+
+  flushScaledFrame(1, w, h);
 }
 
 void DisplayManager::renderFocusTimerScreen(const String &mode, const String &genre,

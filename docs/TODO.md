@@ -155,9 +155,11 @@ positions in a book and jump back to any of them later.
 - Should removing/clearing bookmarks be easy (swipe/Back on the list)?
 
 ### 10. Selectable fonts in Settings  — IDEA, medium
-**My understanding:** let the user choose between several reading fonts from Settings → Display (the
-RSVP word is currently drawn with one built-in serif). Offer a few distinct options (e.g. the serif,
-a clean sans, maybe a mono/dyslexia-friendly face) and persist the choice per device.
+**STATUS: DONE (already implemented).** The reader already supports 3 selectable typefaces —
+Standard serif, OpenDyslexic, and Atkinson Hyperlegible — with persistence (`kPrefReaderTypeface`),
+cycled from Settings → Typography ("Typeface"). No further work needed unless you want more faces.
+
+**Original understanding:** let the user choose between several reading fonts and persist the choice.
 **Notes / questions:**
 - The reader renders glyphs from a built-in font table (`serifWordLayout*` in DisplayManager); adding
   fonts means bundling extra glyph tables, which costs flash — keep the set small and check the

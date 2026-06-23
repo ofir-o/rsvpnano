@@ -142,6 +142,8 @@ class DisplayManager {
   void renderFocusTimerScreen(const String &mode, const String &genre, const String &timer,
                               const String &instruction, const String &footer = "",
                               int progressPercent = -1, bool breakAccent = false);
+  // Shuli the cat. mood: 0=Happy 1=Needy 2=Grumpy 3=Sad 4=Sick 5=Miserable.
+  void renderShuliScreen(int mood, const String &status, const String &stat, uint8_t goalPercent);
 
  private:
   bool initPanel();

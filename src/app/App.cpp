@@ -104,6 +104,7 @@ enum MenuItem : size_t {
   MenuResume,
   MenuChapters,
   MenuBooks,
+  MenuShuli,
   MenuFocusTimer,
   MenuSettings,
   MenuSdCardCheck,
@@ -120,6 +121,7 @@ enum RestructuredMenuItem : size_t {
   RestructuredMenuResume,
   RestructuredMenuChapters,
   RestructuredMenuBooks,
+  RestructuredMenuShuli,
   RestructuredMenuSettings,
   RestructuredMenuPowerOff,
   RestructuredMenuItemCount,
@@ -946,6 +948,8 @@ void App::begin() {
   // Gyro/IMU auto-level. Reuses the same on-board QMI8658 (via Board::Imu) that
   // the focus timer uses; gated to boards with an IMU inside AutoLevel::begin().
   autoLevel_.begin();
+  // Shuli the reading pet: load her saved state and reconcile with today's date.
+  shuli_.begin(&preferences_);
 
 #if RSVP_USB_TRANSFER_ENABLED && RSVP_USB_TRANSFER_AUTO_START
   state_ = AppState::Booting;
@@ -1003,6 +1007,13 @@ void App::update(uint32_t nowMs) {
   const bool batteryChanged = updateBatteryStatus(nowMs);
   if (powerOffStarted_) {
     return;
+  }
+
+  // Keep Shuli's day-tracking current and persist her progress occasionally.
+  if (nowMs - lastShuliUpdateMs_ >= 60000) {
+    lastShuliUpdateMs_ = nowMs;
+    shuli_.update();
+    shuli_.flush();
   }
 
   const bool clockChanged = updateClock(nowMs);
@@ -1295,6 +1306,9 @@ void App::updateReader(uint32_t nowMs) {
 
   const size_t previousIndex = reader_.currentIndex();
   const bool changed = reader_.update(nowMs, !pauseAtSentenceEndRequested_);
+  if (changed) {
+    shuli_.addWordsRead(1);  // feed Shuli one word for each word read
+  }
   if (!ensureCurrentBookWordAvailable(nowMs)) {
     return;
   }
@@ -3269,6 +3283,12 @@ bool App::navigateBackInMenu(uint32_t nowMs) {
       renderMainMenu();
       return true;
 
+    case MenuScreen::Shuli:
+      shuli_.flush();
+      menuScreen_ = MenuScreen::Main;
+      renderMainMenu();
+      return true;
+
     case MenuScreen::SettingsHome:
       menuScreen_ = MenuScreen::Main;
       renderMainMenu();
@@ -3535,6 +3555,9 @@ bool App::moveMenuSelection(int direction, bool wrap) {
         case RestructuredMenuBooks:
           selectedLabel = "Books";
           break;
+        case RestructuredMenuShuli:
+          selectedLabel = "Shuli";
+          break;
         case RestructuredMenuSettings:
           selectedLabel = uiText(UiText::Settings);
           break;
@@ -3554,6 +3577,9 @@ bool App::moveMenuSelection(int direction, bool wrap) {
           break;
         case MenuBooks:
           selectedLabel = "Books";
+          break;
+        case MenuShuli:
+          selectedLabel = "Shuli";
           break;
         case MenuFocusTimer:
           selectedLabel = "Focus Timer";
@@ -3644,6 +3670,13 @@ void App::selectMenuItem(uint32_t nowMs) {
   if (menuScreen_ == MenuScreen::FocusTimerSession) {
     return;
   }
+  if (menuScreen_ == MenuScreen::Shuli) {
+    // The Shuli screen isn't a list; a tap cycles her daily word goal.
+    shuli_.cycleGoal();
+    shuli_.flush();
+    renderShuliView();
+    return;
+  }
 
   if (Board::Config::ENABLE_RESTRUCTURED_MENU) {
     switch (menuSelectedIndex_) {
@@ -3655,6 +3688,9 @@ void App::selectMenuItem(uint32_t nowMs) {
         return;
       case RestructuredMenuBooks:
         openBookPicker(false);
+        return;
+      case RestructuredMenuShuli:
+        openShuliScreen();
         return;
       case RestructuredMenuSettings:
         openSettings();
@@ -3694,6 +3730,9 @@ void App::selectMenuItem(uint32_t nowMs) {
     case MenuBooks:
       openBookPicker(false);
       return;
+    case MenuShuli:
+      openShuliScreen();
+      return;
     case MenuFocusTimer:
       openFocusTimer();
       return;
@@ -3709,6 +3748,26 @@ void App::openArticlesMenu() {
   articlesSelectedIndex_ = ArticlesBrowse;
   menuScreen_ = MenuScreen::Articles;
   renderArticlesMenu();
+}
+
+void App::openShuliScreen() {
+  shuli_.update();
+  menuSelectedIndex_ = 0;
+  menuScreen_ = MenuScreen::Shuli;
+  renderShuliView();
+}
+
+void App::renderShuliView() {
+  shuli_.update();
+  String stat;
+  if (!shuli_.goalMetToday() && shuli_.missedDays() > 0) {
+    const uint8_t days = shuli_.missedDays();
+    stat = "Unfed for " + String(static_cast<unsigned>(days)) + (days == 1 ? " day" : " days");
+  } else {
+    stat = String(shuli_.wordsToday()) + " / " + String(shuli_.goalWords()) + " words today";
+  }
+  display_.renderShuliScreen(static_cast<int>(shuli_.mood()), shuli_.statusLine(), stat,
+                             shuli_.goalPercent());
 }
 
 void App::selectArticlesItem(uint32_t nowMs) {
@@ -6694,6 +6753,8 @@ void App::renderMenu() {
     renderSettings();
   } else if (menuScreen_ == MenuScreen::Articles) {
     renderArticlesMenu();
+  } else if (menuScreen_ == MenuScreen::Shuli) {
+    renderShuliView();
   } else if (menuScreen_ == MenuScreen::WifiNetworks) {
     renderWifiNetworks();
   } else if (menuScreen_ == MenuScreen::TextEntry) {
@@ -6733,6 +6794,7 @@ void App::renderMainMenu() {
   items.push_back(uiText(UiText::Resume));
   items.push_back(uiText(UiText::Chapters));
   items.push_back("Books");
+  items.push_back("Shuli");
   if (Board::Config::ENABLE_RESTRUCTURED_MENU) {
     items.push_back(uiText(UiText::Settings));
     items.push_back(uiText(UiText::PowerOff));

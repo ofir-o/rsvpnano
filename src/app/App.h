@@ -23,6 +23,7 @@
 #include "storage/index/IndexedBookStore.h"
 #include "storage/StorageManager.h"
 #include "sync/CompanionSyncManager.h"
+#include "pet/Shuli.h"
 #include "timer/FocusTimer.h"
 #include "ui/Localization.h"
 #include "update/OtaUpdater.h"
@@ -98,6 +99,7 @@ class App {
   enum class MenuScreen {
     Main,
     Articles,
+    Shuli,
     SettingsHome,
     SettingsDisplay,
     SettingsPacing,
@@ -267,6 +269,8 @@ class App {
   void selectMenuItem(uint32_t nowMs);
   bool isSettingsMenuScreen(MenuScreen screen) const;
   void openArticlesMenu();
+  void openShuliScreen();
+  void renderShuliView();
   void selectArticlesItem(uint32_t nowMs);
   void openQuickSettings(uint32_t nowMs);
   void selectQuickSettingsItem(uint32_t nowMs);
@@ -488,6 +492,8 @@ class App {
   AppState powerOffConfirmReturnState_ = AppState::Paused;
   DisplayManager display_;
   FocusTimer focusTimer_;
+  ShuliPet shuli_;
+  uint32_t lastShuliUpdateMs_ = 0;
   ReadingLoop reader_;
   Input::Buttons::Button button_;
   Input::Buttons::Button powerButton_;
