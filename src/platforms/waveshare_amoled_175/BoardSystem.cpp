@@ -1,3 +1,4 @@
+#include "board/BoardClock.h"
 #include "board/BoardDisplay.h"
 #include "board/BoardPower.h"
 #include "board/BoardSystem.h"
@@ -70,6 +71,9 @@ void begin() {
   }
 
   Board::Power::begin();
+  if (Config::READER_SHOW_CLOCK) {
+    Board::Clock::begin();
+  }
   Board::Display::enablePowerIfAvailable();
 }
 

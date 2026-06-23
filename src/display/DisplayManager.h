@@ -13,6 +13,19 @@ class DisplayManager {
     AtkinsonHyperlegible = 2,
   };
 
+  // Optional pastel reading palettes. When set to anything other than None, the
+  // palette overrides the bg/text/focus colors derived from the dark/night/yellow
+  // booleans. None preserves the original Dark/Light/Night/Yellow behavior.
+  enum class ThemePalette : uint8_t {
+    None = 0,
+    Terracotta = 1,
+    Peach = 2,
+    Olive = 3,
+    Sage = 4,
+    WarmGold = 5,
+    BeigeRose = 6,
+  };
+
   struct TypographyConfig {
     ReaderTypeface typeface = ReaderTypeface::Standard;
     bool focusHighlight = true;
@@ -65,11 +78,14 @@ class DisplayManager {
   bool begin();
   void setBatteryLabel(const String &label);
   void setBatteryCharging(bool charging);
+  void setClockLabel(const String &label);
   void setBrightnessOverlay(const String &text);
   void setBrightnessPercent(uint8_t percent);
   void setDarkMode(bool darkMode);
   void setNightMode(bool nightMode);
   void setYellowMode(bool enabled);
+  void setThemePalette(ThemePalette palette);
+  ThemePalette themePalette() const;
   void setUiOrientation(Board::Config::UiOrientation orientation);
   void setUiRotated180(bool rotated180);
   void setTypographyConfig(const TypographyConfig &config);
@@ -179,6 +195,7 @@ class DisplayManager {
   void drawBatteryBadge(int logicalWidth, int logicalHeight);
   void drawBatteryBadge(const ReaderChrome &chrome);
   void drawBatteryBadge(int logicalWidth, int logicalHeight, const ReaderChrome &chrome);
+  void drawClockBadge(int logicalWidth, int logicalHeight);
   void drawBrightnessToastBadge(int logicalWidth, int logicalHeight);
   void drawPreviousSentenceHint(int logicalWidth, const ReaderChrome &chrome);
   void drawEdgeMenuHints(int logicalWidth, int logicalHeight, const ReaderChrome &chrome);
@@ -208,10 +225,12 @@ class DisplayManager {
   bool darkMode_ = true;
   bool nightMode_ = false;
   bool yellowMode_ = false;
+  ThemePalette themePalette_ = ThemePalette::None;
   Board::Config::UiOrientation uiOrientation_ = Board::Config::DEFAULT_UI_ORIENTATION;
   bool tickerPlaybackFrameActive_ = false;
   String lastRenderKey_;
   String batteryLabel_;
   bool batteryCharging_ = false;
+  String clockLabel_;
   String brightnessOverlayText_;
 };

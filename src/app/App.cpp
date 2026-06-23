@@ -235,6 +235,8 @@ constexpr size_t kSettingsDisplayReaderChapterIndex = 11;
 constexpr size_t kSettingsDisplayReaderProgressIndex = 12;
 constexpr size_t kSettingsDisplayLanguageIndex = 13;
 constexpr size_t kSettingsDisplayMenuRepeatIndex = 14;
+// Appended last and only present when the board has an IMU (Board::Config::HAS_IMU).
+constexpr size_t kSettingsDisplayAutoRotateIndex = 15;
 constexpr size_t kSettingsDisplayRestructuredThemeIndex = 1;
 constexpr size_t kSettingsDisplayRestructuredBrightnessIndex = 2;
 constexpr size_t kSettingsDisplayRestructuredHandednessIndex = 3;
@@ -249,6 +251,11 @@ constexpr size_t kSettingsDisplayRestructuredReaderBatteryIndex = 11;
 constexpr size_t kSettingsDisplayRestructuredReaderChapterIndex = 12;
 constexpr size_t kSettingsDisplayRestructuredReaderProgressIndex = 13;
 constexpr size_t kSettingsDisplayRestructuredMenuRepeatIndex = 14;
+// Optional trailing items. "Set clock" is present only when READER_SHOW_CLOCK (the 1.75 with its
+// PCF85063 RTC); "Auto-rotate" only when HAS_IMU. When both are present the clock comes first.
+constexpr size_t kSettingsDisplayRestructuredSetClockIndex = 15;
+constexpr size_t kSettingsDisplayRestructuredAutoRotateIndex =
+    Board::Config::READER_SHOW_CLOCK ? 16 : 15;
 constexpr size_t kSettingsPacingReadingModeIndex = 1;
 constexpr size_t kSettingsPacingPauseModeIndex = 2;
 constexpr size_t kSettingsPacingWpmIndex = 3;
@@ -288,6 +295,27 @@ constexpr size_t kFocusTimerGenreFirstIndex = 1;
 // Preference keys are defined once in settings/PreferenceKeys.h and shared with
 // the web companion; pull them into scope so existing call sites are unchanged.
 using namespace settings;
+
+// Clamp a stored theme-palette index to a valid ThemePalette enum value.
+DisplayManager::ThemePalette themePaletteFromStored(uint8_t value) {
+  switch (value) {
+    case static_cast<uint8_t>(DisplayManager::ThemePalette::Terracotta):
+      return DisplayManager::ThemePalette::Terracotta;
+    case static_cast<uint8_t>(DisplayManager::ThemePalette::Peach):
+      return DisplayManager::ThemePalette::Peach;
+    case static_cast<uint8_t>(DisplayManager::ThemePalette::Olive):
+      return DisplayManager::ThemePalette::Olive;
+    case static_cast<uint8_t>(DisplayManager::ThemePalette::Sage):
+      return DisplayManager::ThemePalette::Sage;
+    case static_cast<uint8_t>(DisplayManager::ThemePalette::WarmGold):
+      return DisplayManager::ThemePalette::WarmGold;
+    case static_cast<uint8_t>(DisplayManager::ThemePalette::BeigeRose):
+      return DisplayManager::ThemePalette::BeigeRose;
+    default:
+      return DisplayManager::ThemePalette::None;
+  }
+}
+
 constexpr size_t kReaderFontSizeCount = 3;
 constexpr size_t kPhantomBeforeCharTargets[] = {64, 96, 144};
 constexpr size_t kPhantomAfterCharTargets[] = {96, 144, 208};
@@ -550,6 +578,30 @@ App::ReaderMode nextReaderMode(App::ReaderMode current) {
   }
 }
 
+App::AutoRotateMode autoRotateModeFromSetting(uint8_t value) {
+  switch (value) {
+    case static_cast<uint8_t>(App::AutoRotateMode::Continuous):
+      return App::AutoRotateMode::Continuous;
+    case static_cast<uint8_t>(App::AutoRotateMode::Off):
+      return App::AutoRotateMode::Off;
+    case static_cast<uint8_t>(App::AutoRotateMode::FourWaySnap):
+    default:
+      return App::AutoRotateMode::FourWaySnap;
+  }
+}
+
+App::AutoRotateMode nextAutoRotateMode(App::AutoRotateMode current) {
+  switch (autoRotateModeFromSetting(static_cast<uint8_t>(current))) {
+    case App::AutoRotateMode::Continuous:
+      return App::AutoRotateMode::FourWaySnap;
+    case App::AutoRotateMode::FourWaySnap:
+      return App::AutoRotateMode::Off;
+    case App::AutoRotateMode::Off:
+    default:
+      return App::AutoRotateMode::Continuous;
+  }
+}
+
 uint16_t pacingDelayMsForLegacyLevel(uint8_t levelIndex) {
   constexpr uint16_t kLegacyPacingDelayMs[] = {100, 150, 200, 250, 300};
   constexpr size_t kLegacyPacingLevelCount =
@@ -758,6 +810,8 @@ void App::begin() {
       preferences_.getBool(chapterLabelPrefKey(), chapterLabelDefaultForMode(readerMode_));
   handednessMode_ = handednessModeFromSetting(
       preferences_.getUChar(kPrefHandedness, static_cast<uint8_t>(handednessMode_)));
+  autoRotateMode_ = autoRotateModeFromSetting(
+      preferences_.getUChar(kPrefAutoRotate, static_cast<uint8_t>(autoRotateMode_)));
   readerControlsSwapped_ =
       preferences_.getBool(kPrefReaderControlsSwapped, readerControlsSwapped_);
   readerFontSizeIndex_ = preferences_.getUChar(kPrefReaderFontSize, readerFontSizeIndex_);
@@ -861,6 +915,8 @@ void App::begin() {
   darkMode_ = preferences_.getBool(kPrefDarkMode, darkMode_);
   nightMode_ = preferences_.getBool(kPrefNightMode, nightMode_);
   yellowModeEnabled_ = preferences_.getBool(kPrefYellowMode, yellowModeEnabled_);
+  themePalette_ = themePaletteFromStored(
+      preferences_.getUChar(kPrefThemePalette, static_cast<uint8_t>(themePalette_)));
   applyHandednessSettings(0, false);
   applyDisplayPreferences(0, false);
   applyTypographySettings(0, false);
@@ -874,6 +930,7 @@ void App::begin() {
   logApp("Initializing hardware modules");
   const bool displayReady = display_.begin();
   updateBatteryStatus(bootStartedMs_, true);
+  updateClock(bootStartedMs_, true);
 
   if (displayReady) {
     display_.renderCenteredWord("READY");
@@ -886,6 +943,9 @@ void App::begin() {
   touchInitialized_ = Input::Touch::begin();
   Board::Audio::begin();
   focusTimer_.begin();
+  // Gyro/IMU auto-level. Reuses the same on-board QMI8658 (via Board::Imu) that
+  // the focus timer uses; gated to boards with an IMU inside AutoLevel::begin().
+  autoLevel_.begin();
 
 #if RSVP_USB_TRANSFER_ENABLED && RSVP_USB_TRANSFER_AUTO_START
   state_ = AppState::Booting;
@@ -945,6 +1005,8 @@ void App::update(uint32_t nowMs) {
     return;
   }
 
+  const bool clockChanged = updateClock(nowMs);
+
   if (batteryWarningOverlayVisible_) {
     updateBatteryWarningOverlay(nowMs);
     if (batteryWarningOverlayVisible_) {
@@ -975,6 +1037,7 @@ void App::update(uint32_t nowMs) {
   loadPendingBootBook(nowMs);
   maybeOpenUpdateConfirm(nowMs);
   updateFocusTimer(nowMs);
+  updateAutoRotate(nowMs);
   updateReader(nowMs);
   handleTouch(nowMs);
   updateWpmFeedback(nowMs);
@@ -988,7 +1051,8 @@ void App::update(uint32_t nowMs) {
     return;
   }
 
-  if (batteryChanged && (state_ == AppState::Paused || state_ == AppState::Playing)) {
+  if ((batteryChanged || clockChanged) &&
+      (state_ == AppState::Paused || state_ == AppState::Playing)) {
     renderActiveReader(nowMs);
   } else if (batteryChanged && state_ == AppState::Menu) {
     renderMenu();
@@ -1599,6 +1663,7 @@ void App::applyDisplayPreferences(uint32_t nowMs, bool rerender) {
   display_.setDarkMode(darkMode_);
   display_.setNightMode(nightMode_);
   display_.setYellowMode(yellowModeEnabled_);
+  display_.setThemePalette(themePalette_);
   display_.setBrightnessPercent(currentBrightnessPercent());
 
   if (!rerender) {
@@ -1665,6 +1730,8 @@ void App::reloadRuntimePreferences(uint32_t nowMs, bool rerender) {
       preferences_.getBool(chapterLabelPrefKey(), chapterLabelDefaultForMode(readerMode_));
   handednessMode_ = handednessModeFromSetting(
       preferences_.getUChar(kPrefHandedness, static_cast<uint8_t>(handednessMode_)));
+  autoRotateMode_ = autoRotateModeFromSetting(
+      preferences_.getUChar(kPrefAutoRotate, static_cast<uint8_t>(autoRotateMode_)));
   readerControlsSwapped_ =
       preferences_.getBool(kPrefReaderControlsSwapped, readerControlsSwapped_);
   readerFontSizeIndex_ = preferences_.getUChar(kPrefReaderFontSize, readerFontSizeIndex_);
@@ -1775,6 +1842,8 @@ void App::reloadRuntimePreferences(uint32_t nowMs, bool rerender) {
   darkMode_ = preferences_.getBool(kPrefDarkMode, darkMode_);
   nightMode_ = preferences_.getBool(kPrefNightMode, nightMode_);
   yellowModeEnabled_ = preferences_.getBool(kPrefYellowMode, yellowModeEnabled_);
+  themePalette_ = themePaletteFromStored(
+      preferences_.getUChar(kPrefThemePalette, static_cast<uint8_t>(themePalette_)));
 
   reader_.setWpm(preferences_.getUShort(kPrefWpm, reader_.wpm()));
   applyReaderUiOrientation();
@@ -1827,11 +1896,42 @@ void App::cycleBrightness(uint32_t nowMs) {
 
 void App::cycleThemeMode(uint32_t nowMs) {
   // Cycle display modes as standalone options:
-  // Dark -> Light -> Night -> Yellow -> Dark
-  if (yellowModeEnabled_) {
+  // Dark -> Light -> Night -> Yellow -> Terracotta -> Peach -> Olive -> Dark
+  // The pastel palettes override the dark/night/yellow colors when active; we
+  // park the booleans on Light (false/false/false) while a palette is selected
+  // so that clearing the palette lands on a sensible bright theme.
+  if (themePalette_ != DisplayManager::ThemePalette::None) {
+    switch (themePalette_) {
+      case DisplayManager::ThemePalette::Terracotta:
+        themePalette_ = DisplayManager::ThemePalette::Peach;
+        break;
+      case DisplayManager::ThemePalette::Peach:
+        themePalette_ = DisplayManager::ThemePalette::Olive;
+        break;
+      case DisplayManager::ThemePalette::Olive:
+        themePalette_ = DisplayManager::ThemePalette::Sage;
+        break;
+      case DisplayManager::ThemePalette::Sage:
+        themePalette_ = DisplayManager::ThemePalette::WarmGold;
+        break;
+      case DisplayManager::ThemePalette::WarmGold:
+        themePalette_ = DisplayManager::ThemePalette::BeigeRose;
+        break;
+      case DisplayManager::ThemePalette::BeigeRose:
+      default:
+        // Leave the palettes; return to the standard Dark theme.
+        themePalette_ = DisplayManager::ThemePalette::None;
+        darkMode_ = true;
+        nightMode_ = false;
+        yellowModeEnabled_ = false;
+        break;
+    }
+  } else if (yellowModeEnabled_) {
+    // Yellow -> first pastel palette (Terracotta).
     yellowModeEnabled_ = false;
-    darkMode_ = true;
+    darkMode_ = false;
     nightMode_ = false;
+    themePalette_ = DisplayManager::ThemePalette::Terracotta;
   } else if (nightMode_) {
     yellowModeEnabled_ = true;
     darkMode_ = false;
@@ -1847,6 +1947,7 @@ void App::cycleThemeMode(uint32_t nowMs) {
   preferences_.putBool(kPrefYellowMode, yellowModeEnabled_);
   preferences_.putBool(kPrefDarkMode, darkMode_);
   preferences_.putBool(kPrefNightMode, nightMode_);
+  preferences_.putUChar(kPrefThemePalette, static_cast<uint8_t>(themePalette_));
   Serial.printf("[display] theme=%s\n", themeModeLabel().c_str());
   applyDisplayPreferences(nowMs);
 }
@@ -1894,6 +1995,24 @@ void App::cycleHandednessMode(uint32_t nowMs) {
   Serial.printf("[display] handedness=%s rotation180=%u\n", handednessLabel().c_str(),
                 uiRotated180() ? 1U : 0U);
   applyHandednessSettings(nowMs);
+}
+
+void App::cycleAutoRotateMode(uint32_t nowMs) {
+  autoRotateMode_ = nextAutoRotateMode(autoRotateMode_);
+  preferences_.putUChar(kPrefAutoRotate, static_cast<uint8_t>(autoRotateMode_));
+  Serial.printf("[display] auto-rotate=%s\n", autoRotateModeLabel().c_str());
+
+  // Re-arm the estimator so the next stable reading is reported as a change,
+  // and apply the change immediately.
+  autoLevel_.reset();
+  if (autoRotateMode_ == AutoRotateMode::Off) {
+    updateAutoRotate(nowMs);  // reverts to handedness default when disabled
+  }
+
+  if (state_ == AppState::Menu && isSettingsMenuScreen(menuScreen_)) {
+    rebuildSettingsMenuItems();
+    renderSettings();
+  }
 }
 
 void App::toggleReaderControlsLayout(uint32_t nowMs) {
@@ -2011,6 +2130,125 @@ bool App::updateBatteryStatus(uint32_t nowMs, bool force) {
     Serial.println("[power] battery not detected");
   }
   return true;
+}
+
+String App::formatClockLabel(const Board::Clock::DateTime &time) const {
+  char buf[6];
+  snprintf(buf, sizeof(buf), "%02u:%02u", static_cast<unsigned>(time.hour % 24),
+           static_cast<unsigned>(time.minute % 60));
+  return String(buf);
+}
+
+bool App::updateClock(uint32_t nowMs, bool force) {
+  if (!Board::Config::READER_SHOW_CLOCK) {
+    return false;
+  }
+
+  // A HH:MM clock only changes once a minute; sampling the RTC every 15 s keeps
+  // the display fresh shortly after the minute rolls over without busy polling.
+  constexpr uint32_t kClockSampleIntervalMs = 15000;
+  if (!force && (nowMs - lastClockSampleMs_) < kClockSampleIntervalMs) {
+    return false;
+  }
+  lastClockSampleMs_ = nowMs;
+
+  Board::Clock::DateTime time;
+  bool oscillatorStopped = false;
+  if (!Board::Clock::read(time, &oscillatorStopped)) {
+    clockAvailable_ = false;
+    if (!clockLabel_.isEmpty()) {
+      clockLabel_ = "";
+      display_.setClockLabel(clockLabel_);
+      return true;
+    }
+    return false;
+  }
+
+  clockAvailable_ = true;
+  // When the oscillator stopped (backup power lost) the time is unset; show
+  // dashes so the user knows to set it rather than trusting a stale value.
+  const String nextLabel = oscillatorStopped ? String("--:--") : formatClockLabel(time);
+  if (nextLabel == clockLabel_) {
+    return false;
+  }
+  clockLabel_ = nextLabel;
+  display_.setClockLabel(clockLabel_);
+  return true;
+}
+
+void App::openClockTimeEntry() {
+  Board::Clock::DateTime time;
+  bool oscillatorStopped = false;
+  String initial;
+  if (Board::Clock::read(time, &oscillatorStopped) && !oscillatorStopped) {
+    char buf[5];
+    snprintf(buf, sizeof(buf), "%02u%02u", static_cast<unsigned>(time.hour % 24),
+             static_cast<unsigned>(time.minute % 60));
+    initial = String(buf);
+  }
+
+  openTextEntry(TextEntryPurpose::ClockTime, "Set clock", "HH:MM (24h)",
+                "Enter 4 digits, e.g. 0930", initial, "", false, 4,
+                MenuScreen::SettingsDisplay);
+  // Digits live on the symbols keyboard; start there so the keypad is immediate.
+  textEntrySession_.mode = KeyboardMode::Symbols;
+  rebuildTextEntryButtons();
+  renderTextEntry();
+}
+
+void App::commitClockTimeEntry(const String &digits) {
+  if (digits.length() != 4) {
+    display_.renderStatus("Set clock", "Enter 4 digits", "HHMM e.g. 0930");
+    delay(1100);
+    renderTextEntry();
+    return;
+  }
+
+  for (size_t i = 0; i < digits.length(); ++i) {
+    if (!isDigit(digits[i])) {
+      display_.renderStatus("Set clock", "Digits only", "HHMM e.g. 0930");
+      delay(1100);
+      renderTextEntry();
+      return;
+    }
+  }
+
+  const int hour = (digits[0] - '0') * 10 + (digits[1] - '0');
+  const int minute = (digits[2] - '0') * 10 + (digits[3] - '0');
+  if (hour > 23 || minute > 59) {
+    display_.renderStatus("Set clock", "Out of range", "00:00 - 23:59");
+    delay(1100);
+    renderTextEntry();
+    return;
+  }
+
+  Board::Clock::DateTime time;
+  bool oscillatorStopped = false;
+  // Preserve the existing date when valid; otherwise seed a sane default so the
+  // RTC keeps a coherent calendar even though only HH:MM is user-visible.
+  if (!Board::Clock::read(time, &oscillatorStopped) || oscillatorStopped) {
+    time = Board::Clock::DateTime();
+  }
+  time.hour = static_cast<uint8_t>(hour);
+  time.minute = static_cast<uint8_t>(minute);
+  time.second = 0;
+
+  const bool ok = Board::Clock::set(time);
+  textEntrySession_ = TextEntrySession();
+  textEntryButtons_.clear();
+
+  if (ok) {
+    clockLabel_ = formatClockLabel(time);
+    display_.setClockLabel(clockLabel_);
+    lastClockSampleMs_ = 0;
+    display_.renderStatus("Set clock", "Time saved", clockLabel_);
+  } else {
+    display_.renderStatus("Set clock", "RTC write failed", "");
+  }
+  delay(900);
+  menuScreen_ = MenuScreen::SettingsDisplay;
+  rebuildSettingsMenuItems();
+  renderSettings();
 }
 
 void App::handleBatteryProtection(uint32_t nowMs) {
@@ -3699,6 +3937,11 @@ void App::selectSettingsItem(uint32_t nowMs) {
         rebuildSettingsMenuItems();
         renderSettings();
         return;
+      case kSettingsDisplayAutoRotateIndex:
+        if (Board::Config::HAS_IMU) {
+          cycleAutoRotateMode(nowMs);
+        }
+        return;
       default:
         return;
     }
@@ -3929,6 +4172,13 @@ void App::selectRestructuredSettingsItem(uint32_t nowMs) {
         renderSettings();
         return;
       default:
+        if (Board::Config::READER_SHOW_CLOCK &&
+            selectedIndex == kSettingsDisplayRestructuredSetClockIndex) {
+          openClockTimeEntry();
+        } else if (Board::Config::HAS_IMU &&
+                   selectedIndex == kSettingsDisplayRestructuredAutoRotateIndex) {
+          cycleAutoRotateMode(nowMs);
+        }
         return;
     }
   }
@@ -4586,6 +4836,10 @@ void App::commitTextEntry(uint32_t nowMs) {
       openWifiSettings();
       return;
     }
+    case TextEntryPurpose::ClockTime: {
+      commitClockTimeEntry(textEntrySession_.value);
+      return;
+    }
     case TextEntryPurpose::None:
     default:
       menuScreen_ = textEntrySession_.returnScreen;
@@ -4726,6 +4980,12 @@ void App::rebuildSettingsMenuItems() {
       settingsMenuItems_.push_back("Reading progress: " +
                                    onOffLabel(readerProgressVisibleWhilePlaying_));
       settingsMenuItems_.push_back("Menu repeat: " + menuRepeatDelayLabel(menuRepeatDelayMs_));
+      if (Board::Config::READER_SHOW_CLOCK) {
+        settingsMenuItems_.push_back("Set clock: " + clockSettingLabel());
+      }
+      if (Board::Config::HAS_IMU) {
+        settingsMenuItems_.push_back("Auto-rotate: " + autoRotateModeLabel());
+      }
     } else if (menuScreen_ == MenuScreen::SettingsPacing) {
       settingsMenuItems_.push_back(uiText(UiText::Back));
       settingsMenuItems_.push_back("Reading mode: " + readerModeLabel());
@@ -4798,6 +5058,9 @@ void App::rebuildSettingsMenuItems() {
                                  onOffLabel(readerProgressVisibleWhilePlaying_));
     settingsMenuItems_.push_back(uiText(UiText::Language) + ": " + uiLanguageLabel());
     settingsMenuItems_.push_back("Menu repeat: " + menuRepeatDelayLabel(menuRepeatDelayMs_));
+    if (Board::Config::HAS_IMU) {
+      settingsMenuItems_.push_back("Auto-rotate: " + autoRotateModeLabel());
+    }
   } else if (menuScreen_ == MenuScreen::SettingsPacing) {
     settingsMenuItems_.push_back(uiText(UiText::Back));
     settingsMenuItems_.push_back("Reading mode: " + readerModeLabel());
@@ -5135,6 +5398,22 @@ String App::firmwareVersionLabel() const {
 String App::uiText(UiText key) const { return Localization::text(uiLanguage_, key); }
 
 String App::themeModeLabel() const {
+  switch (themePalette_) {
+    case DisplayManager::ThemePalette::Terracotta:
+      return "Terracotta";
+    case DisplayManager::ThemePalette::Peach:
+      return "Peach";
+    case DisplayManager::ThemePalette::Olive:
+      return "Olive";
+    case DisplayManager::ThemePalette::Sage:
+      return "Sage";
+    case DisplayManager::ThemePalette::WarmGold:
+      return "Warm gold";
+    case DisplayManager::ThemePalette::BeigeRose:
+      return "Beige rose";
+    case DisplayManager::ThemePalette::None:
+      break;
+  }
   if (yellowModeEnabled_) {
     return "Yellow";
   }
@@ -5170,6 +5449,18 @@ String App::pauseModeLabel() const {
 
 String App::handednessLabel() const {
   return handednessMode_ == HandednessMode::Left ? "Left" : "Right";
+}
+
+String App::autoRotateModeLabel() const {
+  switch (autoRotateMode_) {
+    case AutoRotateMode::Continuous:
+      return "Continuous";
+    case AutoRotateMode::Off:
+      return "Off";
+    case AutoRotateMode::FourWaySnap:
+    default:
+      return "4-way snap";
+  }
 }
 
 String App::readerControlsLayoutLabel() const {
@@ -6863,6 +7154,16 @@ String App::batteryLabelModeLabel() const {
   }
 }
 
+String App::clockSettingLabel() const {
+  if (!clockAvailable_) {
+    return "no RTC";
+  }
+  if (clockLabel_.isEmpty() || clockLabel_ == "--:--") {
+    return "not set";
+  }
+  return clockLabel_;
+}
+
 String App::screensaverModeLabel() const {
   switch (screensaverMode_) {
     case ScreensaverMode::Maze:
@@ -7243,8 +7544,82 @@ void App::applyReaderUiOrientation() {
 }
 
 Board::Config::UiOrientation App::readerUiOrientation() const {
+  // When gyro auto-level is active and has a confident reading, let the IMU
+  // drive the orientation. Otherwise fall back to the handedness-based default.
+  if (autoRotateActive_) {
+    return autoRotateOrientation_;
+  }
   return uiRotated180() ? Board::Config::UiOrientation::LandscapeFlipped
                         : Board::Config::UiOrientation::Landscape;
+}
+
+bool App::autoRotateEnabled() const {
+  // Continuous behaves as 4-way snap for now (see AutoLevel.h TODO). Both
+  // Continuous and FourWaySnap enable auto-rotation; Off disables it.
+  return Board::Config::HAS_IMU && autoLevel_.available() &&
+         autoRotateMode_ != AutoRotateMode::Off;
+}
+
+void App::updateAutoRotate(uint32_t nowMs) {
+  if (!Board::Config::HAS_IMU || !autoLevel_.available()) {
+    return;
+  }
+
+  if (!autoRotateEnabled()) {
+    if (autoRotateActive_) {
+      // Auto-rotate was just turned off; revert to the handedness default.
+      autoRotateActive_ = false;
+      applyReaderUiOrientation();
+      if (state_ == AppState::Paused || state_ == AppState::Playing) {
+        renderActiveReader(nowMs);
+      } else if (state_ == AppState::Menu) {
+        renderMenu();
+      }
+    }
+    return;
+  }
+
+  // The focus timer takes over the orientation itself while its screens are
+  // active, so don't fight it.
+  if (state_ == AppState::Menu && isFocusTimerMenuScreen(menuScreen_)) {
+    return;
+  }
+
+  // Only auto-rotate in interactive reader/menu contexts. Leave standby,
+  // sleeping, USB transfer, OTA and boot screens alone.
+  const bool rotatableContext = state_ == AppState::Paused || state_ == AppState::Playing ||
+                                state_ == AppState::Menu;
+  if (!rotatableContext) {
+    return;
+  }
+
+  autoLevel_.update(nowMs);
+
+  Board::Config::UiOrientation next = autoRotateOrientation_;
+  const bool changed = autoLevel_.consumeOrientationChange(next);
+  if (!changed && autoRotateActive_) {
+    return;
+  }
+  if (!changed && !autoLevel_.hasStableOrientation()) {
+    return;
+  }
+  if (!changed) {
+    next = autoLevel_.orientation();
+  }
+
+  if (autoRotateActive_ && next == autoRotateOrientation_) {
+    return;
+  }
+
+  autoRotateOrientation_ = next;
+  autoRotateActive_ = true;
+  applyReaderUiOrientation();
+
+  if (state_ == AppState::Paused || state_ == AppState::Playing) {
+    renderActiveReader(nowMs);
+  } else if (state_ == AppState::Menu) {
+    renderMenu();
+  }
 }
 
 String App::formatFocusTimerRemaining(uint32_t nowMs) const {

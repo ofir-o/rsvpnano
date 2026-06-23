@@ -11,12 +11,14 @@
 #include "app/AppState.h"
 #include "app/MenuRepeat.h"
 #include "board/Board.h"
+#include "board/BoardClock.h"
 #include "book/BookMetadata.h"
 #include "display/DisplayManager.h"
 #include "input/InputButtons.h"
 #include "input/InputTouch.h"
 #include "reader/ReadingLoop.h"
 #include "rss/RssFeedManager.h"
+#include "sensors/AutoLevel.h"
 #include "standby/Screensaver.h"
 #include "storage/index/IndexedBookStore.h"
 #include "storage/StorageManager.h"
@@ -39,6 +41,15 @@ class App {
   enum class HandednessMode : uint8_t {
     Right = 0,
     Left = 1,
+  };
+
+  // Auto-rotate (gyro/IMU auto-level) mode.
+  // Continuous is treated as 4-way snap for now -- the renderer only supports
+  // the four cardinal orientations. See AutoLevel.h for the TODO.
+  enum class AutoRotateMode : uint8_t {
+    Continuous = 0,
+    FourWaySnap = 1,
+    Off = 2,
   };
 
   App();
@@ -136,6 +147,7 @@ class App {
     None,
     WifiPassword,
     OtaOwner,
+    ClockTime,
   };
 
   enum class KeyboardMode : uint8_t {
@@ -204,6 +216,7 @@ class App {
   void cycleUiLanguage(uint32_t nowMs);
   void cycleReaderMode(uint32_t nowMs);
   void cycleHandednessMode(uint32_t nowMs);
+  void cycleAutoRotateMode(uint32_t nowMs);
   void toggleReaderControlsLayout(uint32_t nowMs);
   void togglePhantomWords(uint32_t nowMs);
   void cycleReaderFontSize(uint32_t nowMs);
@@ -212,6 +225,10 @@ class App {
   void applyTypographySettings(uint32_t nowMs, bool rerender = true);
   uint8_t currentBrightnessPercent() const;
   bool updateBatteryStatus(uint32_t nowMs, bool force = false);
+  bool updateClock(uint32_t nowMs, bool force = false);
+  String formatClockLabel(const Board::Clock::DateTime &time) const;
+  void openClockTimeEntry();
+  void commitClockTimeEntry(const String &digits);
   void handleBatteryProtection(uint32_t nowMs);
   void showLowBatteryWarning(uint32_t nowMs);
   void updateBatteryWarningOverlay(uint32_t nowMs);
@@ -312,6 +329,7 @@ class App {
   String readerModeLabel() const;
   String pauseModeLabel() const;
   String handednessLabel() const;
+  String autoRotateModeLabel() const;
   String readerControlsLayoutLabel() const;
   String readerFontSizeLabel() const;
   String readerTypefaceLabel() const;
@@ -408,6 +426,7 @@ class App {
   String currentBatteryLabel() const;
   String footerMetricModeLabel() const;
   String batteryLabelModeLabel() const;
+  String clockSettingLabel() const;
   String screensaverModeLabel() const;
   String standbyTimerLabel() const;
   uint32_t standbyTimerMs() const;
@@ -451,6 +470,8 @@ class App {
   bool scrollModeEnabled() const;
   void applyUiOrientation(Board::Config::UiOrientation orientation);
   void applyReaderUiOrientation();
+  void updateAutoRotate(uint32_t nowMs);
+  bool autoRotateEnabled() const;
   void reloadRuntimePreferences(uint32_t nowMs, bool rerender);
   Board::Config::UiOrientation readerUiOrientation() const;
   bool uiRotated180() const;
@@ -489,6 +510,9 @@ class App {
   uint32_t brightnessToastUntilMs_ = 0;
   uint32_t lastProgressSaveMs_ = 0;
   uint32_t lastBatterySampleMs_ = 0;
+  uint32_t lastClockSampleMs_ = 0;
+  String clockLabel_;
+  bool clockAvailable_ = false;
   uint32_t batteryRuntimeAnchorMs_ = 0;
   uint32_t lastBatteryLabelRefreshMs_ = 0;
   uint32_t lastScrollAnimationRenderMs_ = 0;
@@ -622,8 +646,14 @@ class App {
   bool darkMode_ = true;
   bool nightMode_ = false;
   bool yellowModeEnabled_ = false;
+  DisplayManager::ThemePalette themePalette_ = DisplayManager::ThemePalette::None;
   UiLanguage uiLanguage_ = UiLanguage::English;
   ReaderMode readerMode_ = ReaderMode::Rsvp;
   HandednessMode handednessMode_ = HandednessMode::Right;
+  // Default auto-rotate to 4-way snap ON for boards with an IMU.
+  AutoRotateMode autoRotateMode_ = AutoRotateMode::FourWaySnap;
+  AutoLevel autoLevel_;
+  bool autoRotateActive_ = false;
+  Board::Config::UiOrientation autoRotateOrientation_ = Board::Config::DEFAULT_UI_ORIENTATION;
   DisplayManager::TypographyConfig typographyConfig_;
 };

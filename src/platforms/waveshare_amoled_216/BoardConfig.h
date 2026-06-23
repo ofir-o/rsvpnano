@@ -31,6 +31,8 @@ constexpr bool BOOT_BUTTON_TOGGLES_READER = false;
 constexpr bool BOOT_BUTTON_BACKS_OUT_OF_MENU = false;
 constexpr bool BOOT_BUTTON_HOLD_STARTS_STANDBY = false;
 constexpr bool ENABLE_RESTRUCTURED_MENU = true;
+// No onboard RTC on this board; the reader clock stays disabled.
+constexpr bool READER_SHOW_CLOCK = false;
 
 // BOOT is a standard ESP32 GPIO button, PWR is handled by the AXP2101 PMU, and the board exposes
 // an additional custom-function button on GPIO18.

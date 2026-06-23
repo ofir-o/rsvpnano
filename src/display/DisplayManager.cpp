@@ -27,14 +27,42 @@ constexpr int kMaxTextScale = 1;
 constexpr uint8_t kGlyphAlphaThreshold = 16;
 constexpr uint16_t kTrueBlack = 0x0000;
 constexpr uint16_t kPureWhite = 0xFFFF;
-constexpr uint16_t kDarkWordColor = 0xFFFF;
+constexpr uint16_t kDarkWordColor = 0xEEB4;  // warm amber-cream (#EDD6A6), easy on the eyes
 constexpr uint16_t kLightWordColor = 0x0000;
-constexpr uint16_t kFocusLetterColor = 0xF800;
+constexpr uint16_t kFocusLetterColor = 0xFC2E;  // peachy-pink focus (#FF8674)
 constexpr uint16_t kYellowModeFocusColor = 0x001F;
 constexpr uint16_t kNightWordColor = 0xFCE0;
 constexpr uint16_t kNightFocusColor = 0xFA80;
 constexpr uint16_t kYellowModeNightFocusColor = 0x7D7F;
 constexpr uint16_t kYellowModeBackground = 0xFF44;
+
+// Pastel reading palettes (recommended "A" variants). Each is background /
+// body-text / focus-letter, as RGB565. Body-text contrast vs background is well
+// above 4.5:1 on all three; the focus letter is a warm accent that sits among
+// the body text (same role as the red focus in Dark/Light). See
+// docs/palette-preview.html for the candidate variants and exact values.
+// Terracotta + beige: bg #E8DCC8, text #494742, focus #A05733.
+constexpr uint16_t kTerracottaBackground = 0xEEF9;
+constexpr uint16_t kTerracottaWordColor = 0x4A28;
+constexpr uint16_t kTerracottaFocusColor = 0xA2A6;
+// Peach blush: bg #FEE4D9, text #5C3A2C, focus #AB6622.
+constexpr uint16_t kPeachBackground = 0xFF3B;
+constexpr uint16_t kPeachWordColor = 0x59C5;
+constexpr uint16_t kPeachFocusColor = 0xAB24;
+// Beige + olive: bg #E8DCC8, text #3E3F28, focus #888958.
+constexpr uint16_t kOliveBackground = 0xEEF9;
+constexpr uint16_t kOliveWordColor = 0x39E5;
+constexpr uint16_t kOliveFocusColor = 0x8C4B;
+// Dark palettes (true-black background = best battery on AMOLED). word / focus as RGB565.
+// Sage: text #A8C0A0, focus #C9A86A.
+constexpr uint16_t kSageWordColor = 0xAE14;
+constexpr uint16_t kSageFocusColor = 0xCD4D;
+// Warm gold: text #E4C07A, focus #B5774A.
+constexpr uint16_t kWarmGoldWordColor = 0xE60F;
+constexpr uint16_t kWarmGoldFocusColor = 0xB3A9;
+// Beige rose: text #EAD2CB, focus #D99AA4.
+constexpr uint16_t kBeigeRoseWordColor = 0xEE99;
+constexpr uint16_t kBeigeRoseFocusColor = 0xDCD4;
 constexpr uint16_t kDarkMenuDimColor = 0x8410;
 constexpr uint16_t kLightMenuDimColor = 0x6B4D;
 constexpr uint16_t kDarkFooterColor = 0x528A;
@@ -897,6 +925,16 @@ void DisplayManager::setBatteryCharging(bool charging) {
   lastRenderKey_ = "";
 }
 
+void DisplayManager::setClockLabel(const String &label) {
+  if (clockLabel_ == label) {
+    return;
+  }
+
+  clockLabel_ = label;
+  tickerPlaybackFrameActive_ = false;
+  lastRenderKey_ = "";
+}
+
 void DisplayManager::setBrightnessOverlay(const String &text) {
   if (brightnessOverlayText_ == text) {
     return;
@@ -947,6 +985,18 @@ void DisplayManager::setYellowMode(bool enabled) {
   tickerPlaybackFrameActive_ = false;
   lastRenderKey_ = "";
 }
+
+void DisplayManager::setThemePalette(ThemePalette palette) {
+  if (themePalette_ == palette) {
+    return;
+  }
+
+  themePalette_ = palette;
+  tickerPlaybackFrameActive_ = false;
+  lastRenderKey_ = "";
+}
+
+DisplayManager::ThemePalette DisplayManager::themePalette() const { return themePalette_; }
 
 void DisplayManager::setUiOrientation(Board::Config::UiOrientation orientation) {
   if (uiOrientation_ == orientation) {
@@ -1119,6 +1169,20 @@ void DisplayManager::clearVirtualBuffer(int width, int height) {
 }
 
 uint16_t DisplayManager::backgroundColor() const {
+  switch (themePalette_) {
+    case ThemePalette::Terracotta:
+      return kTerracottaBackground;
+    case ThemePalette::Peach:
+      return kPeachBackground;
+    case ThemePalette::Olive:
+      return kOliveBackground;
+    case ThemePalette::Sage:
+    case ThemePalette::WarmGold:
+    case ThemePalette::BeigeRose:
+      return kTrueBlack;
+    case ThemePalette::None:
+      break;
+  }
   if (nightMode_) {
     return kTrueBlack;
   }
@@ -1129,6 +1193,22 @@ uint16_t DisplayManager::backgroundColor() const {
 }
 
 uint16_t DisplayManager::wordColor() const {
+  switch (themePalette_) {
+    case ThemePalette::Terracotta:
+      return kTerracottaWordColor;
+    case ThemePalette::Peach:
+      return kPeachWordColor;
+    case ThemePalette::Olive:
+      return kOliveWordColor;
+    case ThemePalette::Sage:
+      return kSageWordColor;
+    case ThemePalette::WarmGold:
+      return kWarmGoldWordColor;
+    case ThemePalette::BeigeRose:
+      return kBeigeRoseWordColor;
+    case ThemePalette::None:
+      break;
+  }
   if (nightMode_) {
     return kNightWordColor;
   }
@@ -1139,6 +1219,22 @@ uint16_t DisplayManager::wordColor() const {
 }
 
 uint16_t DisplayManager::focusColor() const {
+  switch (themePalette_) {
+    case ThemePalette::Terracotta:
+      return kTerracottaFocusColor;
+    case ThemePalette::Peach:
+      return kPeachFocusColor;
+    case ThemePalette::Olive:
+      return kOliveFocusColor;
+    case ThemePalette::Sage:
+      return kSageFocusColor;
+    case ThemePalette::WarmGold:
+      return kWarmGoldFocusColor;
+    case ThemePalette::BeigeRose:
+      return kBeigeRoseFocusColor;
+    case ThemePalette::None:
+      break;
+  }
   if (yellowMode_) {
     return nightMode_ ? kYellowModeNightFocusColor : kYellowModeFocusColor;
   }
@@ -1149,6 +1245,10 @@ uint16_t DisplayManager::focusColor() const {
 }
 
 uint16_t DisplayManager::dimColor() const {
+  if (themePalette_ != ThemePalette::None) {
+    // Derive a muted label color by blending the body text into the pastel bg.
+    return blendOverBackground(wordColor(), 150);
+  }
   if (nightMode_) {
     return blendOverBackground(wordColor(), kNightDimAlpha);
   }
@@ -1159,6 +1259,9 @@ uint16_t DisplayManager::dimColor() const {
 }
 
 uint16_t DisplayManager::footerColor() const {
+  if (themePalette_ != ThemePalette::None) {
+    return blendOverBackground(wordColor(), 120);
+  }
   if (nightMode_) {
     return blendOverBackground(wordColor(), kNightFooterAlpha);
   }
@@ -1169,6 +1272,9 @@ uint16_t DisplayManager::footerColor() const {
 }
 
 uint16_t DisplayManager::selectedBarColor() const {
+  if (themePalette_ != ThemePalette::None) {
+    return focusColor();
+  }
   return nightMode_ ? focusColor() : kFocusLetterColor;
 }
 
@@ -1740,6 +1846,18 @@ void DisplayManager::drawBatteryBadge(int logicalWidth, int logicalHeight,
   }
 }
 
+void DisplayManager::drawClockBadge(int logicalWidth, int logicalHeight) {
+  if (!Board::Config::READER_SHOW_CLOCK || clockLabel_.isEmpty()) {
+    return;
+  }
+
+  const int width = measureTinyTextWidth(clockLabel_, kTinyScale);
+  const int x = std::max(0, (logicalWidth - width) / 2);
+  const int y = logicalHeight > (kDisplayHeight * 2) ? kReaderBatteryMarginTop + 8
+                                                     : kReaderBatteryMarginTop;
+  drawTinyTextAt(clockLabel_, x, y, footerColor(), kTinyScale);
+}
+
 void DisplayManager::drawBrightnessToastBadge(int logicalWidth, int logicalHeight) {
   if (brightnessOverlayText_.isEmpty()) {
     return;
@@ -2094,6 +2212,7 @@ void DisplayManager::renderRsvpWord(const String &word, const String &chapterLab
     drawPreviousSentenceHint(virtualWidth, chrome);
   }
   drawEdgeMenuHints(virtualWidth, virtualHeight, chrome);
+  drawClockBadge(virtualWidth, virtualHeight);
   if (chrome.showBattery) {
     drawBatteryBadge(virtualWidth, virtualHeight, chrome);
   }
@@ -2140,6 +2259,7 @@ void DisplayManager::renderRsvpWordWithWpm(const String &word, uint16_t wpm,
     drawPreviousSentenceHint(virtualWidth, chrome);
   }
   drawEdgeMenuHints(virtualWidth, virtualHeight, chrome);
+  drawClockBadge(virtualWidth, virtualHeight);
   if (chrome.showBattery) {
     drawBatteryBadge(virtualWidth, virtualHeight, chrome);
   }
@@ -2199,6 +2319,7 @@ void DisplayManager::renderPhantomRsvpWord(const String &beforeText, const Strin
       drawPreviousSentenceHint(virtualWidth, chrome);
     }
     drawEdgeMenuHints(virtualWidth, virtualHeight, chrome);
+    drawClockBadge(virtualWidth, virtualHeight);
     if (chrome.showBattery) {
       drawBatteryBadge(virtualWidth, virtualHeight, chrome);
     }
@@ -2245,6 +2366,7 @@ void DisplayManager::renderPhantomRsvpWord(const String &beforeText, const Strin
     drawPreviousSentenceHint(virtualWidth, chrome);
   }
   drawEdgeMenuHints(virtualWidth, virtualHeight, chrome);
+  drawClockBadge(virtualWidth, virtualHeight);
   if (chrome.showBattery) {
     drawBatteryBadge(virtualWidth, virtualHeight, chrome);
   }
@@ -2385,6 +2507,7 @@ void DisplayManager::renderWordTickerView(const std::vector<ContextWord> &words,
     }
     drawEdgeMenuHints(virtualWidth, virtualHeight, chrome);
     if (!canUseBandOnly) {
+      drawClockBadge(virtualWidth, virtualHeight);
       if (chrome.showBattery) {
         drawBatteryBadge(virtualWidth, virtualHeight, chrome);
       }
@@ -2472,6 +2595,7 @@ void DisplayManager::renderWordTickerView(const std::vector<ContextWord> &words,
   }
   drawEdgeMenuHints(virtualWidth, virtualHeight, chrome);
   if (!canUseBandOnly) {
+    drawClockBadge(virtualWidth, virtualHeight);
     if (chrome.showBattery) {
       drawBatteryBadge(virtualWidth, virtualHeight, chrome);
     }
@@ -2643,6 +2767,7 @@ void DisplayManager::renderPhantomRsvpWordWithWpm(const String &beforeText, cons
       drawPreviousSentenceHint(virtualWidth, chrome);
     }
     drawEdgeMenuHints(virtualWidth, virtualHeight, chrome);
+    drawClockBadge(virtualWidth, virtualHeight);
     if (chrome.showBattery) {
       drawBatteryBadge(virtualWidth, virtualHeight, chrome);
     }
@@ -2692,6 +2817,7 @@ void DisplayManager::renderPhantomRsvpWordWithWpm(const String &beforeText, cons
     drawPreviousSentenceHint(virtualWidth, chrome);
   }
   drawEdgeMenuHints(virtualWidth, virtualHeight, chrome);
+  drawClockBadge(virtualWidth, virtualHeight);
   if (chrome.showBattery) {
     drawBatteryBadge(virtualWidth, virtualHeight, chrome);
   }
@@ -2878,6 +3004,7 @@ void DisplayManager::renderScrollView(const std::vector<ContextWord> &words, uin
     drawPreviousSentenceHint(virtualWidth, chrome);
   }
   drawEdgeMenuHints(virtualWidth, virtualHeight, chrome);
+  drawClockBadge(virtualWidth, virtualHeight);
   if (chrome.showBattery) {
     drawBatteryBadge(virtualWidth, virtualHeight, chrome);
   }
