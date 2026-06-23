@@ -81,6 +81,47 @@ class InstallFirmware extends HTMLElement {
     ];
 
     this.innerHTML = `
+      <style>
+        .flash-error-log {
+          margin-top: 16px;
+          border: 1px solid #d9534f;
+          border-radius: 8px;
+          background: #2a1414;
+          color: #ffd7d2;
+          padding: 10px 12px;
+          font-size: 13px;
+        }
+        .flash-error-head {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          margin-bottom: 6px;
+        }
+        .flash-error-head strong { color: #ff8a80; }
+        #flash-error-clear {
+          background: transparent;
+          border: 1px solid currentColor;
+          color: inherit;
+          border-radius: 6px;
+          padding: 2px 8px;
+          cursor: pointer;
+          font-size: 12px;
+        }
+        .flash-error-items {
+          list-style: none;
+          margin: 0;
+          padding: 0;
+          max-height: 180px;
+          overflow-y: auto;
+          font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+          white-space: pre-wrap;
+          word-break: break-word;
+        }
+        .flash-error-items li { padding: 2px 0; border-top: 1px solid rgba(255,255,255,0.08); }
+        .flash-error-items li:first-child { border-top: none; }
+        .flash-error-warn { color: #ffe08a; }
+        .flash-error-hint { margin: 6px 0 0; opacity: 0.7; font-size: 12px; }
+      </style>
       <section class="card step-card" id="install-section">
         <button class="step-card-toggle" id="install-toggle" type="button" aria-expanded="true" aria-controls="install-content">
           <span class="section-header-main">
@@ -143,6 +184,14 @@ class InstallFirmware extends HTMLElement {
             </div>
               `).join("")}
             </div>
+            <div class="flash-error-log" id="flash-error-log" hidden>
+              <div class="flash-error-head">
+                <strong>Installer messages</strong>
+                <button type="button" id="flash-error-clear">Clear</button>
+              </div>
+              <ul class="flash-error-items" id="flash-error-items"></ul>
+              <p class="flash-error-hint">Errors during install show here so you don't need the browser console. Select and copy them for bug reports.</p>
+            </div>
           </div>
         </div>
       </section>
@@ -163,6 +212,7 @@ class InstallFirmware extends HTMLElement {
     this._showFlashHistory();
     this._autoCollapse();
     this._observeInstallDialog();
+    this._setupErrorSurface();
 
     this.querySelectorAll(".install-option").forEach((option) => {
       option.querySelector('button[slot="activate"]').addEventListener("click", () => {
@@ -172,6 +222,16 @@ class InstallFirmware extends HTMLElement {
           version: option.dataset.version,
         };
       });
+
+      const espButton = option.querySelector("esp-web-install-button");
+      if (espButton) {
+        espButton.addEventListener("state-changed", (e) => {
+          const detail = e.detail || {};
+          if (detail.state === "error") {
+            this._logFlashMessage("error", detail.message || "Installation error");
+          }
+        });
+      }
 
       fetch(option.dataset.manifest, { cache: "no-store" })
         .then((r) => {
@@ -356,6 +416,63 @@ class InstallFirmware extends HTMLElement {
         });
       });
     }).observe(document.body, { childList: true });
+  }
+
+  _setupErrorSurface() {
+    const clearBtn = this.querySelector("#flash-error-clear");
+    if (clearBtn) {
+      clearBtn.addEventListener("click", () => {
+        const items = this.querySelector("#flash-error-items");
+        if (items) items.innerHTML = "";
+        const panel = this.querySelector("#flash-error-log");
+        if (panel) panel.hidden = true;
+      });
+    }
+
+    // Mirror console errors/warnings (where ESP Web Tools and esptool-js report failures) onto the
+    // page so they are visible without opening devtools.
+    const mirror = (level) => {
+      const original = typeof console[level] === "function" ? console[level].bind(console) : () => {};
+      console[level] = (...args) => {
+        try {
+          const text = args
+            .map((a) => (typeof a === "string" ? a : (a && a.message) || (() => {
+              try { return JSON.stringify(a); } catch (e) { return String(a); }
+            })()))
+            .join(" ");
+          this._logFlashMessage(level === "warn" ? "warn" : "error", text);
+        } catch (e) {
+          /* never let logging break the page */
+        }
+        original(...args);
+      };
+    };
+    mirror("error");
+    mirror("warn");
+
+    window.addEventListener("error", (e) => {
+      this._logFlashMessage("error", e.message || String((e && e.error) || "Script error"));
+    });
+    window.addEventListener("unhandledrejection", (e) => {
+      const reason = e && e.reason;
+      this._logFlashMessage("error", (reason && (reason.message || reason.toString())) || "Unhandled error");
+    });
+  }
+
+  _logFlashMessage(level, text) {
+    if (!text) return;
+    const panel = this.querySelector("#flash-error-log");
+    const items = this.querySelector("#flash-error-items");
+    if (!panel || !items) return;
+    const li = document.createElement("li");
+    li.className = "flash-error-" + (level === "warn" ? "warn" : "error");
+    li.textContent = "[" + new Date().toLocaleTimeString() + "] " + text;
+    items.appendChild(li);
+    while (items.children.length > 80) {
+      items.removeChild(items.firstChild);
+    }
+    panel.hidden = false;
+    items.scrollTop = items.scrollHeight;
   }
 }
 
