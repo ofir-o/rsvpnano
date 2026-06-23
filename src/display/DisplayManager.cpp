@@ -1,6 +1,7 @@
 #include "display/DisplayManager.h"
 
 #include <algorithm>
+#include <math.h>
 #include <cstring>
 
 #include <esp_heap_caps.h>
