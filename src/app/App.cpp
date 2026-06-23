@@ -294,10 +294,10 @@ DisplayManager::ThemePalette themePaletteFromStored(uint8_t value) {
   switch (value) {
     case static_cast<uint8_t>(DisplayManager::ThemePalette::Terracotta):
       return DisplayManager::ThemePalette::Terracotta;
-    case static_cast<uint8_t>(DisplayManager::ThemePalette::BabyPink):
-      return DisplayManager::ThemePalette::BabyPink;
-    case static_cast<uint8_t>(DisplayManager::ThemePalette::Matcha):
-      return DisplayManager::ThemePalette::Matcha;
+    case static_cast<uint8_t>(DisplayManager::ThemePalette::Peach):
+      return DisplayManager::ThemePalette::Peach;
+    case static_cast<uint8_t>(DisplayManager::ThemePalette::Olive):
+      return DisplayManager::ThemePalette::Olive;
     default:
       return DisplayManager::ThemePalette::None;
   }
@@ -1847,19 +1847,19 @@ void App::cycleBrightness(uint32_t nowMs) {
 
 void App::cycleThemeMode(uint32_t nowMs) {
   // Cycle display modes as standalone options:
-  // Dark -> Light -> Night -> Yellow -> Terracotta -> Baby pink -> Matcha -> Dark
+  // Dark -> Light -> Night -> Yellow -> Terracotta -> Peach -> Olive -> Dark
   // The pastel palettes override the dark/night/yellow colors when active; we
   // park the booleans on Light (false/false/false) while a palette is selected
   // so that clearing the palette lands on a sensible bright theme.
   if (themePalette_ != DisplayManager::ThemePalette::None) {
     switch (themePalette_) {
       case DisplayManager::ThemePalette::Terracotta:
-        themePalette_ = DisplayManager::ThemePalette::BabyPink;
+        themePalette_ = DisplayManager::ThemePalette::Peach;
         break;
-      case DisplayManager::ThemePalette::BabyPink:
-        themePalette_ = DisplayManager::ThemePalette::Matcha;
+      case DisplayManager::ThemePalette::Peach:
+        themePalette_ = DisplayManager::ThemePalette::Olive;
         break;
-      case DisplayManager::ThemePalette::Matcha:
+      case DisplayManager::ThemePalette::Olive:
       default:
         // Leave the palettes; return to the standard Dark theme.
         themePalette_ = DisplayManager::ThemePalette::None;
@@ -5181,10 +5181,10 @@ String App::themeModeLabel() const {
   switch (themePalette_) {
     case DisplayManager::ThemePalette::Terracotta:
       return "Terracotta";
-    case DisplayManager::ThemePalette::BabyPink:
-      return "Baby pink";
-    case DisplayManager::ThemePalette::Matcha:
-      return "Matcha";
+    case DisplayManager::ThemePalette::Peach:
+      return "Peach";
+    case DisplayManager::ThemePalette::Olive:
+      return "Olive";
     case DisplayManager::ThemePalette::None:
       break;
   }

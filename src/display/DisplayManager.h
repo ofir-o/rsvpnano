@@ -19,8 +19,8 @@ class DisplayManager {
   enum class ThemePalette : uint8_t {
     None = 0,
     Terracotta = 1,
-    BabyPink = 2,
-    Matcha = 3,
+    Peach = 2,
+    Olive = 3,
   };
 
   struct TypographyConfig {

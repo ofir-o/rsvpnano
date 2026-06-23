@@ -41,18 +41,18 @@ constexpr uint16_t kYellowModeBackground = 0xFF44;
 // above 4.5:1 on all three; the focus letter is a warm accent that sits among
 // the body text (same role as the red focus in Dark/Light). See
 // docs/palette-preview.html for the candidate variants and exact values.
-// Terracotta + beige: bg #E8DCC8, text #6B2F22, focus #B5532E.
+// Terracotta + beige: bg #E8DCC8, text #494742, focus #A05733.
 constexpr uint16_t kTerracottaBackground = 0xEEF9;
-constexpr uint16_t kTerracottaWordColor = 0x6964;
-constexpr uint16_t kTerracottaFocusColor = 0xB285;
-// Baby pastel pink: bg #F8D7E3, text #5E2A4E, focus #C0246A.
-constexpr uint16_t kBabyPinkBackground = 0xFEBC;
-constexpr uint16_t kBabyPinkWordColor = 0x5949;
-constexpr uint16_t kBabyPinkFocusColor = 0xC12D;
-// Matcha / sage green: bg #CBD8B0, text #2C3A22, focus #7A4A1E.
-constexpr uint16_t kMatchaBackground = 0xCED6;
-constexpr uint16_t kMatchaWordColor = 0x29C4;
-constexpr uint16_t kMatchaFocusColor = 0x7A43;
+constexpr uint16_t kTerracottaWordColor = 0x4A28;
+constexpr uint16_t kTerracottaFocusColor = 0xA2A6;
+// Peach blush: bg #FEE4D9, text #5C3A2C, focus #AB6622.
+constexpr uint16_t kPeachBackground = 0xFF3B;
+constexpr uint16_t kPeachWordColor = 0x59C5;
+constexpr uint16_t kPeachFocusColor = 0xAB24;
+// Beige + olive: bg #E8DCC8, text #3E3F28, focus #888958.
+constexpr uint16_t kOliveBackground = 0xEEF9;
+constexpr uint16_t kOliveWordColor = 0x39E5;
+constexpr uint16_t kOliveFocusColor = 0x8C4B;
 constexpr uint16_t kDarkMenuDimColor = 0x8410;
 constexpr uint16_t kLightMenuDimColor = 0x6B4D;
 constexpr uint16_t kDarkFooterColor = 0x528A;
@@ -1152,10 +1152,10 @@ uint16_t DisplayManager::backgroundColor() const {
   switch (themePalette_) {
     case ThemePalette::Terracotta:
       return kTerracottaBackground;
-    case ThemePalette::BabyPink:
-      return kBabyPinkBackground;
-    case ThemePalette::Matcha:
-      return kMatchaBackground;
+    case ThemePalette::Peach:
+      return kPeachBackground;
+    case ThemePalette::Olive:
+      return kOliveBackground;
     case ThemePalette::None:
       break;
   }
@@ -1172,10 +1172,10 @@ uint16_t DisplayManager::wordColor() const {
   switch (themePalette_) {
     case ThemePalette::Terracotta:
       return kTerracottaWordColor;
-    case ThemePalette::BabyPink:
-      return kBabyPinkWordColor;
-    case ThemePalette::Matcha:
-      return kMatchaWordColor;
+    case ThemePalette::Peach:
+      return kPeachWordColor;
+    case ThemePalette::Olive:
+      return kOliveWordColor;
     case ThemePalette::None:
       break;
   }
@@ -1192,10 +1192,10 @@ uint16_t DisplayManager::focusColor() const {
   switch (themePalette_) {
     case ThemePalette::Terracotta:
       return kTerracottaFocusColor;
-    case ThemePalette::BabyPink:
-      return kBabyPinkFocusColor;
-    case ThemePalette::Matcha:
-      return kMatchaFocusColor;
+    case ThemePalette::Peach:
+      return kPeachFocusColor;
+    case ThemePalette::Olive:
+      return kOliveFocusColor;
     case ThemePalette::None:
       break;
   }
