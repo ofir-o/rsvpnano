@@ -9,7 +9,7 @@
 
 namespace {
 
-constexpr int kSpiFrequency = 20000000;
+constexpr int kSpiFrequency = Board::Config::DISPLAY_QSPI_CLOCK_HZ;
 constexpr int kSendBufferRows =
     Board::Config::DISPLAY_TX_CHUNK_BYTES /
     (Board::Config::PANEL_NATIVE_WIDTH * static_cast<int>(sizeof(uint16_t)));

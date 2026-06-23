@@ -144,4 +144,7 @@ constexpr uint8_t ES8311_ADDRESS = 0x18;
 constexpr bool TOUCH_ROTATED_180 = true;
 // The 466 round panel must skip the 480-class page-0x20 source/gate tuning (causes vertical stripes).
 constexpr bool CO5300_EXTRA_PANEL_TUNING = false;
+// Waveshare's working 1.75 demo drives the CO5300 QSPI bus at 40 MHz; 20 MHz produces green
+// vertical stripes on this panel. (2.16 / 1.8 V2 stay at their validated 20 MHz.)
+constexpr int DISPLAY_QSPI_CLOCK_HZ = 40000000;
 }  // namespace Board::Config
