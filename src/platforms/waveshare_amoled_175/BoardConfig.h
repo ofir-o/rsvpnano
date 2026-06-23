@@ -35,6 +35,9 @@ constexpr bool BOOT_BUTTON_TOGGLES_READER = true;
 constexpr bool BOOT_BUTTON_BACKS_OUT_OF_MENU = true;
 constexpr bool BOOT_BUTTON_HOLD_STARTS_STANDBY = true;
 constexpr bool ENABLE_RESTRUCTURED_MENU = true;
+// This SKU carries an onboard PCF85063 RTC (I2C 0x51) with backup power, so the
+// reader shows a small HH:MM clock at top-center and exposes a manual time set.
+constexpr bool READER_SHOW_CLOCK = true;
 
 // BOOT is the standard ESP32 GPIO0 button. PWR is handled by the AXP2101 PMU. The round 1.75
 // board does not expose the 2.16's extra custom-function button.

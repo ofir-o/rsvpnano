@@ -31,6 +31,8 @@ constexpr bool BOOT_BUTTON_TOGGLES_READER = true;
 constexpr bool BOOT_BUTTON_BACKS_OUT_OF_MENU = true;
 constexpr bool BOOT_BUTTON_HOLD_STARTS_STANDBY = true;
 constexpr bool ENABLE_RESTRUCTURED_MENU = true;
+// No onboard RTC on this board; the reader clock stays disabled.
+constexpr bool READER_SHOW_CLOCK = false;
 
 // BOOT is the real ESP32 GPIO0 button. Runtime PWR is Waveshare's EXIO4 input
 // on the TCA9554 expander, active high.

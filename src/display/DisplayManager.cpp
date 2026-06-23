@@ -882,6 +882,16 @@ void DisplayManager::setBatteryLabel(const String &label) {
   lastRenderKey_ = "";
 }
 
+void DisplayManager::setClockLabel(const String &label) {
+  if (clockLabel_ == label) {
+    return;
+  }
+
+  clockLabel_ = label;
+  tickerPlaybackFrameActive_ = false;
+  lastRenderKey_ = "";
+}
+
 void DisplayManager::setBrightnessOverlay(const String &text) {
   if (brightnessOverlayText_ == text) {
     return;
@@ -1674,6 +1684,18 @@ void DisplayManager::drawBatteryBadge(int logicalWidth, int logicalHeight,
   drawTinyTextAt(batteryLabel_, x, y, footerColor(), kTinyScale);
 }
 
+void DisplayManager::drawClockBadge(int logicalWidth, int logicalHeight) {
+  if (!Board::Config::READER_SHOW_CLOCK || clockLabel_.isEmpty()) {
+    return;
+  }
+
+  const int width = measureTinyTextWidth(clockLabel_, kTinyScale);
+  const int x = std::max(0, (logicalWidth - width) / 2);
+  const int y = logicalHeight > (kDisplayHeight * 2) ? kReaderBatteryMarginTop + 8
+                                                     : kReaderBatteryMarginTop;
+  drawTinyTextAt(clockLabel_, x, y, footerColor(), kTinyScale);
+}
+
 void DisplayManager::drawBrightnessToastBadge(int logicalWidth, int logicalHeight) {
   if (brightnessOverlayText_.isEmpty()) {
     return;
@@ -2029,6 +2051,7 @@ void DisplayManager::renderRsvpWord(const String &word, const String &chapterLab
     drawPreviousSentenceHint(virtualWidth, chrome);
   }
   drawEdgeMenuHints(virtualWidth, virtualHeight, chrome);
+  drawClockBadge(virtualWidth, virtualHeight);
   if (chrome.showBattery) {
     drawBatteryBadge(virtualWidth, virtualHeight, chrome);
   }
@@ -2075,6 +2098,7 @@ void DisplayManager::renderRsvpWordWithWpm(const String &word, uint16_t wpm,
     drawPreviousSentenceHint(virtualWidth, chrome);
   }
   drawEdgeMenuHints(virtualWidth, virtualHeight, chrome);
+  drawClockBadge(virtualWidth, virtualHeight);
   if (chrome.showBattery) {
     drawBatteryBadge(virtualWidth, virtualHeight, chrome);
   }
@@ -2134,6 +2158,7 @@ void DisplayManager::renderPhantomRsvpWord(const String &beforeText, const Strin
       drawPreviousSentenceHint(virtualWidth, chrome);
     }
     drawEdgeMenuHints(virtualWidth, virtualHeight, chrome);
+    drawClockBadge(virtualWidth, virtualHeight);
     if (chrome.showBattery) {
       drawBatteryBadge(virtualWidth, virtualHeight, chrome);
     }
@@ -2180,6 +2205,7 @@ void DisplayManager::renderPhantomRsvpWord(const String &beforeText, const Strin
     drawPreviousSentenceHint(virtualWidth, chrome);
   }
   drawEdgeMenuHints(virtualWidth, virtualHeight, chrome);
+  drawClockBadge(virtualWidth, virtualHeight);
   if (chrome.showBattery) {
     drawBatteryBadge(virtualWidth, virtualHeight, chrome);
   }
@@ -2320,6 +2346,7 @@ void DisplayManager::renderWordTickerView(const std::vector<ContextWord> &words,
     }
     drawEdgeMenuHints(virtualWidth, virtualHeight, chrome);
     if (!canUseBandOnly) {
+      drawClockBadge(virtualWidth, virtualHeight);
       if (chrome.showBattery) {
         drawBatteryBadge(virtualWidth, virtualHeight, chrome);
       }
@@ -2407,6 +2434,7 @@ void DisplayManager::renderWordTickerView(const std::vector<ContextWord> &words,
   }
   drawEdgeMenuHints(virtualWidth, virtualHeight, chrome);
   if (!canUseBandOnly) {
+    drawClockBadge(virtualWidth, virtualHeight);
     if (chrome.showBattery) {
       drawBatteryBadge(virtualWidth, virtualHeight, chrome);
     }
@@ -2578,6 +2606,7 @@ void DisplayManager::renderPhantomRsvpWordWithWpm(const String &beforeText, cons
       drawPreviousSentenceHint(virtualWidth, chrome);
     }
     drawEdgeMenuHints(virtualWidth, virtualHeight, chrome);
+    drawClockBadge(virtualWidth, virtualHeight);
     if (chrome.showBattery) {
       drawBatteryBadge(virtualWidth, virtualHeight, chrome);
     }
@@ -2627,6 +2656,7 @@ void DisplayManager::renderPhantomRsvpWordWithWpm(const String &beforeText, cons
     drawPreviousSentenceHint(virtualWidth, chrome);
   }
   drawEdgeMenuHints(virtualWidth, virtualHeight, chrome);
+  drawClockBadge(virtualWidth, virtualHeight);
   if (chrome.showBattery) {
     drawBatteryBadge(virtualWidth, virtualHeight, chrome);
   }
@@ -2813,6 +2843,7 @@ void DisplayManager::renderScrollView(const std::vector<ContextWord> &words, uin
     drawPreviousSentenceHint(virtualWidth, chrome);
   }
   drawEdgeMenuHints(virtualWidth, virtualHeight, chrome);
+  drawClockBadge(virtualWidth, virtualHeight);
   if (chrome.showBattery) {
     drawBatteryBadge(virtualWidth, virtualHeight, chrome);
   }
