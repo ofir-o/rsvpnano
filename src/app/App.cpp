@@ -288,6 +288,21 @@ constexpr size_t kFocusTimerGenreFirstIndex = 1;
 // Preference keys are defined once in settings/PreferenceKeys.h and shared with
 // the web companion; pull them into scope so existing call sites are unchanged.
 using namespace settings;
+
+// Clamp a stored theme-palette index to a valid ThemePalette enum value.
+DisplayManager::ThemePalette themePaletteFromStored(uint8_t value) {
+  switch (value) {
+    case static_cast<uint8_t>(DisplayManager::ThemePalette::Terracotta):
+      return DisplayManager::ThemePalette::Terracotta;
+    case static_cast<uint8_t>(DisplayManager::ThemePalette::BabyPink):
+      return DisplayManager::ThemePalette::BabyPink;
+    case static_cast<uint8_t>(DisplayManager::ThemePalette::Matcha):
+      return DisplayManager::ThemePalette::Matcha;
+    default:
+      return DisplayManager::ThemePalette::None;
+  }
+}
+
 constexpr size_t kReaderFontSizeCount = 3;
 constexpr size_t kPhantomBeforeCharTargets[] = {64, 96, 144};
 constexpr size_t kPhantomAfterCharTargets[] = {96, 144, 208};
@@ -861,6 +876,8 @@ void App::begin() {
   darkMode_ = preferences_.getBool(kPrefDarkMode, darkMode_);
   nightMode_ = preferences_.getBool(kPrefNightMode, nightMode_);
   yellowModeEnabled_ = preferences_.getBool(kPrefYellowMode, yellowModeEnabled_);
+  themePalette_ = themePaletteFromStored(
+      preferences_.getUChar(kPrefThemePalette, static_cast<uint8_t>(themePalette_)));
   applyHandednessSettings(0, false);
   applyDisplayPreferences(0, false);
   applyTypographySettings(0, false);
@@ -1599,6 +1616,7 @@ void App::applyDisplayPreferences(uint32_t nowMs, bool rerender) {
   display_.setDarkMode(darkMode_);
   display_.setNightMode(nightMode_);
   display_.setYellowMode(yellowModeEnabled_);
+  display_.setThemePalette(themePalette_);
   display_.setBrightnessPercent(currentBrightnessPercent());
 
   if (!rerender) {
@@ -1775,6 +1793,8 @@ void App::reloadRuntimePreferences(uint32_t nowMs, bool rerender) {
   darkMode_ = preferences_.getBool(kPrefDarkMode, darkMode_);
   nightMode_ = preferences_.getBool(kPrefNightMode, nightMode_);
   yellowModeEnabled_ = preferences_.getBool(kPrefYellowMode, yellowModeEnabled_);
+  themePalette_ = themePaletteFromStored(
+      preferences_.getUChar(kPrefThemePalette, static_cast<uint8_t>(themePalette_)));
 
   reader_.setWpm(preferences_.getUShort(kPrefWpm, reader_.wpm()));
   applyReaderUiOrientation();
@@ -1827,11 +1847,33 @@ void App::cycleBrightness(uint32_t nowMs) {
 
 void App::cycleThemeMode(uint32_t nowMs) {
   // Cycle display modes as standalone options:
-  // Dark -> Light -> Night -> Yellow -> Dark
-  if (yellowModeEnabled_) {
+  // Dark -> Light -> Night -> Yellow -> Terracotta -> Baby pink -> Matcha -> Dark
+  // The pastel palettes override the dark/night/yellow colors when active; we
+  // park the booleans on Light (false/false/false) while a palette is selected
+  // so that clearing the palette lands on a sensible bright theme.
+  if (themePalette_ != DisplayManager::ThemePalette::None) {
+    switch (themePalette_) {
+      case DisplayManager::ThemePalette::Terracotta:
+        themePalette_ = DisplayManager::ThemePalette::BabyPink;
+        break;
+      case DisplayManager::ThemePalette::BabyPink:
+        themePalette_ = DisplayManager::ThemePalette::Matcha;
+        break;
+      case DisplayManager::ThemePalette::Matcha:
+      default:
+        // Leave the palettes; return to the standard Dark theme.
+        themePalette_ = DisplayManager::ThemePalette::None;
+        darkMode_ = true;
+        nightMode_ = false;
+        yellowModeEnabled_ = false;
+        break;
+    }
+  } else if (yellowModeEnabled_) {
+    // Yellow -> first pastel palette (Terracotta).
     yellowModeEnabled_ = false;
-    darkMode_ = true;
+    darkMode_ = false;
     nightMode_ = false;
+    themePalette_ = DisplayManager::ThemePalette::Terracotta;
   } else if (nightMode_) {
     yellowModeEnabled_ = true;
     darkMode_ = false;
@@ -1847,6 +1889,7 @@ void App::cycleThemeMode(uint32_t nowMs) {
   preferences_.putBool(kPrefYellowMode, yellowModeEnabled_);
   preferences_.putBool(kPrefDarkMode, darkMode_);
   preferences_.putBool(kPrefNightMode, nightMode_);
+  preferences_.putUChar(kPrefThemePalette, static_cast<uint8_t>(themePalette_));
   Serial.printf("[display] theme=%s\n", themeModeLabel().c_str());
   applyDisplayPreferences(nowMs);
 }
@@ -5135,6 +5178,16 @@ String App::firmwareVersionLabel() const {
 String App::uiText(UiText key) const { return Localization::text(uiLanguage_, key); }
 
 String App::themeModeLabel() const {
+  switch (themePalette_) {
+    case DisplayManager::ThemePalette::Terracotta:
+      return "Terracotta";
+    case DisplayManager::ThemePalette::BabyPink:
+      return "Baby pink";
+    case DisplayManager::ThemePalette::Matcha:
+      return "Matcha";
+    case DisplayManager::ThemePalette::None:
+      break;
+  }
   if (yellowModeEnabled_) {
     return "Yellow";
   }

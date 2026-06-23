@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>RSVP Nano — Pastel theme palette preview</title>
+<style>
+  body{font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;margin:0;padding:24px;background:#1c1c1e;color:#eee;line-height:1.4}
+  h1{font-size:22px;margin:0 0 4px}
+  .lead{color:#aaa;margin:0 0 24px;max-width:760px}
+  .card{background:#2a2a2c;border-radius:14px;padding:20px;margin-bottom:24px}
+  .card h2{margin:0 0 16px;font-size:19px}
+  .tag{font-size:12px;background:#444;color:#ddd;border-radius:8px;padding:2px 8px;vertical-align:middle;margin-left:6px}
+  .variants{display:flex;flex-wrap:wrap;gap:20px}
+  .variant{flex:1 1 340px;background:#222;border-radius:12px;padding:16px}
+  .variant h3{margin:0 0 12px;font-size:15px;color:#ccc}
+  .sample{border-radius:200px;height:150px;display:flex;align-items:center;justify-content:center;
+    font-family:Georgia,'Times New Roman',serif;font-size:42px;font-weight:600;
+    box-shadow:inset 0 0 0 1px rgba(0,0,0,.15);margin-bottom:14px}
+  .chips{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+  .chip{display:flex;gap:8px;align-items:center;font-size:11px;color:#bbb}
+  .swatch{width:34px;height:34px;border-radius:8px;border:1px solid #555;flex:none}
+  .meta b{color:#eee}
+  .q{color:#888}
+  .contrast{font-size:12px;color:#bbb}
+  .ok{color:#5fd96b} .warn{color:#e0b020}
+  footer{color:#888;font-size:13px;margin-top:8px;max-width:760px}
+</style></head><body>
+<h1>RSVP Nano — Pastel theme palette preview</h1>
+<p class="lead">For the Waveshare AMOLED 1.75 (round 466×466). Three new reading palettes, two
+candidate variants each. The round swatch shows the sample words “This is” rendered in the body-text
+color on the palette background, with the focus letter (current-letter highlight) in the accent
+color. Hex, RGB, and the firmware RGB565 value are shown for each chip (with the slightly quantized
+on-device color it maps to). Pick one variant per palette, or request tweaks — nothing ships until
+you approve.</p>
+<section class="card">
+      <h2>Terracotta + beige <span class="tag">warm</span></h2>
+      <div class="variants"><div class="variant">
+          <h3>A (recommended)</h3>
+          <div class="sample" style="background:#E8DCC8;color:#6B2F22">
+          <span style="color:#B5532E">T</span>his is
+        </div>
+          <div class="chips"><div class="chip">
+      <div class="swatch" style="background:#E8DCC8"></div>
+      <div class="meta"><b>background</b><br>hex #E8DCC8<br>rgb(232,220,200)<br>RGB565 0xEEF9<br><span class="q">on-device ≈ #EEDECD</span></div>
+    </div><div class="chip">
+      <div class="swatch" style="background:#6B2F22"></div>
+      <div class="meta"><b>body text</b><br>hex #6B2F22<br>rgb(107,47,34)<br>RGB565 0x6964<br><span class="q">on-device ≈ #6A2C20</span></div>
+    </div><div class="chip">
+      <div class="swatch" style="background:#B5532E"></div>
+      <div class="meta"><b>focus letter</b><br>hex #B5532E<br>rgb(181,83,46)<br>RGB565 0xB285<br><span class="q">on-device ≈ #B45029</span></div>
+    </div></div>
+          <div class="contrast">body-text contrast vs bg: <b class="ok">7.54:1</b>
+          &nbsp;|&nbsp; focus vs bg: <b>3.65:1</b> (accent, not body)</div>
+        </div><div class="variant">
+          <h3>B (lighter beige)</h3>
+          <div class="sample" style="background:#EFE3D0;color:#5C2A1E">
+          <span style="color:#C2502A">T</span>his is
+        </div>
+          <div class="chips"><div class="chip">
+      <div class="swatch" style="background:#EFE3D0"></div>
+      <div class="meta"><b>background</b><br>hex #EFE3D0<br>rgb(239,227,208)<br>RGB565 0xEF1A<br><span class="q">on-device ≈ #EEE2D5</span></div>
+    </div><div class="chip">
+      <div class="swatch" style="background:#5C2A1E"></div>
+      <div class="meta"><b>body text</b><br>hex #5C2A1E<br>rgb(92,42,30)<br>RGB565 0x5943<br><span class="q">on-device ≈ #5A2818</span></div>
+    </div><div class="chip">
+      <div class="swatch" style="background:#C2502A"></div>
+      <div class="meta"><b>focus letter</b><br>hex #C2502A<br>rgb(194,80,42)<br>RGB565 0xC285<br><span class="q">on-device ≈ #C55029</span></div>
+    </div></div>
+          <div class="contrast">body-text contrast vs bg: <b class="ok">9.18:1</b>
+          &nbsp;|&nbsp; focus vs bg: <b>3.70:1</b> (accent, not body)</div>
+        </div></div>
+    </section><section class="card">
+      <h2>Baby pastel pink <span class="tag">light / soft</span></h2>
+      <div class="variants"><div class="variant">
+          <h3>A (recommended)</h3>
+          <div class="sample" style="background:#F8D7E3;color:#5E2A4E">
+          <span style="color:#C0246A">T</span>his is
+        </div>
+          <div class="chips"><div class="chip">
+      <div class="swatch" style="background:#F8D7E3"></div>
+      <div class="meta"><b>background</b><br>hex #F8D7E3<br>rgb(248,215,227)<br>RGB565 0xFEBC<br><span class="q">on-device ≈ #FFD6E6</span></div>
+    </div><div class="chip">
+      <div class="swatch" style="background:#5E2A4E"></div>
+      <div class="meta"><b>body text</b><br>hex #5E2A4E<br>rgb(94,42,78)<br>RGB565 0x5949<br><span class="q">on-device ≈ #5A284A</span></div>
+    </div><div class="chip">
+      <div class="swatch" style="background:#C0246A"></div>
+      <div class="meta"><b>focus letter</b><br>hex #C0246A<br>rgb(192,36,106)<br>RGB565 0xC12D<br><span class="q">on-device ≈ #C5246A</span></div>
+    </div></div>
+          <div class="contrast">body-text contrast vs bg: <b class="ok">8.25:1</b>
+          &nbsp;|&nbsp; focus vs bg: <b>4.27:1</b> (accent, not body)</div>
+        </div><div class="variant">
+          <h3>B (softer pink, deeper plum)</h3>
+          <div class="sample" style="background:#FBE3EC;color:#4A1F44">
+          <span style="color:#B5176B">T</span>his is
+        </div>
+          <div class="chips"><div class="chip">
+      <div class="swatch" style="background:#FBE3EC"></div>
+      <div class="meta"><b>background</b><br>hex #FBE3EC<br>rgb(251,227,236)<br>RGB565 0xFF1D<br><span class="q">on-device ≈ #FFE2EE</span></div>
+    </div><div class="chip">
+      <div class="swatch" style="background:#4A1F44"></div>
+      <div class="meta"><b>body text</b><br>hex #4A1F44<br>rgb(74,31,68)<br>RGB565 0x48E8<br><span class="q">on-device ≈ #4A1C41</span></div>
+    </div><div class="chip">
+      <div class="swatch" style="background:#B5176B"></div>
+      <div class="meta"><b>focus letter</b><br>hex #B5176B<br>rgb(181,23,107)<br>RGB565 0xB0AD<br><span class="q">on-device ≈ #B4146A</span></div>
+    </div></div>
+          <div class="contrast">body-text contrast vs bg: <b class="ok">11.02:1</b>
+          &nbsp;|&nbsp; focus vs bg: <b>5.24:1</b> (accent, not body)</div>
+        </div></div>
+    </section><section class="card">
+      <h2>Matcha / sage green <span class="tag">calm</span></h2>
+      <div class="variants"><div class="variant">
+          <h3>A (recommended)</h3>
+          <div class="sample" style="background:#CBD8B0;color:#2C3A22">
+          <span style="color:#7A4A1E">T</span>his is
+        </div>
+          <div class="chips"><div class="chip">
+      <div class="swatch" style="background:#CBD8B0"></div>
+      <div class="meta"><b>background</b><br>hex #CBD8B0<br>rgb(203,216,176)<br>RGB565 0xCED6<br><span class="q">on-device ≈ #CDDAB4</span></div>
+    </div><div class="chip">
+      <div class="swatch" style="background:#2C3A22"></div>
+      <div class="meta"><b>body text</b><br>hex #2C3A22<br>rgb(44,58,34)<br>RGB565 0x29C4<br><span class="q">on-device ≈ #293820</span></div>
+    </div><div class="chip">
+      <div class="swatch" style="background:#7A4A1E"></div>
+      <div class="meta"><b>focus letter</b><br>hex #7A4A1E<br>rgb(122,74,30)<br>RGB565 0x7A43<br><span class="q">on-device ≈ #7B4818</span></div>
+    </div></div>
+          <div class="contrast">body-text contrast vs bg: <b class="ok">8.06:1</b>
+          &nbsp;|&nbsp; focus vs bg: <b>4.95:1</b> (accent, not body)</div>
+        </div><div class="variant">
+          <h3>B (lighter sage)</h3>
+          <div class="sample" style="background:#D8E2C2;color:#2A3A20">
+          <span style="color:#8A4B12">T</span>his is
+        </div>
+          <div class="chips"><div class="chip">
+      <div class="swatch" style="background:#D8E2C2"></div>
+      <div class="meta"><b>background</b><br>hex #D8E2C2<br>rgb(216,226,194)<br>RGB565 0xDF18<br><span class="q">on-device ≈ #DEE2C5</span></div>
+    </div><div class="chip">
+      <div class="swatch" style="background:#2A3A20"></div>
+      <div class="meta"><b>body text</b><br>hex #2A3A20<br>rgb(42,58,32)<br>RGB565 0x29C4<br><span class="q">on-device ≈ #293820</span></div>
+    </div><div class="chip">
+      <div class="swatch" style="background:#8A4B12"></div>
+      <div class="meta"><b>focus letter</b><br>hex #8A4B12<br>rgb(138,75,18)<br>RGB565 0x8A42<br><span class="q">on-device ≈ #8B4810</span></div>
+    </div></div>
+          <div class="contrast">body-text contrast vs bg: <b class="ok">9.03:1</b>
+          &nbsp;|&nbsp; focus vs bg: <b>5.03:1</b> (accent, not body)</div>
+        </div></div>
+    </section>
+<footer>WCAG target: body-text contrast ≥ 4.5:1 against the background (all variants here are well
+above that). The focus-letter contrast shown is vs the background; the focus letter is an accent
+that sits among the body text, mirroring how the existing Dark/Light themes use a red focus letter.
+These are AMOLED-bright backgrounds (always-lit), so they cost more power than true-black Dark mode —
+fine as opt-in themes, not as the default.</footer>
+</body></html>
