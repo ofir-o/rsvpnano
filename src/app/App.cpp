@@ -35,6 +35,8 @@ constexpr uint32_t kSoftOffWakeConfirmMs = Board::Config::SOFT_OFF_WAKE_CONFIRM_
 constexpr uint32_t kBatterySampleIntervalMs = 180000;
 constexpr uint32_t kPreviewBrowseHoldMs = 240;
 constexpr uint32_t kThemeToggleHoldMs = 900;
+// Hold-to-read: holding the reader-control button past this runs the words while held.
+constexpr uint32_t kHoldToReadMs = 400;
 constexpr uint32_t kScrollAnimationFrameMs = 16;
 constexpr uint16_t kSwipeThresholdPx = 40;
 constexpr uint16_t kAxisBiasPx = 12;
@@ -102,7 +104,6 @@ enum MenuItem : size_t {
   MenuResume,
   MenuChapters,
   MenuBooks,
-  MenuArticles,
   MenuFocusTimer,
   MenuSettings,
   MenuSdCardCheck,
@@ -119,7 +120,6 @@ enum RestructuredMenuItem : size_t {
   RestructuredMenuResume,
   RestructuredMenuChapters,
   RestructuredMenuBooks,
-  RestructuredMenuArticles,
   RestructuredMenuSettings,
   RestructuredMenuPowerOff,
   RestructuredMenuItemCount,
@@ -1382,19 +1382,47 @@ void App::handleBootButton(uint32_t nowMs) {
     return;
   }
 
+  // Hold-to-read: on the reader-control button, holding runs the words while held and releasing
+  // pauses instantly. (Boards that start standby on a hold keep that behavior instead; theme
+  // selection moved to Settings -> Display.)
+  if (!Board::Config::BOOT_BUTTON_HOLD_STARTS_STANDBY &&
+      Board::Config::BOOT_BUTTON_TOGGLES_READER && !holdToReadActive_ &&
+      (state_ == AppState::Paused || state_ == AppState::Playing) && button_.isHeld() &&
+      button_.heldDurationMs(nowMs) >= kHoldToReadMs) {
+    holdToReadActive_ = true;
+    bootButtonLongPressHandled_ = true;  // suppress the tap-toggle on release
+    if (state_ != AppState::Playing) {
+      playLocked_ = true;
+      pauseAtSentenceEndRequested_ = false;
+      wpmFeedbackVisible_ = false;
+      setState(AppState::Playing, nowMs);
+    }
+    return;
+  }
+
   if (button_.isHeld() && !bootButtonLongPressHandled_ &&
       button_.heldDurationMs(nowMs) >= kThemeToggleHoldMs) {
     bootButtonLongPressHandled_ = true;
     if (Board::Config::BOOT_BUTTON_HOLD_STARTS_STANDBY) {
       Serial.println("[button] BOOT hold -> standby");
       enterStandby(nowMs);
-    } else {
-      cycleThemeMode(nowMs);
     }
     return;
   }
 
   if (!button_.wasReleasedEvent()) {
+    return;
+  }
+
+  // Release ends a hold-to-read session by pausing immediately.
+  if (holdToReadActive_) {
+    holdToReadActive_ = false;
+    bootButtonLongPressHandled_ = false;
+    playLocked_ = false;
+    pauseAtSentenceEndRequested_ = false;
+    if (state_ == AppState::Playing) {
+      setState(AppState::Paused, nowMs);
+    }
     return;
   }
 
@@ -3507,9 +3535,6 @@ bool App::moveMenuSelection(int direction, bool wrap) {
         case RestructuredMenuBooks:
           selectedLabel = "Books";
           break;
-        case RestructuredMenuArticles:
-          selectedLabel = "Articles";
-          break;
         case RestructuredMenuSettings:
           selectedLabel = uiText(UiText::Settings);
           break;
@@ -3529,9 +3554,6 @@ bool App::moveMenuSelection(int direction, bool wrap) {
           break;
         case MenuBooks:
           selectedLabel = "Books";
-          break;
-        case MenuArticles:
-          selectedLabel = "Articles";
           break;
         case MenuFocusTimer:
           selectedLabel = "Focus Timer";
@@ -3634,9 +3656,6 @@ void App::selectMenuItem(uint32_t nowMs) {
       case RestructuredMenuBooks:
         openBookPicker(false);
         return;
-      case RestructuredMenuArticles:
-        openArticlesMenu();
-        return;
       case RestructuredMenuSettings:
         openSettings();
         return;
@@ -3674,9 +3693,6 @@ void App::selectMenuItem(uint32_t nowMs) {
       return;
     case MenuBooks:
       openBookPicker(false);
-      return;
-    case MenuArticles:
-      openBookPicker(true);
       return;
     case MenuFocusTimer:
       openFocusTimer();
@@ -6717,7 +6733,6 @@ void App::renderMainMenu() {
   items.push_back(uiText(UiText::Resume));
   items.push_back(uiText(UiText::Chapters));
   items.push_back("Books");
-  items.push_back("Articles");
   if (Board::Config::ENABLE_RESTRUCTURED_MENU) {
     items.push_back(uiText(UiText::Settings));
     items.push_back(uiText(UiText::PowerOff));
