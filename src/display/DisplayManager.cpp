@@ -1678,11 +1678,9 @@ void DisplayManager::drawBatteryBadge(int logicalWidth, int logicalHeight,
     return;
   }
 
+  // Battery stays pinned to the top-right corner (progress occupies the top-left).
   const int width = measureTinyTextWidth(batteryLabel_, kTinyScale);
-  const int x =
-      chrome.swapPreviousSentenceAndBattery
-          ? kReaderBatteryMarginX
-          : std::max(kReaderBatteryMarginX, logicalWidth - kReaderBatteryMarginX - width);
+  const int x = std::max(kReaderBatteryMarginX, logicalWidth - kReaderBatteryMarginX - width);
   const int y = logicalHeight > (kDisplayHeight * 2) ? kReaderBatteryMarginTop + 8
                                                       : kReaderBatteryMarginTop;
   drawTinyTextAt(batteryLabel_, x, y, footerColor(), kTinyScale);
@@ -1719,13 +1717,14 @@ void DisplayManager::drawBrightnessToastBadge(int logicalWidth, int logicalHeigh
 }
 
 void DisplayManager::drawPreviousSentenceHint(int logicalWidth, const ReaderChrome &chrome) {
+  // The top corners now hold progress (left) and battery (right), so the rewind hint moves to the
+  // bottom-right corner, opposite the chapter label.
+  (void)chrome;
   const String hint = "<<";
   const int width = measureTinyTextWidth(hint, kTinyScale);
-  const int x =
-      chrome.swapPreviousSentenceAndBattery
-          ? std::max(kReaderChromeMarginX, logicalWidth - kReaderChromeMarginX - width)
-          : kReaderChromeMarginX;
-  drawTinyTextAt(hint, x, kReaderChromeMarginTop, footerColor(), kTinyScale);
+  const int x = std::max(kReaderChromeMarginX, logicalWidth - kReaderChromeMarginX - width);
+  const int y = kDisplayHeight - kTinyGlyphHeight * kTinyScale - kReaderChromeMarginBottom;
+  drawTinyTextAt(hint, x, y, footerColor(), kTinyScale);
 }
 
 void DisplayManager::drawEdgeMenuHints(int logicalWidth, int logicalHeight,
@@ -1757,19 +1756,17 @@ void DisplayManager::drawFooter(const String &chapterLabel, const String &status
     return;
   }
 
-  const int y = kDisplayHeight - kTinyGlyphHeight * kTinyScale - kReaderChromeMarginBottom;
-  int maxChapterWidth = kDisplayWidth - (kReaderChromeMarginX * 2);
-
+  // Book progress lives in the top-left corner, mirroring the battery badge in the top-right.
   if (chrome.showProgress) {
     const String status = statusLabel.isEmpty() ? "0%" : statusLabel;
-    const int statusWidth = measureTinyTextWidth(status, kTinyScale);
-    const int rightX =
-        std::max(kReaderChromeMarginX, kDisplayWidth - kReaderChromeMarginX - statusWidth);
-    maxChapterWidth = std::max(0, rightX - kReaderChromeMarginX - 18);
-    drawTinyTextAt(status, rightX, y, footerColor(), kTinyScale);
+    drawTinyTextAt(status, kReaderBatteryMarginX, kReaderBatteryMarginTop, footerColor(),
+                   kTinyScale);
   }
 
+  // Chapter/section name stays along the bottom edge and may use the full width.
   if (chrome.showChapter) {
+    const int y = kDisplayHeight - kTinyGlyphHeight * kTinyScale - kReaderChromeMarginBottom;
+    const int maxChapterWidth = kDisplayWidth - (kReaderChromeMarginX * 2);
     const String chapter = fitTinyText(chapterLabel.isEmpty() ? "START" : chapterLabel,
                                       maxChapterWidth, kTinyScale);
     drawTinyTextAt(chapter, kReaderChromeMarginX, y, footerColor(), kTinyScale);
