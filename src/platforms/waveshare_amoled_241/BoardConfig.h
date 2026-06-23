@@ -121,4 +121,5 @@ constexpr int PIN_AUDIO_WS = -1;
 constexpr int PIN_AUDIO_DIN = -1;
 constexpr int PIN_AUDIO_DOUT = -1;
 constexpr uint8_t ES8311_ADDRESS = 0x00;
+constexpr bool TOUCH_ROTATED_180 = false;
 }  // namespace Board::Config
