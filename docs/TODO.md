@@ -5,6 +5,19 @@ buildable), `IN PROGRESS`, `DONE (verify)` (code done, needs on-device check), `
 
 When a piece of work finishes, pick the next item from here.
 
+## STATUS (overnight session)
+- **DONE (built green, flash to verify):** green-line fix, AXP2101 charging + battery icon + charging
+  bolt, 8 themes (Dark warmed + 6 palettes), clock (RTC), gyro auto-level (4-way), hold-to-read +
+  theme-off-hold, Articles removed, fonts (already existed), **Shuli** (#5), **bookmarks** (#7),
+  USB-sync error visibility, battery audit (`docs/battery-audit.md`).
+- **DEFERRED — needs hardware/assets, not safe to do blind:**
+  - **#11 Hebrew/RTL** — needs a Hebrew bitmap font asset + on-device RTL verification; doing it
+    blind risks regressing English. Scoped in task #11. (Biggest remaining task.)
+  - **#12 pinch-zoom** — the CST92xx driver is compiled single-touch (`kMaxTouchPoints = 1`); needs
+    the driver extended to 2 points and verified on hardware before adding pinch (don't risk the
+    primary input blind).
+  - **#1 continuous gyro** — 4-way snap shipped; true arbitrary-angle text needs a renderer rewrite.
+
 ## Difficulty order (easiest → hardest)
 1. **#4 Pastel themes** — easiest. Pure UI palette additions, no hardware/time deps.
 2. **#3 Hold-to-read mode** — easy. One localized input-mode change + a settings toggle.
