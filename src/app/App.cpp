@@ -6027,7 +6027,9 @@ void App::enterUsbTransfer(uint32_t nowMs) {
   activeBookStore_.close();
   if (!usbTransfer_.begin(true)) {
     Serial.printf("[app] USB transfer failed: %s\n", usbTransfer_.statusMessage());
-    display_.renderStatus("USB", usbTransfer_.statusMessage(), "Returning");
+    // Hold the failure reason on screen long enough to actually read it (it used to flash by).
+    display_.renderStatus("USB sync failed", usbTransfer_.statusMessage(), "Try Wi-Fi Sync instead");
+    delay(4000);
     storageReady_ = storageWasReady ? true : storage_.begin();
     if (storageReady_ && usingStorageBook_ && !currentBookPath_.isEmpty()) {
       const int refreshedBookIndex = findBookIndexByPath(currentBookPath_);
