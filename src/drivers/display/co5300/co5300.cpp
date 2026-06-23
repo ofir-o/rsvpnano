@@ -2,7 +2,9 @@
 
 #include <Arduino.h>
 #include <SPI.h>
+#include <cstring>
 #include <driver/spi_master.h>
+#include <esp_heap_caps.h>
 #include <esp_log.h>
 
 #include "board/BoardConfig.h"
@@ -198,6 +200,16 @@ void pushColors(Context &context, uint16_t x, uint16_t y, uint16_t width, uint16
   size_t pixelsRemaining = static_cast<size_t>(width) * height;
   const uint16_t *cursor = data;
 
+  // When the source frame lives in PSRAM (whole-frame flush boards), copy each chunk through an
+  // internal DMA-capable bounce buffer so the SPI transfer always reads from internal RAM.
+  uint16_t *bounce = nullptr;
+  if (Board::Config::DISPLAY_FLUSH_WHOLE_FRAME) {
+    static uint16_t *sBounce = static_cast<uint16_t *>(
+        heap_caps_malloc(static_cast<size_t>(kSendBufferPixels) * sizeof(uint16_t),
+                         MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL));
+    bounce = sBounce;
+  }
+
   // Round panels such as the 1.75 address the CO5300 RAM with a non-zero column start; existing
   // square panels keep both offsets at zero so their windows are unchanged.
   const uint16_t colStart = static_cast<uint16_t>(x + Board::Config::DISPLAY_COL_OFFSET);
@@ -212,13 +224,19 @@ void pushColors(Context &context, uint16_t x, uint16_t y, uint16_t width, uint16
       chunkPixels = kSendBufferPixels;
     }
 
+    const uint16_t *txPtr = cursor;
+    if (bounce != nullptr) {
+      memcpy(bounce, cursor, chunkPixels * sizeof(uint16_t));
+      txPtr = bounce;
+    }
+
     spi_transaction_ext_t transaction = {};
     transaction.base.flags = SPI_TRANS_MODE_QIO;
     transaction.base.cmd = 0x32;
     transaction.base.addr = static_cast<uint32_t>(firstSend ? kRamWriteCommand
                                                             : kRamWriteContinueCommand)
                             << 8;
-    transaction.base.tx_buffer = cursor;
+    transaction.base.tx_buffer = txPtr;
     transaction.base.length = chunkPixels * 16;
 
     ESP_ERROR_CHECK(

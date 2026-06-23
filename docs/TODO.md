@@ -104,7 +104,8 @@ gamified reading-streak companion.
 ### 6. Round-screen reader chrome cleanup  — READY-ish
 **My understanding:** on the round 1.75 the reader's corner labels get clipped by the bezel. Wanted:
 - **Remove** the labels at **top-left, bottom-left, and bottom-right** (the ones cut off / unreadable).
-- **Keep** the **battery percentage at top-right** (currently looks good, not clipped).
+- **Top-right is actually the book progress %, not the battery.** Wanted: move **book progress % to
+  the top-left**, and put the **battery % at the top-right**.
 - **Add a small clock at the top** of the screen.
 - **Remove the small edge lines at the top and bottom** (the paused-reader swipe-handle hints).
 **Questions for you:**

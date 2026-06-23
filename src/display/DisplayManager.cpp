@@ -102,7 +102,12 @@ constexpr int kVirtualBufferHeight = kPanelNativeHeight;
 constexpr size_t kBytesPerPixel = sizeof(uint16_t);
 constexpr size_t kMaxChunkBytes = Board::Config::DISPLAY_TX_CHUNK_BYTES;
 constexpr int kTxBufferWidth = kDisplayWidth > kPanelNativeWidth ? kDisplayWidth : kPanelNativeWidth;
-constexpr int kMaxChunkPhysicalRows = kMaxChunkBytes / (kTxBufferWidth * kBytesPerPixel);
+// Boards that need a seam-free panel flush the whole frame in one address window, so the tx buffer
+// spans the full height (allocated in PSRAM). Others keep the small DMA-internal strip buffer.
+constexpr bool kFlushWholeFrame = Board::Config::DISPLAY_FLUSH_WHOLE_FRAME;
+constexpr int kMaxChunkPhysicalRows =
+    kFlushWholeFrame ? kPanelNativeHeight
+                     : static_cast<int>(kMaxChunkBytes / (kTxBufferWidth * kBytesPerPixel));
 static_assert(kMaxChunkPhysicalRows > 0, "Display chunk buffer must hold at least one row");
 
 constexpr size_t kTxBufferPixels = static_cast<size_t>(kTxBufferWidth) * kMaxChunkPhysicalRows;
@@ -1042,8 +1047,17 @@ bool DisplayManager::allocateBuffers() {
 
   if (txBuffer_ == nullptr) {
     txBufferBytes_ = kTxBufferPixels * sizeof(uint16_t);
-    txBuffer_ = static_cast<uint16_t *>(
-        heap_caps_malloc(txBufferBytes_, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL));
+    // A full-frame buffer is too large for internal DMA RAM, so place it in PSRAM; the CO5300
+    // driver bounces each DMA chunk through an internal buffer when the source is PSRAM. Strip
+    // buffers stay in internal DMA RAM as before.
+    if (kFlushWholeFrame) {
+      txBuffer_ = static_cast<uint16_t *>(
+          heap_caps_malloc(txBufferBytes_, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+    }
+    if (txBuffer_ == nullptr) {
+      txBuffer_ = static_cast<uint16_t *>(
+          heap_caps_malloc(txBufferBytes_, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL));
+    }
   }
 
   return virtualFrame_ != nullptr && txBuffer_ != nullptr;

@@ -150,4 +150,8 @@ constexpr bool CO5300_EXTRA_PANEL_TUNING = false;
 // Waveshare's working 1.75 demo drives the CO5300 QSPI bus at 40 MHz; 20 MHz produces green
 // vertical stripes on this panel. (2.16 / 1.8 V2 stay at their validated 20 MHz.)
 constexpr int DISPLAY_QSPI_CLOCK_HZ = 40000000;
+// Flush the whole frame in a single CO5300 address window (no per-strip restarts). The round panel
+// shows a steady seam line at every horizontal strip boundary otherwise. Requires a full-frame
+// PSRAM tx buffer; the CO5300 driver bounces each DMA chunk through internal RAM.
+constexpr bool DISPLAY_FLUSH_WHOLE_FRAME = true;
 }  // namespace Board::Config
