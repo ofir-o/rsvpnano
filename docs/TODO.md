@@ -12,6 +12,8 @@ When a piece of work finishes, pick the next item from here.
    trivial; the **clock** part is medium because it needs a time source (RTC/Wi-Fi/manual).
 4. **#7 Multiple bookmarks** — medium. Persistence (sidecar file) + create/list/jump UI, but no
    hardware or time deps.
+   - **#8 Battery-life audit** — the audit/report is easy; implementing findings ranges from easy
+     (timings/CPU freq) to medium. Slot it wherever; the report can be done anytime.
 5. **#1 Gyro auto-level** — medium-hard. Renderer already supports 4 orientations, so it's IMU →
    orientation wiring + debounce + on-device tuning.
 6. **#5 Reading Tamagotchi** — hardest. New subsystem: daily-goal tracking, persistence, time/day
@@ -111,6 +113,18 @@ gamified reading-streak companion.
   hint lines? (Could make this 1.75-only so other boards keep the hints.)
 - After removing three corners, should the remaining bottom-center area show anything (e.g. reading
   progress), or stay clean?
+
+### 8. Battery-life improvement audit  — IDEA, audit-first
+**My understanding:** review the whole firmware for ways to extend battery life, then implement the
+worthwhile ones. Areas to check: CPU frequency per state (RSVP/scroll/paused/menu/standby — already
+configurable), display brightness + auto-dim timing, AMOLED true-black usage (pastel themes cost
+power), touch/IMU/battery polling intervals, Wi-Fi radio left on, light vs deep sleep in standby,
+and the OLED refresh/flush rate. Deliver a findings list first, then targeted changes.
+**Questions for you:**
+- Priority: maximize battery even if it makes the UI slightly less snappy, or keep it snappy and
+  only take "free" wins?
+- Is idle standby/auto-off something you want re-enabled (it's currently effectively off on the
+  1.75 per your earlier request)? A screen-off-after-N-minutes is one of the biggest savers.
 
 ### 7. Multiple bookmarks  — IDEA, medium
 **My understanding:** beyond the automatic "resume where I left off," let me save several named/marked
