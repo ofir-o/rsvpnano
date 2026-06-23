@@ -249,6 +249,9 @@ constexpr size_t kSettingsDisplayRestructuredReaderBatteryIndex = 11;
 constexpr size_t kSettingsDisplayRestructuredReaderChapterIndex = 12;
 constexpr size_t kSettingsDisplayRestructuredReaderProgressIndex = 13;
 constexpr size_t kSettingsDisplayRestructuredMenuRepeatIndex = 14;
+// Optional trailing item, only present when Board::Config::READER_SHOW_CLOCK is
+// true (currently the AMOLED 1.75 with its onboard PCF85063 RTC).
+constexpr size_t kSettingsDisplayRestructuredSetClockIndex = 15;
 constexpr size_t kSettingsPacingReadingModeIndex = 1;
 constexpr size_t kSettingsPacingPauseModeIndex = 2;
 constexpr size_t kSettingsPacingWpmIndex = 3;
@@ -891,6 +894,7 @@ void App::begin() {
   logApp("Initializing hardware modules");
   const bool displayReady = display_.begin();
   updateBatteryStatus(bootStartedMs_, true);
+  updateClock(bootStartedMs_, true);
 
   if (displayReady) {
     display_.renderCenteredWord("READY");
@@ -962,6 +966,8 @@ void App::update(uint32_t nowMs) {
     return;
   }
 
+  const bool clockChanged = updateClock(nowMs);
+
   if (batteryWarningOverlayVisible_) {
     updateBatteryWarningOverlay(nowMs);
     if (batteryWarningOverlayVisible_) {
@@ -1005,7 +1011,8 @@ void App::update(uint32_t nowMs) {
     return;
   }
 
-  if (batteryChanged && (state_ == AppState::Paused || state_ == AppState::Playing)) {
+  if ((batteryChanged || clockChanged) &&
+      (state_ == AppState::Paused || state_ == AppState::Playing)) {
     renderActiveReader(nowMs);
   } else if (batteryChanged && state_ == AppState::Menu) {
     renderMenu();
@@ -2054,6 +2061,125 @@ bool App::updateBatteryStatus(uint32_t nowMs, bool force) {
     Serial.println("[power] battery not detected");
   }
   return true;
+}
+
+String App::formatClockLabel(const Board::Clock::DateTime &time) const {
+  char buf[6];
+  snprintf(buf, sizeof(buf), "%02u:%02u", static_cast<unsigned>(time.hour % 24),
+           static_cast<unsigned>(time.minute % 60));
+  return String(buf);
+}
+
+bool App::updateClock(uint32_t nowMs, bool force) {
+  if (!Board::Config::READER_SHOW_CLOCK) {
+    return false;
+  }
+
+  // A HH:MM clock only changes once a minute; sampling the RTC every 15 s keeps
+  // the display fresh shortly after the minute rolls over without busy polling.
+  constexpr uint32_t kClockSampleIntervalMs = 15000;
+  if (!force && (nowMs - lastClockSampleMs_) < kClockSampleIntervalMs) {
+    return false;
+  }
+  lastClockSampleMs_ = nowMs;
+
+  Board::Clock::DateTime time;
+  bool oscillatorStopped = false;
+  if (!Board::Clock::read(time, &oscillatorStopped)) {
+    clockAvailable_ = false;
+    if (!clockLabel_.isEmpty()) {
+      clockLabel_ = "";
+      display_.setClockLabel(clockLabel_);
+      return true;
+    }
+    return false;
+  }
+
+  clockAvailable_ = true;
+  // When the oscillator stopped (backup power lost) the time is unset; show
+  // dashes so the user knows to set it rather than trusting a stale value.
+  const String nextLabel = oscillatorStopped ? String("--:--") : formatClockLabel(time);
+  if (nextLabel == clockLabel_) {
+    return false;
+  }
+  clockLabel_ = nextLabel;
+  display_.setClockLabel(clockLabel_);
+  return true;
+}
+
+void App::openClockTimeEntry() {
+  Board::Clock::DateTime time;
+  bool oscillatorStopped = false;
+  String initial;
+  if (Board::Clock::read(time, &oscillatorStopped) && !oscillatorStopped) {
+    char buf[5];
+    snprintf(buf, sizeof(buf), "%02u%02u", static_cast<unsigned>(time.hour % 24),
+             static_cast<unsigned>(time.minute % 60));
+    initial = String(buf);
+  }
+
+  openTextEntry(TextEntryPurpose::ClockTime, "Set clock", "HH:MM (24h)",
+                "Enter 4 digits, e.g. 0930", initial, "", false, 4,
+                MenuScreen::SettingsDisplay);
+  // Digits live on the symbols keyboard; start there so the keypad is immediate.
+  textEntrySession_.mode = KeyboardMode::Symbols;
+  rebuildTextEntryButtons();
+  renderTextEntry();
+}
+
+void App::commitClockTimeEntry(const String &digits) {
+  if (digits.length() != 4) {
+    display_.renderStatus("Set clock", "Enter 4 digits", "HHMM e.g. 0930");
+    delay(1100);
+    renderTextEntry();
+    return;
+  }
+
+  for (size_t i = 0; i < digits.length(); ++i) {
+    if (!isDigit(digits[i])) {
+      display_.renderStatus("Set clock", "Digits only", "HHMM e.g. 0930");
+      delay(1100);
+      renderTextEntry();
+      return;
+    }
+  }
+
+  const int hour = (digits[0] - '0') * 10 + (digits[1] - '0');
+  const int minute = (digits[2] - '0') * 10 + (digits[3] - '0');
+  if (hour > 23 || minute > 59) {
+    display_.renderStatus("Set clock", "Out of range", "00:00 - 23:59");
+    delay(1100);
+    renderTextEntry();
+    return;
+  }
+
+  Board::Clock::DateTime time;
+  bool oscillatorStopped = false;
+  // Preserve the existing date when valid; otherwise seed a sane default so the
+  // RTC keeps a coherent calendar even though only HH:MM is user-visible.
+  if (!Board::Clock::read(time, &oscillatorStopped) || oscillatorStopped) {
+    time = Board::Clock::DateTime();
+  }
+  time.hour = static_cast<uint8_t>(hour);
+  time.minute = static_cast<uint8_t>(minute);
+  time.second = 0;
+
+  const bool ok = Board::Clock::set(time);
+  textEntrySession_ = TextEntrySession();
+  textEntryButtons_.clear();
+
+  if (ok) {
+    clockLabel_ = formatClockLabel(time);
+    display_.setClockLabel(clockLabel_);
+    lastClockSampleMs_ = 0;
+    display_.renderStatus("Set clock", "Time saved", clockLabel_);
+  } else {
+    display_.renderStatus("Set clock", "RTC write failed", "");
+  }
+  delay(900);
+  menuScreen_ = MenuScreen::SettingsDisplay;
+  rebuildSettingsMenuItems();
+  renderSettings();
 }
 
 void App::handleBatteryProtection(uint32_t nowMs) {
@@ -3971,6 +4097,11 @@ void App::selectRestructuredSettingsItem(uint32_t nowMs) {
         rebuildSettingsMenuItems();
         renderSettings();
         return;
+      case kSettingsDisplayRestructuredSetClockIndex:
+        if (Board::Config::READER_SHOW_CLOCK) {
+          openClockTimeEntry();
+        }
+        return;
       default:
         return;
     }
@@ -4629,6 +4760,10 @@ void App::commitTextEntry(uint32_t nowMs) {
       openWifiSettings();
       return;
     }
+    case TextEntryPurpose::ClockTime: {
+      commitClockTimeEntry(textEntrySession_.value);
+      return;
+    }
     case TextEntryPurpose::None:
     default:
       menuScreen_ = textEntrySession_.returnScreen;
@@ -4769,6 +4904,9 @@ void App::rebuildSettingsMenuItems() {
       settingsMenuItems_.push_back("Reading progress: " +
                                    onOffLabel(readerProgressVisibleWhilePlaying_));
       settingsMenuItems_.push_back("Menu repeat: " + menuRepeatDelayLabel(menuRepeatDelayMs_));
+      if (Board::Config::READER_SHOW_CLOCK) {
+        settingsMenuItems_.push_back("Set clock: " + clockSettingLabel());
+      }
     } else if (menuScreen_ == MenuScreen::SettingsPacing) {
       settingsMenuItems_.push_back(uiText(UiText::Back));
       settingsMenuItems_.push_back("Reading mode: " + readerModeLabel());
@@ -6914,6 +7052,16 @@ String App::batteryLabelModeLabel() const {
     default:
       return "Percentage";
   }
+}
+
+String App::clockSettingLabel() const {
+  if (!clockAvailable_) {
+    return "no RTC";
+  }
+  if (clockLabel_.isEmpty() || clockLabel_ == "--:--") {
+    return "not set";
+  }
+  return clockLabel_;
 }
 
 String App::screensaverModeLabel() const {

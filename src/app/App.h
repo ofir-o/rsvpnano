@@ -11,6 +11,7 @@
 #include "app/AppState.h"
 #include "app/MenuRepeat.h"
 #include "board/Board.h"
+#include "board/BoardClock.h"
 #include "book/BookMetadata.h"
 #include "display/DisplayManager.h"
 #include "input/InputButtons.h"
@@ -136,6 +137,7 @@ class App {
     None,
     WifiPassword,
     OtaOwner,
+    ClockTime,
   };
 
   enum class KeyboardMode : uint8_t {
@@ -212,6 +214,10 @@ class App {
   void applyTypographySettings(uint32_t nowMs, bool rerender = true);
   uint8_t currentBrightnessPercent() const;
   bool updateBatteryStatus(uint32_t nowMs, bool force = false);
+  bool updateClock(uint32_t nowMs, bool force = false);
+  String formatClockLabel(const Board::Clock::DateTime &time) const;
+  void openClockTimeEntry();
+  void commitClockTimeEntry(const String &digits);
   void handleBatteryProtection(uint32_t nowMs);
   void showLowBatteryWarning(uint32_t nowMs);
   void updateBatteryWarningOverlay(uint32_t nowMs);
@@ -408,6 +414,7 @@ class App {
   String currentBatteryLabel() const;
   String footerMetricModeLabel() const;
   String batteryLabelModeLabel() const;
+  String clockSettingLabel() const;
   String screensaverModeLabel() const;
   String standbyTimerLabel() const;
   uint32_t standbyTimerMs() const;
@@ -489,6 +496,9 @@ class App {
   uint32_t brightnessToastUntilMs_ = 0;
   uint32_t lastProgressSaveMs_ = 0;
   uint32_t lastBatterySampleMs_ = 0;
+  uint32_t lastClockSampleMs_ = 0;
+  String clockLabel_;
+  bool clockAvailable_ = false;
   uint32_t batteryRuntimeAnchorMs_ = 0;
   uint32_t lastBatteryLabelRefreshMs_ = 0;
   uint32_t lastScrollAnimationRenderMs_ = 0;
