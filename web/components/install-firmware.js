@@ -42,6 +42,7 @@ class InstallFirmware extends HTMLElement {
         manifest: "firmware/manifest-esp32-s3-touch-amoled-1.75.json",
         title: "Waveshare Touch AMOLED 1.75 — Cutesy Edition",
         badge: "Round AMOLED",
+        hideVersion: true,
         note: "Experimental build for the 1.75 inch round AMOLED board (CO5300 display, CST9217 touch). No SD slot: the library lives on internal flash, exposed over USB transfer (Wi-Fi optional).",
       },
       {
@@ -158,7 +159,7 @@ class InstallFirmware extends HTMLElement {
             </div>
             <div class="install-options">
               ${firmwareOptions.map((option) => `
-            <div class="install-option" data-manifest="${option.manifest}" data-title="${option.title}">
+            <div class="install-option" data-manifest="${option.manifest}" data-title="${option.title}" data-hide-version="${option.hideVersion ? "true" : ""}">
               <div class="install-option-head">
                 <strong class="fw-version">${option.title}</strong>
                 <span class="latest-badge"><span class="pulse-dot"></span>${option.badge}</span>
@@ -242,7 +243,9 @@ class InstallFirmware extends HTMLElement {
           option.dataset.available = "true";
           option.dataset.version = m.version;
           option.querySelector(".fw-version").textContent =
-            option.dataset.title + " - " + m.version;
+            option.dataset.hideVersion === "true"
+              ? option.dataset.title
+              : option.dataset.title + " - " + m.version;
           if (m.features) {
             const ul = option.querySelector(".feature-list");
             ul.innerHTML = m.features.map(f => "<li>" + f + "</li>").join("");
