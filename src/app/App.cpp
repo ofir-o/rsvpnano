@@ -948,6 +948,13 @@ void App::begin() {
   }
 
   touchInitialized_ = Input::Touch::begin();
+  if (displayReady && Board::Config::AXP2101_RECOVER_TOUCH_POWER_RAIL) {
+    // Opening the menu on this board needs a touch swipe, so a dead touch controller can't be
+    // diagnosed from Settings. Show the touch self-test result on screen at boot, no input needed.
+    display_.renderStatus("TOUCH", touchInitialized_ ? "DETECTED" : "NOT FOUND",
+                          touchInitialized_ ? "tap screen to test" : "chip not responding");
+    delay(2500);
+  }
   Board::Audio::begin();
   focusTimer_.begin();
   // Gyro/IMU auto-level. Reuses the same on-board QMI8658 (via Board::Imu) that
