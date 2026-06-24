@@ -164,4 +164,7 @@ constexpr bool READER_HIDE_SECONDARY_CHROME = true;
 // configure the AXP2101 charger (4.2 V / 200 mA) and detach the TS pin, otherwise the PMU refuses
 // to charge and the device dies the instant USB is removed.
 constexpr bool AXP2101_CONFIGURE_CHARGER = true;
+// The large PWR key is the reader/hold-to-read button here, so stop the AXP2101 from powering the
+// device off on a long press. Power-off lives on a BOOT-button hold (software shutdown path).
+constexpr bool AXP2101_DISABLE_LONG_PRESS_POWEROFF = true;
 }  // namespace Board::Config
