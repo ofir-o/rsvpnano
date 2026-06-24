@@ -37,6 +37,9 @@ constexpr uint32_t kPreviewBrowseHoldMs = 240;
 constexpr uint32_t kThemeToggleHoldMs = 900;
 // Hold-to-read: holding the reader-control button past this runs the words while held.
 constexpr uint32_t kHoldToReadMs = 400;
+// Hold BOTH buttons this long to force a real PMU power-off (cuts rails). Touch-independent way to
+// fully power-cycle the device (e.g. to recover a frozen touch controller) without the battery out.
+constexpr uint32_t kForceOffHoldMs = 3000;
 constexpr uint32_t kScrollAnimationFrameMs = 16;
 constexpr uint16_t kSwipeThresholdPx = 40;
 constexpr uint16_t kAxisBiasPx = 12;
@@ -1004,6 +1007,20 @@ void App::update(uint32_t nowMs) {
   handleKeyButton(nowMs);
   if (powerOffStarted_) {
     return;
+  }
+
+  // Two-button force power-off: hold BOTH buttons together to issue the real AXP2101 shutdown,
+  // cutting the rails for a full power cycle (recovers a frozen touch controller) without touch or
+  // removing the battery.
+  if (button_.isHeld() && powerButton_.isHeld()) {
+    if (bothButtonsHeldSinceMs_ == 0) {
+      bothButtonsHeldSinceMs_ = nowMs;
+    } else if (nowMs - bothButtonsHeldSinceMs_ >= kForceOffHoldMs) {
+      forceHardPowerOff();
+      return;
+    }
+  } else {
+    bothButtonsHeldSinceMs_ = 0;
   }
 
   const bool batteryChanged = updateBatteryStatus(nowMs);
@@ -6384,6 +6401,23 @@ void App::updateStandbyScreensaver(uint32_t nowMs, bool force) {
     display_.renderLifeScreensaver(*frame.cells, kStandbyLifeColumns, kStandbyLifeRows,
                                    frame.generation, frame.dimCells);
   }
+}
+
+void App::forceHardPowerOff() {
+  // Issue the real AXP2101 shutdown so the rails actually drop (unlike the recoverable soft-off),
+  // power-cycling peripherals such as a frozen touch controller. On USB the PMU usually re-powers
+  // and the ESP32 cold-boots; the restart() below is a safety net if VSYS is held alive.
+  Serial.println("[power] two-button force power-off; cutting PMU rails");
+  powerOffStarted_ = true;
+  saveReadingPosition(true);
+  display_.renderStatus("POWER OFF", "Cutting power...", "then press the big button");
+  delay(700);
+  display_.prepareForSleep();
+  Input::Touch::end();
+  touchInitialized_ = false;
+  Board::Power::releaseBatteryPowerHold();
+  delay(3000);
+  ESP.restart();
 }
 
 void App::enterPowerOff(uint32_t nowMs) {
