@@ -4,11 +4,14 @@
   "new_install_prompt_erase": false,
   "new_install_improv_wait_time": 0,
   "features": [
-    "Books and articles library",
+    "Books library on internal flash (no SD slot) — USB transfer or Wi-Fi",
     "Device-hosted web companion",
-    "RSS feed downloads",
-    "Internal-flash library (no SD slot) — USB transfer or Wi-Fi",
-    "Touch AMOLED 1.75 round profile"
+    "Touch AMOLED 1.75 round profile",
+    "New cutesy themes — pastels + warm darks",
+    "Poopik: a Tamagotchi pet you feed by reading!",
+    "Hold the big button to run the words",
+    "Per-book bookmarks (kept across updates)",
+    "Reading progress, clock & battery icon on screen"
   ],
   "builds": [
     {
