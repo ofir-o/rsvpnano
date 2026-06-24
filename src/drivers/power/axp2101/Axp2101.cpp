@@ -27,6 +27,9 @@ constexpr uint8_t kChargeVoltageReg = 0x64;      // constant-voltage target [2:0
 constexpr uint8_t kChargeCurrentReg = 0x62;      // constant charge current [4:0]
 constexpr uint8_t kPrechargeCurrentReg = 0x61;   // precharge current [3:0]
 constexpr uint8_t kTerminationCurrentReg = 0x63; // termination current [3:0]
+// LDO on/off control 0 (verified against XPowersLib AXP2101 constants): one enable bit per rail.
+constexpr uint8_t kLdoOnOffCtrl0Reg = 0x90;
+constexpr uint8_t kAldoRailMask = 0x0F; // ALDO1=bit0, ALDO2=bit1, ALDO3=bit2, ALDO4=bit3
 constexpr uint8_t kPowerKeyIrqMask = 0x0F;
 constexpr uint8_t kPowerKeyPositiveIrqMask = 0x01;
 constexpr uint8_t kPowerKeyNegativeIrqMask = 0x02;
@@ -39,6 +42,7 @@ constexpr uint32_t kPowerKeyPollIntervalMs = 20;
 
 struct Context {
   bool ready = false;
+  bool touchRailRecovered = false;
   bool powerButtonHeld = false;
   bool shortPressPending = false;
   bool longPressPending = false;
@@ -154,6 +158,32 @@ bool begin() {
     updateRegisterBits(kTerminationCurrentReg, 0x0F, 0x01);
     if (!updateRegisterBits(kChargerCtrlReg, 0x02, 0x02)) {
       Serial.println("[board] AXP2101 charge enable failed");
+    }
+  }
+
+  if (Board::Config::AXP2101_RECOVER_TOUCH_POWER_RAIL && !gContext.touchRailRecovered) {
+    // Run exactly once per boot: a later begin() re-init must not blip the display rail mid-use.
+    gContext.touchRailRecovered = true;
+    // Cold-boot the peripheral 3.x V rails so a brown-out-latched touch controller restarts from
+    // zero. We only ever toggle the ALDO rails (ALDO1..ALDO4); DCDC1 (the ESP32 system rail) is
+    // never touched, so there is no brick risk, and the display/RTC/IMU re-initialize afterwards.
+    // This runs before any display or touch init, so the brief power blip on those rails is
+    // indistinguishable from a normal cold boot.
+    uint8_t ldoState = 0;
+    if (readRegister(kLdoOnOffCtrl0Reg, ldoState)) {
+      const uint8_t aldoOn = static_cast<uint8_t>(ldoState & kAldoRailMask);
+      if (aldoOn != 0) {
+        Serial.printf("[board] AXP2101 cold-booting touch rail: 0x90=0x%02X aldo=0x%02X\n", ldoState,
+                      aldoOn);
+        writeRegister(kLdoOnOffCtrl0Reg, static_cast<uint8_t>(ldoState & ~aldoOn));
+        delay(200);
+        writeRegister(kLdoOnOffCtrl0Reg, ldoState);
+        delay(200);
+      } else {
+        Serial.println("[board] AXP2101 touch-rail recovery skipped (no ALDO rails enabled)");
+      }
+    } else {
+      Serial.println("[board] AXP2101 touch-rail recovery failed to read 0x90");
     }
   }
 

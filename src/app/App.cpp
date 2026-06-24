@@ -5190,6 +5190,10 @@ void App::rebuildSettingsMenuItems() {
       settingsMenuItems_.push_back(firmwareUpdateMenuLabel());
       settingsMenuItems_.push_back("Installed: " + firmwareVersionLabel());
       settingsMenuItems_.push_back("SD card check");
+      if (Board::Config::AXP2101_RECOVER_TOUCH_POWER_RAIL) {
+        // Non-interactive self-test line: shows whether the touch controller is answering on I2C.
+        settingsMenuItems_.push_back("Touch: " + touchStatusLabel());
+      }
     } else if (menuScreen_ == MenuScreen::SettingsDisplay) {
       settingsMenuItems_.push_back(uiText(UiText::Back));
       settingsMenuItems_.push_back("Theme: " + themeModeLabel());
@@ -5623,6 +5627,10 @@ String App::firmwareVersionLabel() const {
 #else
   return "dev";
 #endif
+}
+
+String App::touchStatusLabel() const {
+  return Input::Touch::isInitialized() ? "detected" : "NOT FOUND";
 }
 
 String App::uiText(UiText key) const { return Localization::text(uiLanguage_, key); }

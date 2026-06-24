@@ -127,4 +127,5 @@ constexpr bool DISPLAY_FLUSH_WHOLE_FRAME = false;
 constexpr bool READER_HIDE_SECONDARY_CHROME = false;
 constexpr bool AXP2101_CONFIGURE_CHARGER = false;
 constexpr bool AXP2101_DISABLE_LONG_PRESS_POWEROFF = false;
+constexpr bool AXP2101_RECOVER_TOUCH_POWER_RAIL = false;
 }  // namespace Board::Config
