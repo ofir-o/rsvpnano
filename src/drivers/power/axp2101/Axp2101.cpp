@@ -177,10 +177,12 @@ bool begin() {
   }
 
   if (Board::Config::AXP2101_DISABLE_LONG_PRESS_POWEROFF) {
-    // The PWR key is used as a reader/hold-to-read control on this board, so disable the PMU's
-    // long-press hardware shutdown (clear the long-press shutdown enable bit). The firmware still
-    // powers off via the software shutdown command (reg 0x10) on a BOOT-button hold.
-    updateRegisterBits(kPowerOffEnableReg, kLongPressShutdownMask, 0x00);
+    // The PWR key is used as a reader/hold-to-read control on this board, so disable BOTH PMU
+    // long-press hardware actions on it (shutdown AND restart) — otherwise a long hold restarts
+    // the device. The firmware still powers off via the software shutdown command (reg 0x10) on a
+    // BOOT-button hold.
+    updateRegisterBits(kPowerOffEnableReg,
+                       static_cast<uint8_t>(kLongPressShutdownMask | kLongPressRestartMask), 0x00);
   }
 
   gContext.powerButtonHeld = false;
