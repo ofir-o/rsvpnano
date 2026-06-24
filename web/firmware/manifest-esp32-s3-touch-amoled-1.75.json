@@ -18,6 +18,10 @@
         {
           "path": "rsvp-nano-esp32-s3-touch-amoled-1.75.bin",
           "offset": 0
+        },
+        {
+          "path": "rsvp-nano-esp32-s3-touch-amoled-1.75-app.bin",
+          "offset": 57344
         }
       ]
     }

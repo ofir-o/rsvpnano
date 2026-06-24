@@ -14,6 +14,14 @@ ROOT = Path(__file__).resolve().parents[1]
 WEB_FIRMWARE_DIR = ROOT / "web" / "firmware"
 BOOT_APP0_GLOB = "framework-arduinoespressif32*/tools/partitions/boot_app0.bin"
 
+# The NVS partition holds user settings that must survive a USB re-flash: bookmarks, reading
+# positions, theme, and pet state. (See partitions_16MB_ffat.csv — nvs @ 0x9000, size 0x5000.)
+# A single contiguous merged image would 0xFF-fill across this region and wipe it on every flash,
+# so the merged image is split into two parts that straddle NVS without touching it. ESP Web Tools
+# flashes each part at its own offset, leaving 0x9000..0xE000 (NVS) exactly as the device left it.
+NVS_OFFSET = 0x9000
+NVS_END = 0xE000
+
 FLASH_EXPORTS = (
     {
         "env": "waveshare_esp32s3",
@@ -170,15 +178,17 @@ def load_flash_parts(env: str) -> list[tuple[int, Path]]:
     return sorted(parts, key=lambda item: item[0])
 
 
-def merge_firmware(env: str, output: Path) -> None:
-    parts = load_flash_parts(env)
-    output.parent.mkdir(parents=True, exist_ok=True)
+def _merge_segment(segment: list[tuple[int, Path]], output: Path) -> int:
+    """Write one contiguous flash segment, 0xFF-filling gaps relative to its own start offset.
 
-    cursor = 0
+    Returns the flash offset the segment must be written at.
+    """
+    start = segment[0][0]
+    cursor = start
     with output.open("wb") as merged:
-        for offset, path in parts:
+        for offset, path in segment:
             if offset < cursor:
-                raise SystemExit(f"Overlapping flash part for {env}: {path}")
+                raise SystemExit(f"Overlapping flash part: {path}")
 
             gap = offset - cursor
             if gap > 0:
@@ -188,6 +198,34 @@ def merge_firmware(env: str, output: Path) -> None:
             data = path.read_bytes()
             merged.write(data)
             cursor += len(data)
+    return start
+
+
+def merge_firmware(env: str, output: Path) -> list[tuple[int, str]]:
+    """Build the web-flasher image(s) for an env, skipping the NVS region.
+
+    Returns the manifest part list as (offset, filename) tuples.
+    """
+    parts = load_flash_parts(env)
+    output.parent.mkdir(parents=True, exist_ok=True)
+
+    inside_nvs = [path for offset, path in parts if NVS_OFFSET <= offset < NVS_END]
+    if inside_nvs:
+        raise SystemExit(f"Flash part lands inside the preserved NVS region for {env}: {inside_nvs}")
+
+    low = [item for item in parts if item[0] < NVS_OFFSET]
+    high = [item for item in parts if item[0] >= NVS_END]
+
+    manifest_parts: list[tuple[int, str]] = []
+    if low:
+        low_start = _merge_segment(low, output)
+        manifest_parts.append((low_start, output.name))
+    if high:
+        high_output = output.with_name(f"{output.stem}-app{output.suffix}")
+        high_start = _merge_segment(high, high_output)
+        manifest_parts.append((high_start, high_output.name))
+
+    return manifest_parts
 
 
 def export_ota_binary(env: str, output: Path) -> None:
@@ -198,9 +236,12 @@ def export_ota_binary(env: str, output: Path) -> None:
     shutil.copy2(firmware_path, output)
 
 
-def update_manifest(path: Path, version: str) -> None:
+def update_manifest(path: Path, version: str, manifest_parts: list[tuple[int, str]]) -> None:
     manifest = json.loads(path.read_text())
     manifest["version"] = version
+    builds = manifest.get("builds")
+    if builds and manifest_parts:
+        builds[0]["parts"] = [{"path": name, "offset": offset} for offset, name in manifest_parts]
     path.write_text(json.dumps(manifest, indent=2) + "\n")
 
 
@@ -246,8 +287,8 @@ def main() -> int:
     for export in flash_exports:
         output = WEB_FIRMWARE_DIR / export["binary"]
         print(f"Exporting {export['label']} -> {output}")
-        merge_firmware(export["env"], output)
-        update_manifest(WEB_FIRMWARE_DIR / export["manifest"], args.version)
+        manifest_parts = merge_firmware(export["env"], output)
+        update_manifest(WEB_FIRMWARE_DIR / export["manifest"], args.version, manifest_parts)
 
     for export in ota_exports:
         ota_output = WEB_FIRMWARE_DIR / export["binary"]
