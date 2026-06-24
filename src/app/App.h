@@ -370,6 +370,7 @@ class App {
   void seedStandbyScreenOff(uint32_t nowMs);
   void updateStandbyScreensaver(uint32_t nowMs, bool force = false);
   void enterPowerOff(uint32_t nowMs);
+  void forceHardPowerOff();
   void enterSleep(uint32_t nowMs);
   void wakeFromSleep(bool fullPeripheralReset = false);
   bool restoreSavedBook(uint32_t nowMs);
@@ -624,6 +625,7 @@ class App {
   bool bootButtonReleasedSinceBoot_ = false;
   bool bootButtonLongPressHandled_ = false;
   bool holdToReadActive_ = false;
+  uint32_t bothButtonsHeldSinceMs_ = 0;
   bool powerButtonReleasedSinceBoot_ = false;
   bool powerButtonLongPressHandled_ = false;
   bool keyButtonReleasedSinceBoot_ = false;
