@@ -177,12 +177,13 @@ bool begin() {
   }
 
   if (Board::Config::AXP2101_DISABLE_LONG_PRESS_POWEROFF) {
-    // The PWR key is used as a reader/hold-to-read control on this board, so disable BOTH PMU
-    // long-press hardware actions on it (shutdown AND restart) — otherwise a long hold restarts
-    // the device. The firmware still powers off via the software shutdown command (reg 0x10) on a
-    // BOOT-button hold.
-    updateRegisterBits(kPowerOffEnableReg,
-                       static_cast<uint8_t>(kLongPressShutdownMask | kLongPressRestartMask), 0x00);
+    // The PWR key is the reader / hold-to-read button. The AXP2101 cannot fully ignore a long
+    // press (hardware always does power-off OR restart), so pick the least-destructive option:
+    // make a long press a recoverable RESTART (resumes reading) instead of a power-off, and push
+    // the trigger to its 10 s maximum. Real power-off is the two-button combo (firmware soft-off).
+    // Per XPowersLib, PWROFF_EN bit0 = 1 selects restart; reg 0x27 bits[3:2] set the off-level time.
+    updateRegisterBits(kPowerOffEnableReg, kLongPressRestartMask, kLongPressRestartMask);
+    updateRegisterBits(kIrqOffOnLevelCtrlReg, 0x0C, 0x0C);
   }
 
   gContext.powerButtonHeld = false;
