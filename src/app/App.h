@@ -561,7 +561,8 @@ class App {
   size_t quickSettingsSelectedIndex_ = 0;
   size_t quickSyncSelectedIndex_ = 0;
   size_t focusTimerGenreSelectedIndex_ = 0;
-  uint8_t standbyTimerIndex_ = 0;
+  // Default: sleep (screen off) after 2 minutes idle to save battery (index 2 == "2 min").
+  uint8_t standbyTimerIndex_ = 2;
   uint8_t brightnessLevelIndex_ = 4;
   uint8_t readerFontSizeIndex_ = 0;
   uint16_t menuRepeatDelayMs_ = MenuRepeat::kDefaultDelayMs;
@@ -662,7 +663,9 @@ class App {
   bool chapterLabelEnabled_ = true;
   FooterMetricMode footerMetricMode_ = FooterMetricMode::Percentage;
   BatteryLabelMode batteryLabelMode_ = BatteryLabelMode::Percent;
-  ScreensaverMode screensaverMode_ = ScreensaverMode::Life;
+  // Default to a real screen-off standby (AMOLED sleep) instead of an animation, so idle standby
+  // actually saves battery rather than redrawing a screensaver.
+  ScreensaverMode screensaverMode_ = ScreensaverMode::ScreenOff;
   PauseMode pauseMode_ = PauseMode::Instant;
   bool darkMode_ = true;
   bool nightMode_ = false;

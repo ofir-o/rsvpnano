@@ -828,7 +828,7 @@ void App::begin() {
   menuRepeatDelayMs_ = MenuRepeat::sanitizeDelayMs(
       preferences_.getUShort(kPrefMenuRepeatMs, MenuRepeat::kDefaultDelayMs));
   standbyTimerIndex_ = preferences_.getUChar(kPrefStandbyTimer, standbyTimerIndex_);
-  if (standbyTimerIndex_ > 4) {
+  if (standbyTimerIndex_ > 5) {
     standbyTimerIndex_ = 0;
   }
   switch (preferences_.getUChar(kPrefFooterMetricMode,
@@ -1809,7 +1809,7 @@ void App::reloadRuntimePreferences(uint32_t nowMs, bool rerender) {
   menuRepeatDelayMs_ = MenuRepeat::sanitizeDelayMs(
       preferences_.getUShort(kPrefMenuRepeatMs, MenuRepeat::kDefaultDelayMs));
   standbyTimerIndex_ = preferences_.getUChar(kPrefStandbyTimer, standbyTimerIndex_);
-  if (standbyTimerIndex_ > 4) {
+  if (standbyTimerIndex_ > 5) {
     standbyTimerIndex_ = 0;
   }
 
@@ -4141,7 +4141,7 @@ void App::selectSettingsItem(uint32_t nowMs) {
         renderSettings();
         return;
       case kSettingsDisplayStandbyTimerIndex:
-        standbyTimerIndex_ = static_cast<uint8_t>((standbyTimerIndex_ + 1) % 5);
+        standbyTimerIndex_ = static_cast<uint8_t>((standbyTimerIndex_ + 1) % 6);
         preferences_.putUChar(kPrefStandbyTimer, standbyTimerIndex_);
         lastActivityMs_ = nowMs;
         rebuildSettingsMenuItems();
@@ -4337,7 +4337,7 @@ void App::selectRestructuredSettingsItem(uint32_t nowMs) {
         renderSettings();
         return;
       case kSettingsDisplayRestructuredStandbyTimerIndex:
-        standbyTimerIndex_ = static_cast<uint8_t>((standbyTimerIndex_ + 1) % 5);
+        standbyTimerIndex_ = static_cast<uint8_t>((standbyTimerIndex_ + 1) % 6);
         preferences_.putUChar(kPrefStandbyTimer, standbyTimerIndex_);
         lastActivityMs_ = nowMs;
         rebuildSettingsMenuItems();
@@ -7452,10 +7452,12 @@ String App::standbyTimerLabel() const {
     case 1:
       return "1 min";
     case 2:
-      return "5 min";
+      return "2 min";
     case 3:
-      return "10 min";
+      return "5 min";
     case 4:
+      return "10 min";
+    case 5:
       return "30 min";
     case 0:
     default:
@@ -7468,10 +7470,12 @@ uint32_t App::standbyTimerMs() const {
     case 1:
       return 60UL * 1000UL;
     case 2:
-      return 5UL * 60UL * 1000UL;
+      return 2UL * 60UL * 1000UL;
     case 3:
-      return 10UL * 60UL * 1000UL;
+      return 5UL * 60UL * 1000UL;
     case 4:
+      return 10UL * 60UL * 1000UL;
+    case 5:
       return 30UL * 60UL * 1000UL;
     case 0:
     default:
