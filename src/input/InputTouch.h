@@ -23,6 +23,9 @@ struct Event {
 bool begin();
 void end();
 void cancel();
+// True when the controller last answered on the I2C bus. Surfaced in Settings as a touch self-test
+// so a dead/recovered touch chip can be diagnosed without a serial console.
+bool isInitialized();
 bool readEvent(Event &event);
 void setUiOrientation(Board::Config::UiOrientation orientation);
 void setUiRotated180(bool rotated180);

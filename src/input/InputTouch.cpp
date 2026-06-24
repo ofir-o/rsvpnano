@@ -151,6 +151,8 @@ void end() {
   gTouch.initialized = false;
 }
 
+bool isInitialized() { return gTouch.initialized; }
+
 void cancel() { resetRuntimeState(); }
 
 bool readEvent(Event &event) {
