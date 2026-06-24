@@ -102,7 +102,11 @@ void holdBacklightOffForDeepSleep() {
 
 void resetWakePeripherals() { Board::Power::resetWakePeripherals(); }
 
-void resetTouchController() { pulseDirectTouchResetPin(12, 12); }
+void resetTouchController() {
+  // Hold reset solidly low, then give the CST92xx generous time to boot before the I2C probe.
+  // A short pulse can leave a brown-out-hung controller unrecovered on the next start.
+  pulseDirectTouchResetPin(30, 120);
+}
 
 void deepSleepUntilConfiguredWake() {
   const int wakePin = Config::PIN_DEEP_SLEEP_WAKE;
