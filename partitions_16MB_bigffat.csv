@@ -1,0 +1,9 @@
+# Partition table for 16 MB ESP32-S3 boards with no SD slot (Waveshare AMOLED 1.75C). Stays fully
+# inside 16 MB (no flash-size change, so no boot risk) but drops the second OTA app slot -- this
+# device updates over USB, not OTA -- and hands that space to the FAT library partition. ffat grows
+# from ~6 MB to ~11 MB so a 3 MB book plus its word index fits. ffat ends exactly at 16 MB.
+# Name,     Type, SubType,  Offset,    Size,      Flags
+nvs,        data, nvs,      0x9000,    0x5000,
+otadata,    data, ota,      0xe000,    0x2000,
+app0,       app,  ota_0,    0x10000,   0x500000,
+ffat,       data, fat,      0x510000,  0xAF0000,
