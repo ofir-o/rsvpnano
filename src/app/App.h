@@ -352,6 +352,7 @@ class App {
   void selectSdCardRepairConfirmItem(uint32_t nowMs);
   void runSdCardRepair(uint32_t nowMs);
   void runSdCardCheck(uint32_t nowMs);
+  void runStorageUsage(uint32_t nowMs);
   void openUpdateConfirm();
   void selectUpdateConfirmItem(uint32_t nowMs);
   void openPowerOffConfirm(uint32_t nowMs);
