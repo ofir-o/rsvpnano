@@ -170,9 +170,9 @@ constexpr bool AXP2101_CONFIGURE_CHARGER = true;
 // The large PWR key is the reader/hold-to-read button here, so stop the AXP2101 from powering the
 // device off on a long press. Power-off lives on a BOOT-button hold (software shutdown path).
 constexpr bool AXP2101_DISABLE_LONG_PRESS_POWEROFF = true;
-// Touch (CST9217) can latch up after a brown-out / bad power-off and then stays dead through plain
-// resets because, on USB, its supply rail never drops. At boot, cold-boot the AXP2101 peripheral
-// rails (ALDO1..ALDO4) off->on so the controller restarts from zero. The ESP32 system rail (DCDC1)
-// is never touched; the display/RTC/IMU re-initialize normally right after.
-constexpr bool AXP2101_RECOVER_TOUCH_POWER_RAIL = true;
+// Touch recovery is handled by the correct reset pin (GPIO2) plus the CST9217 wake handshake; the
+// touch controller sits on an always-on rail, so the AXP2101 ALDO cold-boot never actually helped.
+// Leaving this off also removes the boot-time touch self-test banner and the Settings touch-check
+// line (both gated on this flag), which are no longer needed now that touch works.
+constexpr bool AXP2101_RECOVER_TOUCH_POWER_RAIL = false;
 }  // namespace Board::Config
