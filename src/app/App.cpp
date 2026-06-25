@@ -10,6 +10,9 @@
 #include <vector>
 
 #include "app/MenuRepeat.h"
+#include <esp_random.h>
+
+#include "board/BoardClock.h"
 #include "board/BoardConfig.h"
 #include "board/BoardStorage.h"
 #include "settings/PreferenceKeys.h"
@@ -24,7 +27,8 @@
 
 static const char *kAppTag = "app";
 constexpr uint32_t kOtaCheckTaskStackBytes = 10240;
-constexpr uint32_t kBootSplashMs = 750;
+// Boot welcome screen dwell time -- long enough to read the greeting, short enough to feel snappy.
+constexpr uint32_t kBootSplashMs = 1800;
 constexpr uint32_t kWpmFeedbackMs = 900;
 constexpr uint32_t kBrightnessToastMs = 1500;
 constexpr uint32_t kPowerOffHoldMs = 1600;
@@ -945,22 +949,18 @@ void App::begin() {
   updateBatteryStatus(bootStartedMs_, true);
   updateClock(bootStartedMs_, true);
 
+  // Boot shows only a warm welcome -- no READY / touch / loading clutter. bootStatusSilent_ keeps
+  // the storage/loading status screens from drawing over it until the boot splash ends.
+  bootStatusSilent_ = true;
   if (displayReady) {
-    display_.renderCenteredWord("READY");
-    logApp("Display init ok");
+    display_.renderStatus("Welcome back", pickWelcomeLine(), "");
+    logApp("Welcome screen shown");
   } else {
     ESP_LOGE(kAppTag, "Display init failed");
     Serial.println("[app] Display init failed");
   }
 
   touchInitialized_ = Input::Touch::begin();
-  if (displayReady && Board::Config::AXP2101_RECOVER_TOUCH_POWER_RAIL) {
-    // Opening the menu on this board needs a touch swipe, so a dead touch controller can't be
-    // diagnosed from Settings. Show the touch self-test result on screen at boot, no input needed.
-    display_.renderStatus("TOUCH", touchInitialized_ ? "DETECTED" : "NOT FOUND",
-                          touchInitialized_ ? "tap screen to test" : "chip not responding");
-    delay(2500);
-  }
   Board::Audio::begin();
   focusTimer_.begin();
   // Gyro/IMU auto-level. Reuses the same on-board QMI8658 (via Board::Imu) that
@@ -976,7 +976,6 @@ void App::begin() {
   return;
 #endif
 
-  display_.renderProgress("SD", "Loading books", "Use SD converter for EPUB", 0);
   storageReady_ = storage_.begin();
   const uint16_t savedWpm = preferences_.getUShort(kPrefWpm, reader_.wpm());
   reader_.setWpm(savedWpm);
@@ -1294,6 +1293,8 @@ void App::updateState(uint32_t nowMs) {
       return;
     }
 
+    // Welcome window is over: allow normal status rendering again and enter the reader.
+    bootStatusSilent_ = false;
     setState((playLocked_ || pauseAtSentenceEndRequested_) ? AppState::Playing : AppState::Paused,
              nowMs);
     return;
@@ -5662,6 +5663,64 @@ String App::firmwareVersionLabel() const {
 #endif
 }
 
+String App::pickWelcomeLine() {
+  static const char *const kGeneral[] = {
+      "Happy reading",
+      "Have fun",
+      "Enjoy",
+      "Let's read",
+      "Where were we?",
+      "Poopik missed you",
+      "Poopik is hungry",
+      "Poopik kept your spot warm",
+      "Feed Poopik some words",
+      "Poopik is purring for some reading",
+      "Hello there, smarty-pants",
+      "Good time to be unproductive",
+      "Well, well, well... look who's back",
+      "Procrastinating productively",
+      "Look at you, reading",
+      "Escaping reality?",
+      "Reality 2.0 is waiting for you",
+      "The words missed you",
+      "Ready when you are",
+      "One more chapter won't hurt",
+      "Let's get lost in a book",
+  };
+  static const char *const kMorning[] = {"Good morning", "Rise and read", "Have a good day"};
+  static const char *const kAfternoon[] = {"Good afternoon", "Perfect reading weather"};
+  static const char *const kEvening[] = {"Good evening", "Wind down with a few pages"};
+  static const char *const kNight[] = {"Good night", "Burning the midnight oil?"};
+
+  // ~1 in 3 boots: a greeting that fits the time of day, when the clock is set.
+  Board::Clock::DateTime time;
+  if (Board::Clock::read(time) && (esp_random() % 3u) == 0u) {
+    const uint8_t hour = static_cast<uint8_t>(time.hour % 24);
+    const char *const *pool = kNight;
+    size_t poolSize = sizeof(kNight) / sizeof(kNight[0]);
+    if (hour >= 5 && hour < 12) {
+      pool = kMorning;
+      poolSize = sizeof(kMorning) / sizeof(kMorning[0]);
+    } else if (hour >= 12 && hour < 17) {
+      pool = kAfternoon;
+      poolSize = sizeof(kAfternoon) / sizeof(kAfternoon[0]);
+    } else if (hour >= 17 && hour < 21) {
+      pool = kEvening;
+      poolSize = sizeof(kEvening) / sizeof(kEvening[0]);
+    }
+    return String(pool[esp_random() % poolSize]);
+  }
+
+  const size_t count = sizeof(kGeneral) / sizeof(kGeneral[0]);
+  const uint8_t last = preferences_.getUChar("welcomeLast", 0xFF);
+  size_t idx = esp_random() % count;
+  if (count > 1 && idx == last) {
+    idx = (idx + 1) % count;
+  }
+  preferences_.putUChar("welcomeLast", static_cast<uint8_t>(idx));
+  return String(kGeneral[idx]);
+}
+
 String App::touchStatusLabel() const {
   return Input::Touch::isInitialized() ? "detected" : "NOT FOUND";
 }
@@ -8354,6 +8413,10 @@ void App::renderStorageStatus(const char *title, const char *line1, const char *
   // "Book open failed" screen can show the real reason instead of a generic "check the log".
   if (title != nullptr && line2 != nullptr && line2[0] != '\0' && strstr(title, "fail") != nullptr) {
     lastStorageFailureDetail_ = line2;
+  }
+  // During the boot welcome window, keep the welcome on screen instead of flashing loading status.
+  if (bootStatusSilent_) {
+    return;
   }
   applyReaderUiOrientation();
   display_.renderProgress(title == nullptr ? "SD" : title, line1 == nullptr ? "" : line1,
