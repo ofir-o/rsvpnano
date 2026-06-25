@@ -72,7 +72,10 @@ constexpr uint32_t kFocusTimerCancelHoldMs = 850;
 constexpr size_t kContextPreviewWindowWords = 288;
 constexpr size_t kContextPreviewAnchorLeadWords = 112;
 constexpr size_t kContextPreviewMaxParagraphSnapWords = 48;
-constexpr uint32_t kProgressSaveIntervalMs = 15000;
+// Throttle the in-reading position autosave. Longer interval = fewer NVS writes = less flash-page
+// churn and rarer compaction stalls (the occasional ~1-2 s freeze on the current word). The
+// position is also force-saved on pause/standby/menu/power-off, so this is just a crash backstop.
+constexpr uint32_t kProgressSaveIntervalMs = 45000;
 constexpr uint32_t kUsbTransferExitHoldMs = 1200;
 constexpr size_t kTimeEstimateBlockWords = 256;
 constexpr size_t kTimeEstimateBlocksPerUpdate = 1;
@@ -6759,13 +6762,20 @@ void App::saveReadingPosition(bool force) {
     return;
   }
 
-  preferences_.putString(kPrefBookPath, currentBookPath_);
+  // While reading, the position is the ONLY value that changes. Writing the other keys (book path,
+  // word count, WPM, recent list) on every periodic autosave just churns the NVS flash page, which
+  // makes NVS compaction -- a blocking ~1-2 s flash erase that freezes the current word -- happen
+  // far more often. So the throttled autosave (force == false) writes only the position; the full
+  // metadata is persisted on real events (book open/close, pause, standby, power-off) via force.
   preferences_.putUInt(bookPositionKey(currentBookPath_).c_str(), static_cast<uint32_t>(wordIndex));
-  preferences_.putUInt(bookWordCountKey(currentBookPath_).c_str(),
-                       static_cast<uint32_t>(reader_.wordCount()));
   preferences_.putUInt(kPrefLegacyWordIndex, static_cast<uint32_t>(wordIndex));
-  preferences_.putUShort(kPrefWpm, reader_.wpm());
-  markBookRecent(currentBookPath_);
+  if (force) {
+    preferences_.putString(kPrefBookPath, currentBookPath_);
+    preferences_.putUInt(bookWordCountKey(currentBookPath_).c_str(),
+                         static_cast<uint32_t>(reader_.wordCount()));
+    preferences_.putUShort(kPrefWpm, reader_.wpm());
+    markBookRecent(currentBookPath_);
+  }
   lastSavedWordIndex_ = wordIndex;
   Serial.printf("[app] saved position word=%u book=%s\n", static_cast<unsigned int>(wordIndex),
                 currentBookPath_.c_str());
