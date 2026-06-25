@@ -215,7 +215,11 @@ class App {
   void toggleReaderPlaybackFromShortcut(uint32_t nowMs);
   void openMainMenu(uint32_t nowMs);
   void cycleBrightness(uint32_t nowMs);
+  // Step brightness up (+1) or down (-1); used by left/right swipe on the menu's Brightness row.
+  void stepBrightness(int direction, uint32_t nowMs);
   void cycleThemeMode(uint32_t nowMs);
+  // Step the theme palette and persist it; used by left/right swipe on the menu's Theme row.
+  void stepTheme(int direction, uint32_t nowMs);
   // Pastel palettes are the only themes now; these keep the palette selection valid and step it.
   void normalizeThemeToPalette();
   void stepThemePalette(int direction);
