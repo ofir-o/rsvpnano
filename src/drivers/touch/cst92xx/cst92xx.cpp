@@ -21,9 +21,32 @@ uint16_t clampPhysicalY(uint16_t y) {
 
 }  // namespace
 
+namespace {
+
+bool writeRegister16(TwoWire &wire, uint8_t address, uint8_t regHigh, uint8_t regLow) {
+  wire.beginTransmission(address);
+  wire.write(regHigh);
+  wire.write(regLow);
+  return wire.endTransmission(true) == 0;
+}
+
+}  // namespace
+
 namespace Cst92xxTouch {
 
 size_t packetLength() { return kPacketLength; }
+
+bool wake(TwoWire &wire, uint8_t address) {
+  // Mirror the factory SensorLib TouchDrvCST92xx bring-up: after the hardware reset the controller
+  // sits in boot mode, so step it into command mode (0xD101) and then back into normal scanning
+  // mode (0xD109). Without this a cold chip never starts reporting and won't ACK normal reads.
+  const bool enteredCommandMode = writeRegister16(wire, address, 0xD1, 0x01);
+  delay(10);
+  const bool enteredNormalMode = writeRegister16(wire, address, 0xD1, 0x09);
+  delay(10);
+  // Either ACK is enough to conclude the controller is alive on the bus.
+  return enteredCommandMode || enteredNormalMode;
+}
 
 bool readPacket(TwoWire &wire, uint8_t address, uint8_t *buffer, size_t len) {
   const uint8_t readCommand[] = {highByte(kReadCommand), lowByte(kReadCommand)};

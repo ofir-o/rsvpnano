@@ -7,7 +7,13 @@ namespace Board::Touch {
 
 TwoWire &wire() { return Wire; }
 
-void resetController() { Board::System::resetTouchController(); }
+void resetController() {
+  Board::System::resetTouchController();
+  // After the hardware reset, walk the CST9217 through the factory wake handshake so a cold chip
+  // (e.g. after a real power-off) starts scanning and answers on I2C. Without this the controller
+  // stays in boot mode and reads as "not found".
+  Cst92xxTouch::wake(wire(), Board::Config::TOUCH_I2C_ADDRESS);
+}
 
 bool ready() { return Board::Config::PIN_TOUCH_IRQ < 0 || !digitalRead(Board::Config::PIN_TOUCH_IRQ); }
 
