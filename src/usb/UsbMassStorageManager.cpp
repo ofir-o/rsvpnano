@@ -16,6 +16,15 @@
 namespace {
 
 constexpr uint16_t kUsbBlockSize = 512;
+// The internal-flash (FFat) library partition is wear-levelled and presents 4096-byte logical
+// sectors, not 512. USB mass storage can expose any power-of-two sector size, so accept up to 4 KB
+// (covers SD cards at 512 and FFat at 4096) instead of rejecting the flash volume outright.
+constexpr uint16_t kUsbMaxBlockSize = 4096;
+
+bool isSupportedSectorSize(uint16_t sectorSize) {
+  return sectorSize >= kUsbBlockSize && sectorSize <= kUsbMaxBlockSize &&
+         (sectorSize & (sectorSize - 1)) == 0;
+}
 
 void pulseUsbReconnect() {
 #if RSVP_USB_TRANSFER_ENABLED && CONFIG_TINYUSB_MSC_ENABLED && !ARDUINO_USB_MODE
@@ -127,8 +136,10 @@ bool UsbMassStorageManager::beginSdCard() {
   physicalDrive_ = 0xFF;
 
   if (sectorBuffer_ == nullptr) {
+    // Size the bounce buffer for the largest sector we accept (FFat's 4096-byte sectors), so the
+    // same buffer works for both SD cards (512) and the internal-flash library partition.
     sectorBuffer_ = static_cast<uint8_t *>(
-        heap_caps_malloc(kUsbBlockSize, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL));
+        heap_caps_malloc(kUsbMaxBlockSize, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL));
   }
   if (sectorBuffer_ == nullptr) {
     Serial.println("[usb-msc] failed to allocate DMA sector buffer");
@@ -154,11 +165,11 @@ bool UsbMassStorageManager::beginSdCard() {
       continue;
     }
 
-    if (sectorSize != kUsbBlockSize) {
-      Serial.printf("[usb-msc] unsupported SD geometry on drive %u: sectors=%lu sectorSize=%u\n",
+    if (!isSupportedSectorSize(sectorSize)) {
+      Serial.printf("[usb-msc] unsupported geometry on drive %u: sectors=%lu sectorSize=%u\n",
                     drive, static_cast<unsigned long>(sectorCount),
                     static_cast<unsigned int>(sectorSize));
-      statusMessage_ = "Unsupported SD geometry";
+      statusMessage_ = "Unsupported geometry";
       continue;
     }
 
