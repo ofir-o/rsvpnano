@@ -1311,10 +1311,14 @@ void App::updateState(uint32_t nowMs) {
       return;
     }
 
-    // Welcome window is over: allow normal status rendering again and enter the reader.
+    // Welcome window is over: allow normal status rendering again. Establish the reader state
+    // underneath, then open Poopik as the default opening screen -- a swipe right (back) drops
+    // straight into reading, and the bottom-edge swipe reopens the pet later.
     bootStatusSilent_ = false;
     setState((playLocked_ || pauseAtSentenceEndRequested_) ? AppState::Playing : AppState::Paused,
              nowMs);
+    openShuliScreen();
+    setState(AppState::Menu, nowMs);
     return;
   }
 
@@ -3708,7 +3712,7 @@ bool App::moveMenuSelection(int direction, bool wrap) {
           selectedLabel = "Books";
           break;
         case MenuShuli:
-          selectedLabel = "Shuli";
+          selectedLabel = "Poopik";
           break;
         case MenuFocusTimer:
           selectedLabel = "Focus Timer";
@@ -7253,7 +7257,7 @@ void App::renderMainMenu() {
   items.push_back(uiText(UiText::Chapters));
   items.push_back("Bookmarks");
   items.push_back("Books");
-  items.push_back("Shuli");
+  items.push_back("Poopik");
   items.push_back("Focus Timer");
   items.push_back(uiText(UiText::Settings));
   items.push_back("SD card check");

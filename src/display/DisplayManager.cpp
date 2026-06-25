@@ -3602,7 +3602,7 @@ void DisplayManager::renderShuliScreen(int mood, const String &status, const Str
   const int mx = cx;
   const int my = headY + static_cast<int>(R * 0.5f);
 
-  drawTinyTextCentered("Shuli", static_cast<int>(h * 0.06f), gold, 3);
+  drawTinyTextCentered("Poopik", static_cast<int>(h * 0.06f), gold, 3);
 
   // Body, tail, then ears behind the head.
   const int bodyCY = headY + static_cast<int>(R * 1.15f);
