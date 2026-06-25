@@ -934,6 +934,9 @@ void App::begin() {
   yellowModeEnabled_ = preferences_.getBool(kPrefYellowMode, yellowModeEnabled_);
   themePalette_ = themePaletteFromStored(
       preferences_.getUChar(kPrefThemePalette, static_cast<uint8_t>(themePalette_)));
+  // The plain dark/light/night/yellow themes were removed; only the pastel palettes remain. Force a
+  // palette and park the legacy mode booleans so old saves (or the default) land on a pastel.
+  normalizeThemeToPalette();
   applyHandednessSettings(0, false);
   applyDisplayPreferences(0, false);
   applyTypographySettings(0, false);
@@ -1923,6 +1926,7 @@ void App::reloadRuntimePreferences(uint32_t nowMs, bool rerender) {
   yellowModeEnabled_ = preferences_.getBool(kPrefYellowMode, yellowModeEnabled_);
   themePalette_ = themePaletteFromStored(
       preferences_.getUChar(kPrefThemePalette, static_cast<uint8_t>(themePalette_)));
+  normalizeThemeToPalette();
 
   reader_.setWpm(preferences_.getUShort(kPrefWpm, reader_.wpm()));
   applyReaderUiOrientation();
@@ -1973,59 +1977,32 @@ void App::cycleBrightness(uint32_t nowMs) {
   applyDisplayPreferences(nowMs);
 }
 
-void App::cycleThemeMode(uint32_t nowMs) {
-  // Cycle display modes as standalone options:
-  // Dark -> Light -> Night -> Yellow -> Terracotta -> Peach -> Olive -> Dark
-  // The pastel palettes override the dark/night/yellow colors when active; we
-  // park the booleans on Light (false/false/false) while a palette is selected
-  // so that clearing the palette lands on a sensible bright theme.
-  if (themePalette_ != DisplayManager::ThemePalette::None) {
-    switch (themePalette_) {
-      case DisplayManager::ThemePalette::Terracotta:
-        themePalette_ = DisplayManager::ThemePalette::Peach;
-        break;
-      case DisplayManager::ThemePalette::Peach:
-        themePalette_ = DisplayManager::ThemePalette::Olive;
-        break;
-      case DisplayManager::ThemePalette::Olive:
-        themePalette_ = DisplayManager::ThemePalette::Sage;
-        break;
-      case DisplayManager::ThemePalette::Sage:
-        themePalette_ = DisplayManager::ThemePalette::WarmGold;
-        break;
-      case DisplayManager::ThemePalette::WarmGold:
-        themePalette_ = DisplayManager::ThemePalette::BeigeRose;
-        break;
-      case DisplayManager::ThemePalette::BeigeRose:
-      default:
-        // Leave the palettes; return to the standard Dark theme.
-        themePalette_ = DisplayManager::ThemePalette::None;
-        darkMode_ = true;
-        nightMode_ = false;
-        yellowModeEnabled_ = false;
-        break;
-    }
-  } else if (yellowModeEnabled_) {
-    // Yellow -> first pastel palette (Terracotta).
-    yellowModeEnabled_ = false;
-    darkMode_ = false;
-    nightMode_ = false;
+void App::normalizeThemeToPalette() {
+  // Only the pastel palettes are offered now (dark/light/night/yellow removed). Park the legacy
+  // mode booleans and make sure a palette is always selected; old saves on a plain mode (palette
+  // None) land on Terracotta.
+  darkMode_ = false;
+  nightMode_ = false;
+  yellowModeEnabled_ = false;
+  if (themePalette_ == DisplayManager::ThemePalette::None) {
     themePalette_ = DisplayManager::ThemePalette::Terracotta;
-  } else if (nightMode_) {
-    yellowModeEnabled_ = true;
-    darkMode_ = false;
-    nightMode_ = false;
-  } else if (darkMode_) {
-    darkMode_ = false;
-    nightMode_ = false;
-  } else {
-    darkMode_ = true;
-    nightMode_ = true;
   }
+}
 
-  preferences_.putBool(kPrefYellowMode, yellowModeEnabled_);
-  preferences_.putBool(kPrefDarkMode, darkMode_);
-  preferences_.putBool(kPrefNightMode, nightMode_);
+void App::stepThemePalette(int direction) {
+  // Move through the pastel palettes (wrapping). direction > 0 = next, < 0 = previous.
+  normalizeThemeToPalette();
+  const int count = 6;  // Terracotta..BeigeRose are enum values 1..6
+  int current = static_cast<int>(themePalette_) - 1;  // 0-based index into the palettes
+  current = (current + (direction >= 0 ? 1 : -1) + count) % count;
+  themePalette_ = static_cast<DisplayManager::ThemePalette>(current + 1);
+}
+
+void App::cycleThemeMode(uint32_t nowMs) {
+  stepThemePalette(1);
+  preferences_.putBool(kPrefYellowMode, false);
+  preferences_.putBool(kPrefDarkMode, false);
+  preferences_.putBool(kPrefNightMode, false);
   preferences_.putUChar(kPrefThemePalette, static_cast<uint8_t>(themePalette_));
   Serial.printf("[display] theme=%s\n", themeModeLabel().c_str());
   applyDisplayPreferences(nowMs);
@@ -2812,6 +2789,8 @@ void App::applyPausedTouchGesture(const TouchEvent &event, uint32_t nowMs) {
           if (handlePreviousSentenceTap(event.x, event.y, nowMs)) {
             return;
           }
+          // A plain tap on the reading screen pauses reading.
+          setState(AppState::Paused, nowMs);
         }
       }
       return;
@@ -2883,6 +2862,11 @@ void App::applyPausedTouchGesture(const TouchEvent &event, uint32_t nowMs) {
     if (tapLike && previewBrowseMode) {
       contextViewVisible_ = false;
       renderActiveReader(nowMs);
+      return;
+    }
+    // A plain tap on the reading screen resumes reading.
+    if (tapLike) {
+      setState(AppState::Playing, nowMs);
     }
   }
 }

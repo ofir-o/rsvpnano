@@ -216,6 +216,9 @@ class App {
   void openMainMenu(uint32_t nowMs);
   void cycleBrightness(uint32_t nowMs);
   void cycleThemeMode(uint32_t nowMs);
+  // Pastel palettes are the only themes now; these keep the palette selection valid and step it.
+  void normalizeThemeToPalette();
+  void stepThemePalette(int direction);
   void cycleUiLanguage(uint32_t nowMs);
   void cycleReaderMode(uint32_t nowMs);
   void cycleHandednessMode(uint32_t nowMs);
@@ -686,7 +689,8 @@ class App {
   bool darkMode_ = true;
   bool nightMode_ = false;
   bool yellowModeEnabled_ = false;
-  DisplayManager::ThemePalette themePalette_ = DisplayManager::ThemePalette::None;
+  // Default to a pastel palette (plain dark/light/night/yellow themes were removed).
+  DisplayManager::ThemePalette themePalette_ = DisplayManager::ThemePalette::Terracotta;
   UiLanguage uiLanguage_ = UiLanguage::English;
   ReaderMode readerMode_ = ReaderMode::Rsvp;
   HandednessMode handednessMode_ = HandednessMode::Right;
