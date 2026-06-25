@@ -2417,7 +2417,8 @@ void App::updateBatteryWarningOverlay(uint32_t nowMs) {
 }
 
 void App::updateWpmFeedback(uint32_t nowMs) {
-  if (!wpmFeedbackVisible_ || state_ != AppState::Paused) {
+  if (!wpmFeedbackVisible_ ||
+      (state_ != AppState::Paused && state_ != AppState::Playing)) {
     return;
   }
 
@@ -2791,22 +2792,31 @@ void App::applyPausedTouchGesture(const TouchEvent &event, uint32_t nowMs) {
   }
 
   if (state_ == AppState::Playing) {
-    if (ended) {
-      pausedTouch_.active = false;
-      pausedTouchIntent_ = TouchIntent::None;
-      if (tapLike) {
-        if (handleBatteryBadgeTap(event.x, event.y, nowMs)) {
-          return;
-        }
-        if (handleFooterMetricTap(event.x, event.y, nowMs)) {
-          return;
-        }
-        if (handlePreviousSentenceTap(event.x, event.y, nowMs)) {
-          return;
+    // Allow a vertical drag to change reading speed while running, just like when paused.
+    if (pausedTouchIntent_ == TouchIntent::None && !previewBrowseMode &&
+        absDeltaY >= static_cast<int>(kSwipeThresholdPx) &&
+        absDeltaY > absDeltaX + static_cast<int>(kAxisBiasPx)) {
+      pausedTouchIntent_ = TouchIntent::Wpm;
+    }
+    if (pausedTouchIntent_ != TouchIntent::Wpm) {
+      if (ended) {
+        pausedTouch_.active = false;
+        pausedTouchIntent_ = TouchIntent::None;
+        if (tapLike) {
+          if (handleBatteryBadgeTap(event.x, event.y, nowMs)) {
+            return;
+          }
+          if (handleFooterMetricTap(event.x, event.y, nowMs)) {
+            return;
+          }
+          if (handlePreviousSentenceTap(event.x, event.y, nowMs)) {
+            return;
+          }
         }
       }
+      return;
     }
-    return;
+    // A speed gesture is in progress: fall through to the shared WPM handler below.
   }
 
   if (pausedTouchIntent_ == TouchIntent::None) {
@@ -8239,6 +8249,15 @@ void App::renderReaderWord() {
   const DisplayManager::ReaderChrome chrome = readerChrome();
   const bool showReaderFooter = readerFooterVisible();
   const String footerMetricLabel = readerFooterStatusLabel();
+  // Just after a speed change (including while running), keep the WPM number on each advancing word
+  // for a moment so the new reading speed is visible without pausing.
+  if (wpmFeedbackVisible_ && millis() < wpmFeedbackUntilMs_) {
+    display_.renderPhantomRsvpWordWithWpm(beforeText, reader_.currentWord(), afterText,
+                                          readerFontSizeIndex_, reader_.wpm(),
+                                          currentChapterLabel(), readingProgressPercent(),
+                                          showReaderFooter, footerMetricLabel, chrome);
+    return;
+  }
   display_.renderPhantomRsvpWord(beforeText, reader_.currentWord(), afterText,
                                  readerFontSizeIndex_, currentChapterLabel(),
                                  readingProgressPercent(), showReaderFooter, footerMetricLabel,
