@@ -184,6 +184,10 @@ class DisplayManager {
   void drawSerifGlyphScaledPercent(int x, int y, char c, uint16_t color, uint8_t scalePercent);
   void drawSerifGlyphScaledPercent(int x, int y, char c, uint16_t color, uint8_t scalePercent,
                                    ReaderTypeface typeface);
+  // Draws a Hebrew (or Hebrew+ASCII) word right-to-left at the given scale, with
+  // its left edge at x. scalePercent 100 == native Hebrew glyph size.
+  void drawHebrewWordVisual(const String &word, int x, int y, uint8_t scalePercent,
+                            uint16_t color);
   void fillVirtualRect(int x, int y, int width, int height, uint16_t color);
   void drawSerifTextAt(const String &text, int x, int y, uint16_t color, int divisor);
   void drawSerif70TextAt(const String &text, int x, int y, uint16_t color);

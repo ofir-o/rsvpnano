@@ -13,6 +13,7 @@
 #include "display/EmbeddedAtkinsonFont70.h"
 #include "display/EmbeddedOpenDyslexicFont.h"
 #include "display/EmbeddedOpenDyslexicFont70.h"
+#include "display/EmbeddedHebrewFont.h"
 #include "display/EmbeddedSerifFont.h"
 #include "display/EmbeddedSerifFont70.h"
 #include "text/LatinText.h"
@@ -662,7 +663,114 @@ int textLayoutWidth(const TextLayoutMetrics &layout) {
   return std::max(0, layout.maxX - layout.minX);
 }
 
+// --- Hebrew (right-to-left) support ---------------------------------------
+//
+// Hebrew letters are preserved through the text pipeline as their raw 2-byte
+// UTF-8 encoding (lead byte 0xD7 for the whole U+05D0..U+05EA block). The Latin
+// glyph path is byte-oriented and left-to-right, so for any word that contains
+// Hebrew we take a separate path: decode the bytes into "units" (a Hebrew
+// codepoint, or a single Latin byte), reverse the unit order for RTL, and lay
+// the visual run out left-to-right using the embedded Hebrew glyph font. ORP /
+// focus highlighting is skipped for Hebrew words -- they render centered.
+
+// Decode a Hebrew letter at byte offset i. Returns the number of bytes consumed
+// (2) and sets cp, or 0 if the bytes there are not a supported Hebrew letter.
+size_t decodeHebrewLetter(const String &word, size_t i, uint32_t &cp) {
+  const uint8_t b0 = static_cast<uint8_t>(word[i]);
+  if ((b0 & 0xE0) != 0xC0 || i + 1 >= word.length()) {
+    return 0;
+  }
+  const uint8_t b1 = static_cast<uint8_t>(word[i + 1]);
+  if ((b1 & 0xC0) != 0x80) {
+    return 0;
+  }
+  const uint32_t c = (static_cast<uint32_t>(b0 & 0x1F) << 6) | (b1 & 0x3F);
+  if (c < kEmbeddedHebrewFirstCodepoint || c > kEmbeddedHebrewLastCodepoint) {
+    return 0;
+  }
+  cp = c;
+  return 2;
+}
+
+bool wordIsHebrew(const String &word) {
+  for (size_t i = 0; i < word.length();) {
+    uint32_t cp = 0;
+    const size_t consumed = decodeHebrewLetter(word, i, cp);
+    if (consumed > 0) {
+      return true;
+    }
+    ++i;
+  }
+  return false;
+}
+
+ReaderGlyph hebrewGlyphForCodepoint(uint32_t cp) {
+  const uint32_t index = cp - kEmbeddedHebrewFirstCodepoint;
+  const EmbeddedHebrewGlyph &glyph = kEmbeddedHebrewGlyphs[index];
+  return {kEmbeddedHebrewBitmaps + glyph.bitmapOffset, glyph.xOffset, glyph.width, glyph.xAdvance,
+          kEmbeddedHebrewHeight};
+}
+
+struct HebrewPositionedGlyph {
+  ReaderGlyph glyph;
+  int x;  // left edge relative to cursor origin 0, already scaled
+};
+
+struct HebrewLayoutResult {
+  std::vector<HebrewPositionedGlyph> glyphs;
+  TextLayoutMetrics metrics;
+};
+
+// Lay out a Hebrew (possibly Hebrew+ASCII) word in visual left-to-right order at
+// the given scale. scalePercent 100 == native Hebrew glyph size (matches the
+// Large serif cell). Latin bytes inside the word reuse the serif glyphs.
+HebrewLayoutResult layoutHebrewWord(const String &word, uint8_t scalePercent) {
+  struct Unit {
+    bool hebrew;
+    uint32_t cp;
+    char latin;
+  };
+  std::vector<Unit> logical;
+  for (size_t i = 0; i < word.length();) {
+    uint32_t cp = 0;
+    const size_t consumed = decodeHebrewLetter(word, i, cp);
+    if (consumed > 0) {
+      logical.push_back({true, cp, 0});
+      i += consumed;
+    } else {
+      logical.push_back({false, 0, word[i]});
+      ++i;
+    }
+  }
+
+  HebrewLayoutResult result;
+  int cursorX = 0;
+  // Reverse for RTL: the last logical letter is drawn leftmost.
+  for (size_t k = logical.size(); k-- > 0;) {
+    const Unit &unit = logical[k];
+    const ReaderGlyph glyph =
+        unit.hebrew ? hebrewGlyphForCodepoint(unit.cp)
+                    : glyphFor(unit.latin, DisplayManager::ReaderTypeface::Standard);
+    const int xOffset = scaledSignedPercent(glyph.xOffset, scalePercent);
+    const int width = glyph.width == 0 ? 0 : scaledPercentDimension(glyph.width, scalePercent);
+    const int advance = std::max(1, scaledPercentDimension(glyph.xAdvance, scalePercent));
+    const int left = cursorX + xOffset;
+    updateTextLayoutBounds(result.metrics, left, width);
+    result.glyphs.push_back({glyph, left});
+    cursorX += advance;
+  }
+
+  if (result.metrics.hasPixels) {
+    result.metrics.focusCenterX = result.metrics.minX + (textLayoutWidth(result.metrics) / 2);
+  }
+  return result;
+}
+
 TextLayoutMetrics serifWordLayout(const String &word, int focusIndex, int divisor = 1) {
+  if (wordIsHebrew(word)) {
+    const uint8_t pct = divisor <= 1 ? 100 : static_cast<uint8_t>(std::max(1, 100 / divisor));
+    return layoutHebrewWord(word, pct).metrics;
+  }
   TextLayoutMetrics layout;
   int cursorX = 0;
   const bool trackFocus = focusIndex >= 0;
@@ -699,6 +807,9 @@ TextLayoutMetrics serifWordLayout(const String &word, int focusIndex, int diviso
 
 TextLayoutMetrics serifWordLayoutScaledPercent(const String &word, int focusIndex,
                                                uint8_t scalePercent) {
+  if (wordIsHebrew(word)) {
+    return layoutHebrewWord(word, scalePercent).metrics;
+  }
   TextLayoutMetrics layout;
   int cursorX = 0;
   const bool trackFocus = focusIndex >= 0;
@@ -735,6 +846,9 @@ TextLayoutMetrics serifWordLayoutScaledPercent(const String &word, int focusInde
 }
 
 TextLayoutMetrics serif70WordLayout(const String &word, int focusIndex) {
+  if (wordIsHebrew(word)) {
+    return layoutHebrewWord(word, 70).metrics;
+  }
   TextLayoutMetrics layout;
   int cursorX = 0;
   const bool trackFocus = focusIndex >= 0;
@@ -812,6 +926,11 @@ int orpOrdinalForLength(int length) {
 }
 
 int findFocusLetterIndex(const String &word) {
+  // Hebrew renders right-to-left and centered; the byte-indexed ORP pivot does
+  // not apply, so center the word (focusIndex < 0).
+  if (wordIsHebrew(word)) {
+    return -1;
+  }
   int wordCharacterCount = 0;
   for (size_t i = 0; i < word.length(); ++i) {
     if (isWordCharacter(word[i])) {
@@ -1644,6 +1763,62 @@ void DisplayManager::drawSerifGlyphScaledPercent(int x, int y, char c, uint16_t 
   }
 }
 
+void DisplayManager::drawHebrewWordVisual(const String &word, int x, int y, uint8_t scalePercent,
+                                          uint16_t color) {
+  if (scalePercent == 0) {
+    scalePercent = 100;
+  }
+  const HebrewLayoutResult layout = layoutHebrewWord(word, scalePercent);
+  for (const HebrewPositionedGlyph &positioned : layout.glyphs) {
+    const ReaderGlyph &glyph = positioned.glyph;
+    if (glyph.width == 0 || glyph.bitmap == nullptr) {
+      continue;
+    }
+    const int glyphHeight = glyph.height;
+    const int scaledWidth =
+        std::max(1, scalePercent == 100 ? static_cast<int>(glyph.width)
+                                        : scaledPercentDimension(glyph.width, scalePercent));
+    const int scaledHeight =
+        std::max(1, scalePercent == 100 ? glyphHeight
+                                        : scaledPercentDimension(glyphHeight, scalePercent));
+    const int glyphLeft = x + positioned.x;
+
+    for (int dstRow = 0; dstRow < scaledHeight; ++dstRow) {
+      const int dstY = y + dstRow;
+      if (dstY < 0 || dstY >= kVirtualBufferHeight) {
+        continue;
+      }
+      const int sourceYStart = (dstRow * glyphHeight) / scaledHeight;
+      const int sourceYEnd =
+          std::min(glyphHeight, ((dstRow + 1) * glyphHeight + scaledHeight - 1) / scaledHeight);
+      for (int dstCol = 0; dstCol < scaledWidth; ++dstCol) {
+        const int dstX = glyphLeft + dstCol;
+        if (dstX < 0 || dstX >= kVirtualBufferWidth) {
+          continue;
+        }
+        const int sourceXStart = (dstCol * glyph.width) / scaledWidth;
+        const int sourceXEnd =
+            std::min(static_cast<int>(glyph.width),
+                     ((dstCol + 1) * glyph.width + scaledWidth - 1) / scaledWidth);
+        uint32_t alphaSum = 0;
+        uint32_t sampleCount = 0;
+        for (int sourceY = sourceYStart; sourceY < sourceYEnd; ++sourceY) {
+          for (int sourceX = sourceXStart; sourceX < sourceXEnd; ++sourceX) {
+            alphaSum += glyph.bitmap[sourceY * glyph.width + sourceX];
+            ++sampleCount;
+          }
+        }
+        const uint8_t alpha = sampleCount == 0 ? 0 : static_cast<uint8_t>(alphaSum / sampleCount);
+        if (alpha < kGlyphAlphaThreshold) {
+          continue;
+        }
+        virtualFrame_[dstY * kVirtualBufferWidth + dstX] =
+            panelColor(blendOverBackground(color, alpha));
+      }
+    }
+  }
+}
+
 void DisplayManager::fillVirtualRect(int x, int y, int width, int height, uint16_t color) {
   const uint16_t panel = panelColor(color);
   const int xEnd = std::min(kVirtualBufferWidth, x + width);
@@ -2001,6 +2176,10 @@ void DisplayManager::drawRsvpAnchorGuide(int anchorX, int textY, int textHeight)
 }
 
 void DisplayManager::drawWordAt(const String &word, int x, int y, uint16_t color) {
+  if (wordIsHebrew(word)) {
+    drawHebrewWordVisual(word, x, y, 100, color);
+    return;
+  }
   int cursorX = x;
   const ReaderTypeface typeface = effectiveReaderTypefaceForText(word);
   for (size_t i = 0; i < word.length(); ++i) {
@@ -2019,6 +2198,11 @@ void DisplayManager::drawWordAt(const String &word, int x, int y, uint16_t color
 void DisplayManager::drawRsvpWordScaledAt(const String &word, int x, int y, int focusIndex,
                                           int divisor) {
   divisor = std::max(1, divisor);
+  if (wordIsHebrew(word)) {
+    const uint8_t pct = divisor <= 1 ? 100 : static_cast<uint8_t>(std::max(1, 100 / divisor));
+    drawHebrewWordVisual(word, x, y, pct, wordColor());
+    return;
+  }
   const bool highlightFocus = currentFocusHighlightEnabled();
   int cursorX = x;
   const ReaderTypeface typeface = effectiveReaderTypefaceForText(word);
@@ -2041,6 +2225,10 @@ void DisplayManager::drawRsvpWordScaledAt(const String &word, int x, int y, int 
 }
 
 void DisplayManager::drawRsvp70WordAt(const String &word, int x, int y, int focusIndex) {
+  if (wordIsHebrew(word)) {
+    drawHebrewWordVisual(word, x, y, 70, wordColor());
+    return;
+  }
   const bool highlightFocus = currentFocusHighlightEnabled();
   int cursorX = x;
   const ReaderTypeface typeface = effectiveReaderTypefaceForText(word);
@@ -2061,6 +2249,10 @@ void DisplayManager::drawRsvp70WordAt(const String &word, int x, int y, int focu
 
 void DisplayManager::drawRsvpWordScaledPercentAt(const String &word, int x, int y, int focusIndex,
                                                  uint8_t scalePercent) {
+  if (wordIsHebrew(word)) {
+    drawHebrewWordVisual(word, x, y, scalePercent, wordColor());
+    return;
+  }
   const bool highlightFocus = currentFocusHighlightEnabled();
   int cursorX = x;
   const ReaderTypeface typeface = effectiveReaderTypefaceForText(word);

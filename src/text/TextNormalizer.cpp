@@ -100,6 +100,16 @@ void appendDisplayApproximation(String &target, uint32_t codepoint) {
     return;
   }
 
+  // Preserve Hebrew letters (U+05D0..U+05EA) as their raw 2-byte UTF-8 so the
+  // display can render them right-to-left with the embedded Hebrew font. The
+  // single-byte Latin storage map has no room for them, so they pass through as
+  // UTF-8 (lead byte 0xD7 for this whole block).
+  if (codepoint >= 0x05D0 && codepoint <= 0x05EA) {
+    target += static_cast<char>(0xC0 | (codepoint >> 6));
+    target += static_cast<char>(0x80 | (codepoint & 0x3F));
+    return;
+  }
+
   if (codepoint >= 0xFF01 && codepoint <= 0xFF5E) {
     target += static_cast<char>(codepoint - 0xFEE0);
     return;
