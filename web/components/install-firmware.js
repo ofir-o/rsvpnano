@@ -40,10 +40,10 @@ class InstallFirmware extends HTMLElement {
       },
       {
         manifest: "firmware/manifest-esp32-s3-touch-amoled-1.75.json",
-        title: "Waveshare Touch AMOLED 1.75 — Cutesy Edition",
+        title: "Waveshare Touch AMOLED 1.75C — Cutesy Edition",
         badge: "Round AMOLED",
         hideVersion: true,
-        note: "Experimental build for the 1.75 inch round AMOLED board (CO5300 display, CST9217 touch). No SD slot: the library lives on internal flash, exposed over USB transfer (Wi-Fi optional).",
+        note: "Experimental build for the 1.75C round AMOLED board (CO5300 display, CST9217 touch, touch reset on GPIO2). No SD slot: the library lives on internal flash, exposed over USB transfer (Wi-Fi optional).",
       },
       {
         manifest: "firmware/manifest-esp32-s3-touch-amoled-2.16.json",
