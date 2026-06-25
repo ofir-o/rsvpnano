@@ -768,6 +768,9 @@ ReaderTextStyle readerTextStyle(uint8_t fontSizeLevel) {
       {100, kPhantomCurrentGapLarge, kPhantomAlphaLarge},
       {70, kPhantomCurrentGapMedium, kPhantomAlphaMedium},
       {50, kPhantomCurrentGapSmall, kPhantomAlphaSmall},
+      // Index 3: "Extra Large" -- bigger than the previous max. Routed through the scale-aware
+      // default render path (it is not index 1 or 2), so it renders at 120% with the large layout.
+      {120, kPhantomCurrentGapLarge, kPhantomAlphaLarge},
   };
 
   const size_t styleCount = sizeof(kStyles) / sizeof(kStyles[0]);
@@ -2529,7 +2532,7 @@ void DisplayManager::renderWordTickerView(const std::vector<ContextWord> &words,
   int gap = kWordTickerGapLarge;
   if (fontSizeLevel == 1) {
     gap = kWordTickerGapMedium;
-  } else if (fontSizeLevel >= 2) {
+  } else if (fontSizeLevel == 2) {  // Small only; Extra Large (index 3) keeps the large gap.
     gap = kWordTickerGapSmall;
   }
   gap = std::max(4, scaledPercentDimension(gap, style.scalePercent));

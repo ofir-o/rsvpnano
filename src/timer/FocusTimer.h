@@ -37,6 +37,7 @@ class FocusTimer {
   void update(uint32_t nowMs);
   void chooseGenre(Genre genre, uint32_t nowMs);
   void cancelActiveTimer(uint32_t nowMs);
+  void startTouchTimerByTap(uint32_t nowMs);
   void cycleTouchDuration();
   void stepTouchDuration(int direction);
   void setTouchDurationIndexForGenre(Genre genre, uint8_t index);
