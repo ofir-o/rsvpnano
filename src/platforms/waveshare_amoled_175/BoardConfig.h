@@ -117,7 +117,10 @@ constexpr int PIN_TOUCH_SCL = 14;
 // TP_INT is GPIO11, but as on the 2.16 we poll the CST92xx-family controller rather than gate
 // reads on the interrupt line, which some samples do not assert reliably.
 constexpr int PIN_TOUCH_IRQ = -1;
-constexpr int PIN_TOUCH_RST = 40;
+// This board is the 1.75*C* variant: it shares the plain 1.75's CST9217@0x5A touch on the same
+// SDA15/SCL14 bus, but its touch RESET line is GPIO2 (the plain 1.75 uses GPIO40). Driving the
+// wrong reset pin leaves the controller held/unreleased so it never answers on I2C.
+constexpr int PIN_TOUCH_RST = 2;
 constexpr uint8_t TOUCH_I2C_ADDRESS = 0x5A;
 constexpr bool TOUCH_REQUIRES_MONITOR_MODE = false;
 constexpr bool TOUCH_RELEASE_BUS_BEFORE_READ = false;
