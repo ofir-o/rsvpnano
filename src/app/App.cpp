@@ -3869,6 +3869,37 @@ void App::openBookmarks() {
   renderBookmarks();
 }
 
+String App::bookmarkSnippetLabel(uint32_t wordIndex) const {
+  const size_t count = reader_.wordCount();
+  if (count == 0) {
+    return "Word " + String(wordIndex);
+  }
+  const size_t center = std::min<size_t>(wordIndex, count - 1);
+  const size_t start = center >= 3 ? center - 3 : 0;
+  const size_t end = std::min<size_t>(center + 3, count - 1);
+  String snippet;
+  for (size_t w = start; w <= end; ++w) {
+    String word = reader_.wordAt(w);
+    word.trim();
+    if (word.isEmpty()) {
+      continue;
+    }
+    if (!snippet.isEmpty()) {
+      snippet += " ";
+    }
+    snippet += word;
+  }
+  snippet.trim();
+  if (!snippet.isEmpty()) {
+    return snippet;
+  }
+  // Fall back to a position label if the words could not be read.
+  if (count > 1) {
+    return "At " + String((center * 100u) / (count - 1)) + " percent";
+  }
+  return "Word " + String(wordIndex);
+}
+
 void App::rebuildBookmarksMenu() {
   bookmarksMenuItems_.clear();
   bookmarksMenuItems_.push_back(uiText(UiText::Back));
@@ -3879,18 +3910,8 @@ void App::rebuildBookmarksMenu() {
   }
   bookmarkPositions_ = currentBookPath_.isEmpty() ? std::vector<uint32_t>()
                                                   : loadBookmarks(currentBookPath_);
-  const size_t wordCount = reader_.wordCount();
   for (size_t i = 0; i < bookmarkPositions_.size(); ++i) {
-    const uint32_t idx = bookmarkPositions_[i];
-    String label = "@ ";
-    if (wordCount > 1) {
-      const uint32_t clamped =
-          static_cast<uint32_t>(std::min<size_t>(idx, wordCount - 1));
-      label += String((clamped * 100u) / (wordCount - 1)) + "%";
-    } else {
-      label += "word " + String(idx);
-    }
-    bookmarksMenuItems_.push_back(label);
+    bookmarksMenuItems_.push_back(bookmarkSnippetLabel(bookmarkPositions_[i]));
   }
   if (!inBook && bookmarkPositions_.empty()) {
     bookmarksMenuItems_.push_back("(open a book first)");
