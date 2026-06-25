@@ -159,6 +159,16 @@ void FocusTimer::chooseGenre(Genre genre, uint32_t nowMs) {
   transitionTo(State::WaitForTouchStart, nowMs);
 }
 
+void FocusTimer::startTouchTimerByTap(uint32_t nowMs) {
+  // Tap-to-start: begin the touch focus session immediately, the same as placing the device on a
+  // short side would. Only valid from the "waiting to start" screen.
+  if (state_ != State::WaitForTouchStart) {
+    return;
+  }
+  startMode(TimerMode::Touch, nowMs, selectedTouchDurationMs(), stableOrientation_);
+  transitionTo(State::TouchRunning, nowMs);
+}
+
 void FocusTimer::cancelActiveTimer(uint32_t nowMs) {
   if (!timerRunning_) {
     return;

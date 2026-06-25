@@ -333,7 +333,7 @@ DisplayManager::ThemePalette themePaletteFromStored(uint8_t value) {
   }
 }
 
-constexpr size_t kReaderFontSizeCount = 3;
+constexpr size_t kReaderFontSizeCount = 4;
 constexpr size_t kPhantomBeforeCharTargets[] = {64, 96, 144};
 constexpr size_t kPhantomAfterCharTargets[] = {96, 144, 208};
 constexpr uint32_t kNoSavedWordIndex = 0xFFFFFFFFUL;
@@ -3182,6 +3182,22 @@ void App::applyFocusTimerTouch(const TouchEvent &event, uint32_t nowMs) {
     return;
   }
 
+  // Tap to start / stop the focus session (in addition to placing the device on its side).
+  const bool tapLike = absDeltaX <= static_cast<int>(kTapSlopPx) &&
+                       absDeltaY <= static_cast<int>(kTapSlopPx);
+  if (tapLike) {
+    if (focusTimer_.state() == FocusTimer::State::WaitForTouchStart) {
+      focusTimer_.startTouchTimerByTap(nowMs);
+      renderFocusTimerSession();
+      return;
+    }
+    if (focusTimer_.isActiveTimerRunning()) {
+      focusTimer_.cancelActiveTimer(nowMs);
+      renderFocusTimerSession();
+      return;
+    }
+  }
+
   if (focusTimer_.state() == FocusTimer::State::WaitForTouchStart &&
       absDeltaX >= static_cast<int>(kSwipeThresholdPx) &&
       absDeltaX > absDeltaY + static_cast<int>(kAxisBiasPx)) {
@@ -5803,8 +5819,10 @@ String App::readerFontSizeLabel() const {
     case 1:
       return uiText(UiText::Medium);
     case 2:
-    default:
       return uiText(UiText::Small);
+    case 3:
+    default:
+      return "Extra Large";
   }
 }
 
