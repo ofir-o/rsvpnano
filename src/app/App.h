@@ -401,6 +401,9 @@ class App {
   void openBookmarks();
   void renderBookmarks();
   void rebuildBookmarksMenu();
+  // Builds a readable bookmark label: a few words on either side of the saved word for sentence
+  // context (the current book is the one whose bookmarks are shown, so reader_.wordAt() is valid).
+  String bookmarkSnippetLabel(uint32_t wordIndex) const;
   void selectBookmarksItem(uint32_t nowMs);
   String bookRecentKey(const String &bookPath) const;
   uint32_t nextRecentSequence();
