@@ -145,6 +145,11 @@ class DisplayManager {
   // Shuli the cat. mood: 0=Happy 1=Needy 2=Grumpy 3=Sad 4=Sick 5=Miserable.
   void renderShuliScreen(int mood, const String &status, const String &stat, uint8_t goalPercent);
 
+  // Horizontal inset (px) from each left/right edge that a row at y must keep to stay inside the
+  // round panel's inscribed circle. 0 on rectangular panels. Public so screen layout in App can
+  // place keyboards/fields inside the circle too.
+  static int roundScreenEdgeInset(int y);
+
  private:
   bool initPanel();
   bool allocateBuffers();

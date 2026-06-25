@@ -55,6 +55,8 @@ constexpr int PANEL_NATIVE_WIDTH = 480;
 constexpr int PANEL_NATIVE_HEIGHT = 480;
 constexpr int DISPLAY_WIDTH = 480;
 constexpr int DISPLAY_HEIGHT = 480;
+// 2.16" is a 480x480 round AMOLED; keep UI inside the inscribed circle.
+constexpr bool DISPLAY_IS_ROUND = true;
 constexpr int DISPLAY_COL_OFFSET = 0;
 constexpr int DISPLAY_ROW_OFFSET = 0;
 constexpr int READER_CHROME_MARGIN_X = 48;
