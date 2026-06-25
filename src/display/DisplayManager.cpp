@@ -128,6 +128,21 @@ constexpr int kOpticalLetterGapPx = 2;
 constexpr int kVirtualBufferWidth = kDisplayWidth;
 constexpr int kVirtualBufferHeight = kPanelNativeHeight;
 
+// Extra slack (px) added to the circular inset so anti-aliased glyph edges and the bezel curve do
+// not shave content on the round panels.
+constexpr int kCircularSafetyPaddingPx = 8;
+
+// On the round AMOLED panels the visible glass is a circle inscribed in the square framebuffer, so
+// content anchored a fixed distance from a square edge spills past the glass near the corners.
+// circularSafeInsetForY(y) returns how far in from each (left/right) edge a row at y must stay to
+// remain inside the inscribed circle. Returns 0 on rectangular panels. The canonical maths live in
+// DisplayManager::roundScreenEdgeInset so screen layout in App can reuse it.
+inline int circularSafeInsetForY(int y) { return DisplayManager::roundScreenEdgeInset(y); }
+
+// Left/right safe x bounds for a horizontal span on the row at y (round-aware).
+inline int circularSafeLeftX(int y) { return circularSafeInsetForY(y); }
+inline int circularSafeRightX(int y) { return kVirtualBufferWidth - circularSafeInsetForY(y); }
+
 constexpr size_t kBytesPerPixel = sizeof(uint16_t);
 constexpr size_t kMaxChunkBytes = Board::Config::DISPLAY_TX_CHUNK_BYTES;
 constexpr int kTxBufferWidth = kDisplayWidth > kPanelNativeWidth ? kDisplayWidth : kPanelNativeWidth;
@@ -894,6 +909,21 @@ int rsvpStartX70(const String &word, int focusIndex, int virtualWidth, bool clam
 }
 
 }  // namespace
+
+int DisplayManager::roundScreenEdgeInset(int y) {
+  if (!Board::Config::DISPLAY_IS_ROUND) {
+    return 0;
+  }
+  const float radius = static_cast<float>(kVirtualBufferWidth) * 0.5f;
+  const float center = static_cast<float>(kVirtualBufferHeight) * 0.5f;
+  const float dy = static_cast<float>(y) - center;
+  if (dy <= -radius || dy >= radius) {
+    return static_cast<int>(radius);
+  }
+  const float halfChord = sqrtf(radius * radius - dy * dy);
+  const int inset = static_cast<int>(radius - halfChord) + kCircularSafetyPaddingPx;
+  return inset < 0 ? 0 : inset;
+}
 
 static const char *kDisplayTag = "display";
 
@@ -3085,11 +3115,17 @@ void DisplayManager::renderMenu(const std::vector<String> &items, size_t selecte
     const size_t itemIndex = firstVisible + row;
     const bool selected = itemIndex == selectedIndex;
     const uint16_t color = selected ? focusColor() : dimColor();
-    const int maxWidth = virtualWidth - kCompactMenuX - 16;
+    // Keep the row inside the inscribed circle on round panels: pull the left edge in and shrink the
+    // available width by the row's circular inset (worst case over the row's vertical extent).
+    const int rowInset = std::max(circularSafeInsetForY(y + 3),
+                                  circularSafeInsetForY(y + 3 + kTinyGlyphHeight * kTinyScale));
+    const int textX = std::max(kCompactMenuX, rowInset + 4);
+    const int maxWidth = std::max(16, (virtualWidth - rowInset) - textX);
     if (selected) {
-      fillVirtualRect(10, y + 2, 5, kTinyGlyphHeight * kTinyScale + 2, selectedBarColor());
+      fillVirtualRect(std::max(10, rowInset), y + 2, 5, kTinyGlyphHeight * kTinyScale + 2,
+                      selectedBarColor());
     }
-    drawTinyTextAt(fitTinyText(items[itemIndex], maxWidth, kTinyScale), kCompactMenuX, y + 3, color,
+    drawTinyTextAt(fitTinyText(items[itemIndex], maxWidth, kTinyScale), textX, y + 3, color,
                    kTinyScale);
     y += rowHeight;
   }
@@ -3157,21 +3193,25 @@ void DisplayManager::renderLibrary(const std::vector<LibraryItem> &items, size_t
     const bool selected = itemIndex == selectedIndex;
     const uint16_t titleColor = selected ? focusColor() : wordColor();
     const uint16_t subtitleColor = blendOverBackground(titleColor, kLibrarySubtitleAlpha);
-    const int maxWidth = virtualWidth - kLibraryInsetX - 16;
     const int rowY = y + static_cast<int>(row) * kLibraryRowHeight;
+    // Pull each row inside the inscribed circle on round panels (worst case over the row height).
+    const int rowInset = std::max(circularSafeInsetForY(rowY + 3),
+                                  circularSafeInsetForY(rowY + kLibraryRowHeight - 3));
+    const int textX = std::max(kLibraryInsetX, rowInset + 4);
+    const int maxWidth = std::max(16, (virtualWidth - rowInset) - textX);
 
     if (selected) {
-      fillVirtualRect(10, rowY + 3, 5, kLibraryRowHeight - 6, selectedBarColor());
+      fillVirtualRect(std::max(10, rowInset), rowY + 3, 5, kLibraryRowHeight - 6, selectedBarColor());
     }
 
     const String title = fitTinyText(item.title, maxWidth, kTinyScale);
     if (item.subtitle.isEmpty()) {
-      drawTinyTextAt(title, kLibraryInsetX, rowY + 12, titleColor, kTinyScale);
+      drawTinyTextAt(title, textX, rowY + 12, titleColor, kTinyScale);
       continue;
     }
 
-    drawTinyTextAt(title, kLibraryInsetX, rowY + kLibraryTitleYOffset, titleColor, kTinyScale);
-    drawTinyTextAt(fitTinyText(item.subtitle, maxWidth, kTinyScale), kLibraryInsetX,
+    drawTinyTextAt(title, textX, rowY + kLibraryTitleYOffset, titleColor, kTinyScale);
+    drawTinyTextAt(fitTinyText(item.subtitle, maxWidth, kTinyScale), textX,
                    rowY + kLibrarySubtitleYOffset, subtitleColor, kTinyScale);
   }
 
@@ -3226,11 +3266,17 @@ void DisplayManager::renderTextEntry(const String &title, const String &prompt, 
   const int virtualWidth = kDisplayWidth;
   const int virtualHeight = kDisplayHeight;
   const String headerText = title.isEmpty() ? helperText : title;
-  const int headerY = 4;
-  const int fieldX = 10;
-  const int fieldY = headerText.isEmpty() ? 8 : 14;
-  const int fieldWidth = virtualWidth - 20;
   const int fieldHeight = 28;
+  // On round panels the top of the screen is too narrow for a full-width field, so drop the
+  // title + field into the wider middle band (just above the keyboard) and inset the field to the
+  // inscribed circle. Rectangular panels keep the original top layout.
+  const bool roundPanel = Board::Config::DISPLAY_IS_ROUND;
+  const int headerY = roundPanel ? 86 : 4;
+  const int fieldY = roundPanel ? 110 : (headerText.isEmpty() ? 8 : 14);
+  const int fieldInset =
+      roundPanel ? std::max(10, roundScreenEdgeInset(fieldY)) : 10;
+  const int fieldX = fieldInset;
+  const int fieldWidth = virtualWidth - (2 * fieldX);
   constexpr uint8_t kFieldTextScalePercent = 36;
   const int fieldTextHeight = scaledPercentDimension(
       baseGlyphHeightForTypeface(effectiveReaderTypefaceForText(value.isEmpty() ? prompt : value)),

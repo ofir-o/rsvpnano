@@ -67,6 +67,8 @@ constexpr int PANEL_NATIVE_WIDTH = 466;
 constexpr int PANEL_NATIVE_HEIGHT = 466;
 constexpr int DISPLAY_WIDTH = 466;
 constexpr int DISPLAY_HEIGHT = 466;
+// Circular AMOLED inscribed in the square framebuffer: UI must stay inside the inscribed circle.
+constexpr bool DISPLAY_IS_ROUND = true;
 constexpr int DISPLAY_COL_OFFSET = 6;
 constexpr int DISPLAY_ROW_OFFSET = 0;
 // Round panel: keep reader text and corner chrome comfortably inside the inscribed circle so the

@@ -4981,6 +4981,9 @@ void App::rebuildTextEntryButtons() {
   }
 
   const uint16_t rowPitch = kKeyboardRowHeight + kKeyboardRowGap;
+  // On round panels the keyboard drops into the wide middle band; each row's horizontal margin is
+  // pulled in to the inscribed circle so keys never land on the curved bezel.
+  const int keyboardTopY = Board::Config::DISPLAY_IS_ROUND ? 150 : kKeyboardTopY;
   for (size_t rowIndex = 0; rowIndex < 3; ++rowIndex) {
     const String rowChars = keyboardRowText(static_cast<uint8_t>(textEntrySession_.mode), rowIndex);
     const size_t keyCount = rowChars.length();
@@ -4988,14 +4991,16 @@ void App::rebuildTextEntryButtons() {
       continue;
     }
 
+    const int y = keyboardTopY + static_cast<int>(rowIndex * rowPitch);
+    const int rowMargin = std::max<int>(
+        kKeyboardMarginX, DisplayManager::roundScreenEdgeInset(y + kKeyboardRowHeight / 2));
     const int availableWidth =
-        Board::Config::DISPLAY_WIDTH - (2 * kKeyboardMarginX) -
+        Board::Config::DISPLAY_WIDTH - (2 * rowMargin) -
         static_cast<int>((keyCount - 1) * kKeyboardRowGap);
-    const int keyWidth = std::max(28, availableWidth / static_cast<int>(keyCount));
+    const int keyWidth = std::max(20, availableWidth / static_cast<int>(keyCount));
     const int totalWidth =
         keyWidth * static_cast<int>(keyCount) + static_cast<int>((keyCount - 1) * kKeyboardRowGap);
     int x = std::max(0, (Board::Config::DISPLAY_WIDTH - totalWidth) / 2);
-    const int y = kKeyboardTopY + static_cast<int>(rowIndex * rowPitch);
 
     for (size_t charIndex = 0; charIndex < keyCount; ++charIndex) {
       TextEntryButton button;
@@ -5043,10 +5048,12 @@ void App::rebuildTextEntryButtons() {
 
   const size_t controlCount = sizeof(controls) / sizeof(controls[0]);
   const int totalGapWidth = static_cast<int>((controlCount - 1) * kKeyboardRowGap);
-  const int availableWidth = Board::Config::DISPLAY_WIDTH - (2 * kKeyboardMarginX) - totalGapWidth;
+  const uint16_t y = static_cast<uint16_t>(keyboardTopY) + static_cast<uint16_t>(3 * rowPitch);
+  const int controlMargin = std::max<int>(
+      kKeyboardMarginX, DisplayManager::roundScreenEdgeInset(y + kKeyboardRowHeight / 2));
+  const int availableWidth = Board::Config::DISPLAY_WIDTH - (2 * controlMargin) - totalGapWidth;
   int remainingWidth = availableWidth;
-  uint16_t x = kKeyboardMarginX;
-  const uint16_t y = kKeyboardTopY + static_cast<uint16_t>(3 * rowPitch);
+  uint16_t x = static_cast<uint16_t>(controlMargin);
 
   for (size_t i = 0; i < controlCount; ++i) {
     const ControlButtonDef &control = controls[i];
