@@ -5196,11 +5196,6 @@ void App::rebuildSettingsMenuItems() {
       settingsMenuItems_.push_back("Battery");
       settingsMenuItems_.push_back(firmwareUpdateMenuLabel());
       settingsMenuItems_.push_back("Installed: " + firmwareVersionLabel());
-      settingsMenuItems_.push_back("SD card check");
-      if (Board::Config::AXP2101_RECOVER_TOUCH_POWER_RAIL) {
-        // Non-interactive self-test line: shows whether the touch controller is answering on I2C.
-        settingsMenuItems_.push_back("Touch: " + touchStatusLabel());
-      }
     } else if (menuScreen_ == MenuScreen::SettingsDisplay) {
       settingsMenuItems_.push_back(uiText(UiText::Back));
       settingsMenuItems_.push_back("Theme: " + themeModeLabel());
