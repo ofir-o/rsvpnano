@@ -140,6 +140,21 @@ enum RestructuredMenuItem : size_t {
   RestructuredMenuItemCount,
 };
 
+// The merged single menu (small button / top-edge swipe). Brightness and Theme are adjusted in
+// place by a left/right swipe on their row (or cycled forward by a tap). Resume is gone (tapping
+// the reader toggles play/pause), the pet moved to the bottom-edge swipe, and power-off is via the
+// two-button combo -- so neither appears here.
+enum MergedMenuItem : size_t {
+  MergedMenuBrightness,
+  MergedMenuTheme,
+  MergedMenuBookmarks,
+  MergedMenuChapters,
+  MergedMenuBooks,
+  MergedMenuSettings,
+  MergedMenuSync,
+  MergedMenuItemCount,
+};
+
 enum ArticlesItem : size_t {
   ArticlesBack,
   ArticlesBrowse,
@@ -1721,7 +1736,8 @@ void App::openMainMenu(uint32_t nowMs) {
   pausedTouch_.active = false;
   pausedTouchIntent_ = TouchIntent::None;
   menuScreen_ = MenuScreen::Main;
-  menuSelectedIndex_ = MenuResume;
+  menuSelectedIndex_ =
+      Board::Config::ENABLE_RESTRUCTURED_MENU ? MergedMenuBookmarks : MenuResume;
   wpmFeedbackVisible_ = false;
   contextViewVisible_ = false;
   if (state_ == AppState::Playing) {
@@ -1981,6 +1997,30 @@ void App::cycleBrightness(uint32_t nowMs) {
   brightnessToastVisible_ = true;
   brightnessToastUntilMs_ = nowMs + kBrightnessToastMs;
   display_.setBrightnessOverlay(String(static_cast<unsigned int>(percent)) + "%");
+  applyDisplayPreferences(nowMs);
+}
+
+void App::stepBrightness(int direction, uint32_t nowMs) {
+  const int count = static_cast<int>(kBrightnessLevelCount);
+  int next = (static_cast<int>(brightnessLevelIndex_) + (direction >= 0 ? 1 : -1)) % count;
+  if (next < 0) {
+    next += count;
+  }
+  brightnessLevelIndex_ = static_cast<uint8_t>(next);
+  preferences_.putUChar(kPrefBrightness, brightnessLevelIndex_);
+  const uint8_t percent = currentBrightnessPercent();
+  brightnessToastVisible_ = true;
+  brightnessToastUntilMs_ = nowMs + kBrightnessToastMs;
+  display_.setBrightnessOverlay(String(static_cast<unsigned int>(percent)) + "%");
+  applyDisplayPreferences(nowMs);
+}
+
+void App::stepTheme(int direction, uint32_t nowMs) {
+  stepThemePalette(direction);
+  preferences_.putBool(kPrefYellowMode, false);
+  preferences_.putBool(kPrefDarkMode, false);
+  preferences_.putBool(kPrefNightMode, false);
+  preferences_.putUChar(kPrefThemePalette, static_cast<uint8_t>(themePalette_));
   applyDisplayPreferences(nowMs);
 }
 
@@ -2933,9 +2973,12 @@ bool App::handleBottomEdgeQuickSettingsSwipe(const TouchEvent &event, uint32_t n
 
   pausedTouch_.active = false;
   pausedTouchIntent_ = TouchIntent::None;
-  openQuickSettings(nowMs);
-  Serial.printf("[touch] bottom-edge quick settings swipe x=%u y=%u dy=%d\n", event.x,
-                event.y, deltaY);
+  if (state_ == AppState::Playing) {
+    saveReadingPosition(true);
+  }
+  openShuliScreen();
+  setState(AppState::Menu, nowMs);
+  Serial.printf("[touch] bottom-edge pet swipe x=%u y=%u dy=%d\n", event.x, event.y, deltaY);
   return true;
 }
 
@@ -3115,6 +3158,23 @@ void App::applyMenuTouchGesture(const TouchEvent &event, uint32_t nowMs) {
     menuRepeatMoved_ = false;
     menuRepeatNextMs_ = 0;
     return;
+  }
+
+  // On the merged main menu, a horizontal swipe on the Brightness or Theme row adjusts that value
+  // in place (right = up/next, left = down/previous) instead of backing out of the menu.
+  if (menuScreen_ == MenuScreen::Main && Board::Config::ENABLE_RESTRUCTURED_MENU &&
+      absDeltaX >= static_cast<int>(kSwipeThresholdPx) &&
+      absDeltaX > absDeltaY + static_cast<int>(kAxisBiasPx)) {
+    const int dir = deltaX > 0 ? 1 : -1;
+    // step{Brightness,Theme} re-render the menu (label refresh) via applyDisplayPreferences.
+    if (menuSelectedIndex_ == MergedMenuBrightness) {
+      stepBrightness(dir, nowMs);
+      return;
+    }
+    if (menuSelectedIndex_ == MergedMenuTheme) {
+      stepTheme(dir, nowMs);
+      return;
+    }
   }
 
   if (MenuRepeat::isRightSwipe(deltaX, deltaY, kSwipeThresholdPx, kAxisBiasPx)) {
@@ -3338,9 +3398,10 @@ bool App::navigateBackInMenu(uint32_t nowMs) {
       return true;
 
     case MenuScreen::Shuli:
+      // The pet is opened by the bottom-edge swipe (not the menu), so backing out returns to
+      // reading rather than the menu.
       shuli_.flush();
-      menuScreen_ = MenuScreen::Main;
-      renderMainMenu();
+      setState(AppState::Paused, nowMs);
       return true;
 
     case MenuScreen::Bookmarks:
@@ -3449,8 +3510,8 @@ bool App::navigateBackInMenu(uint32_t nowMs) {
       return true;
 
     case MenuScreen::QuickSync:
-      menuScreen_ = MenuScreen::QuickSettings;
-      renderQuickSettings();
+      menuScreen_ = MenuScreen::Main;
+      renderMainMenu();
       return true;
 
     case MenuScreen::FocusTimerGenres:
@@ -3471,7 +3532,7 @@ bool App::moveMenuSelection(int direction, bool wrap) {
 
   size_t *selectedIndex = &menuSelectedIndex_;
   size_t itemCount = Board::Config::ENABLE_RESTRUCTURED_MENU
-                         ? static_cast<size_t>(RestructuredMenuItemCount)
+                         ? static_cast<size_t>(MergedMenuItemCount)
                          : static_cast<size_t>(MenuItemCount);
   if (isSettingsMenuScreen(menuScreen_)) {
     selectedIndex = &settingsSelectedIndex_;
@@ -3608,26 +3669,26 @@ bool App::moveMenuSelection(int direction, bool wrap) {
     String selectedLabel = uiText(UiText::Resume);
     if (Board::Config::ENABLE_RESTRUCTURED_MENU) {
       switch (menuSelectedIndex_) {
-        case RestructuredMenuResume:
-          selectedLabel = uiText(UiText::Resume);
+        case MergedMenuBrightness:
+          selectedLabel = "Brightness";
           break;
-        case RestructuredMenuChapters:
-          selectedLabel = uiText(UiText::Chapters);
+        case MergedMenuTheme:
+          selectedLabel = "Theme";
           break;
-        case RestructuredMenuBookmarks:
+        case MergedMenuBookmarks:
           selectedLabel = "Bookmarks";
           break;
-        case RestructuredMenuBooks:
+        case MergedMenuChapters:
+          selectedLabel = uiText(UiText::Chapters);
+          break;
+        case MergedMenuBooks:
           selectedLabel = "Books";
           break;
-        case RestructuredMenuShuli:
-          selectedLabel = "Shuli";
-          break;
-        case RestructuredMenuSettings:
+        case MergedMenuSettings:
           selectedLabel = uiText(UiText::Settings);
           break;
-        case RestructuredMenuPowerOff:
-          selectedLabel = uiText(UiText::PowerOff);
+        case MergedMenuSync:
+          selectedLabel = "Sync";
           break;
         default:
           break;
@@ -3752,26 +3813,28 @@ void App::selectMenuItem(uint32_t nowMs) {
 
   if (Board::Config::ENABLE_RESTRUCTURED_MENU) {
     switch (menuSelectedIndex_) {
-      case RestructuredMenuResume:
-        setState(AppState::Paused, nowMs);
+      case MergedMenuBrightness:
+        // Tap cycles forward; a left/right swipe on this row steps up/down (see touch handler).
+        // cycleBrightness re-renders the menu (label refresh) via applyDisplayPreferences.
+        cycleBrightness(nowMs);
         return;
-      case RestructuredMenuChapters:
-        openChapterPicker();
+      case MergedMenuTheme:
+        cycleThemeMode(nowMs);
         return;
-      case RestructuredMenuBookmarks:
+      case MergedMenuBookmarks:
         openBookmarks();
         return;
-      case RestructuredMenuBooks:
+      case MergedMenuChapters:
+        openChapterPicker();
+        return;
+      case MergedMenuBooks:
         openBookPicker(false);
         return;
-      case RestructuredMenuShuli:
-        openShuliScreen();
-        return;
-      case RestructuredMenuSettings:
+      case MergedMenuSettings:
         openSettings();
         return;
-      case RestructuredMenuPowerOff:
-        enterPowerOff(nowMs);
+      case MergedMenuSync:
+        openQuickSync();
         return;
       default:
         return;
@@ -7165,21 +7228,25 @@ void App::renderMenu() {
 
 void App::renderMainMenu() {
   std::vector<String> items;
-  items.reserve(Board::Config::ENABLE_RESTRUCTURED_MENU
-                    ? static_cast<size_t>(RestructuredMenuItemCount)
-                    : static_cast<size_t>(MenuItemCount));
+  if (Board::Config::ENABLE_RESTRUCTURED_MENU) {
+    items.reserve(MergedMenuItemCount);
+    items.push_back(String("Brightness: ") + String(currentBrightnessPercent()) + "%");
+    items.push_back(String("Theme: ") + themeModeLabel());
+    items.push_back("Bookmarks");
+    items.push_back(uiText(UiText::Chapters));
+    items.push_back("Books");
+    items.push_back(uiText(UiText::Settings));
+    items.push_back("Sync");
+    display_.renderMenu(items, menuSelectedIndex_);
+    return;
+  }
+
+  items.reserve(MenuItemCount);
   items.push_back(uiText(UiText::Resume));
   items.push_back(uiText(UiText::Chapters));
   items.push_back("Bookmarks");
   items.push_back("Books");
   items.push_back("Shuli");
-  if (Board::Config::ENABLE_RESTRUCTURED_MENU) {
-    items.push_back(uiText(UiText::Settings));
-    items.push_back(uiText(UiText::PowerOff));
-    display_.renderMenu(items, menuSelectedIndex_);
-    return;
-  }
-
   items.push_back("Focus Timer");
   items.push_back(uiText(UiText::Settings));
   items.push_back("SD card check");
