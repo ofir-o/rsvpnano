@@ -5881,11 +5881,13 @@ void App::selectBookPickerItem(uint32_t nowMs) {
 
   const size_t bookIndex = bookPickerBookIndices_[rowIndex];
   saveReadingPosition(true);
+  lastStorageFailureDetail_ = "";
   if (!loadBookAtIndex(bookIndex, nowMs)) {
     Serial.println("[book-picker] Failed to load selected book");
-    display_.renderStatus("Book open failed", storage_.bookDisplayName(bookIndex),
-                          "Check serial log");
-    delay(1800);
+    const String reason =
+        lastStorageFailureDetail_.isEmpty() ? String("Check serial log") : lastStorageFailureDetail_;
+    display_.renderStatus("Book open failed", storage_.bookDisplayName(bookIndex), reason);
+    delay(4000);
     renderBookPicker();
     return;
   }
@@ -8286,6 +8288,11 @@ void App::renderWpmFeedback(uint32_t nowMs) {
 
 void App::renderStorageStatus(const char *title, const char *line1, const char *line2,
                               int progressPercent) {
+  // Remember the detail line of any failure the storage/index pipeline reports, so the higher-level
+  // "Book open failed" screen can show the real reason instead of a generic "check the log".
+  if (title != nullptr && line2 != nullptr && line2[0] != '\0' && strstr(title, "fail") != nullptr) {
+    lastStorageFailureDetail_ = line2;
+  }
   applyReaderUiOrientation();
   display_.renderProgress(title == nullptr ? "SD" : title, line1 == nullptr ? "" : line1,
                           line2 == nullptr ? "" : line2, progressPercent);

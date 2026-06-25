@@ -601,6 +601,10 @@ class App {
   std::unique_ptr<standby::Screensaver> screensaver_;
   String currentBookPath_;
   String currentBookTitle_;
+  // Last failure detail reported by the storage/index status callback (e.g. "SD write failed",
+  // "Memory limit reached"), surfaced on the "Book open failed" screen so it can be read without a
+  // serial console.
+  String lastStorageFailureDetail_;
   String pendingUpdateCurrentVersion_;
   String pendingUpdateNewVersion_;
   String batteryLabel_;
