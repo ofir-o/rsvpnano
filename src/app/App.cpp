@@ -1373,6 +1373,13 @@ void App::maybeSaveReadingPosition(uint32_t nowMs) {
     return;
   }
 
+  // Track the leading edge every loop (cheap, in-memory) so the "Latest progress" bookmark is
+  // always accurate even between throttled NVS writes.
+  const uint32_t current = static_cast<uint32_t>(reader_.currentIndex());
+  if (current > furthestWordIndex_) {
+    furthestWordIndex_ = current;
+  }
+
   if (nowMs - lastProgressSaveMs_ < kProgressSaveIntervalMs) {
     return;
   }
@@ -3920,8 +3927,15 @@ void App::rebuildBookmarksMenu() {
   bookmarksMenuItems_.push_back(uiText(UiText::Back));
   const bool inBook =
       usingStorageBook_ && !currentBookPath_.isEmpty() && reader_.wordCount() > 0;
+  bookmarksHasLatestRow_ = false;
   if (inBook) {
     bookmarksMenuItems_.push_back("+ Bookmark here");
+    // Offer a jump back to the leading edge when the reader is currently behind it (e.g. after
+    // jumping to an earlier bookmark). This auto-bookmark always tracks the furthest point read.
+    if (furthestWordIndex_ > static_cast<uint32_t>(reader_.currentIndex())) {
+      bookmarksHasLatestRow_ = true;
+      bookmarksMenuItems_.push_back("Latest progress  " + bookmarkSnippetLabel(furthestWordIndex_));
+    }
   }
   bookmarkPositions_ = currentBookPath_.isEmpty() ? std::vector<uint32_t>()
                                                   : loadBookmarks(currentBookPath_);
@@ -3964,6 +3978,16 @@ void App::selectBookmarksItem(uint32_t nowMs) {
       return;
     }
     firstBookmarkRow = 2;
+    if (bookmarksHasLatestRow_) {
+      if (bookmarksSelectedIndex_ == 2) {
+        reader_.seekTo(furthestWordIndex_);
+        saveReadingPosition(true);
+        playLocked_ = false;
+        setState(AppState::Paused, nowMs);
+        return;
+      }
+      firstBookmarkRow = 3;
+    }
   }
   const size_t markIdx = bookmarksSelectedIndex_ - firstBookmarkRow;
   if (markIdx < bookmarkPositions_.size()) {
@@ -6844,6 +6868,8 @@ void App::loadPendingBootBook(uint32_t nowMs) {
   paragraphStarts_.clear();
   currentBookPath_ = "";
   currentBookTitle_ = "Demo";
+  furthestWordIndex_ = 0;
+  lastSavedFurthestWordIndex_ = 0;
   reader_.begin(millis());
   invalidateContextPreviewWindow();
   Serial.println("[app] using built-in demo text");
@@ -6856,7 +6882,11 @@ void App::saveReadingPosition(bool force) {
   }
 
   const size_t wordIndex = reader_.currentIndex();
-  if (!force && wordIndex == lastSavedWordIndex_) {
+  if (static_cast<uint32_t>(wordIndex) > furthestWordIndex_) {
+    furthestWordIndex_ = static_cast<uint32_t>(wordIndex);
+  }
+  if (!force && wordIndex == lastSavedWordIndex_ &&
+      furthestWordIndex_ == lastSavedFurthestWordIndex_) {
     return;
   }
 
@@ -6867,6 +6897,10 @@ void App::saveReadingPosition(bool force) {
   // metadata is persisted on real events (book open/close, pause, standby, power-off) via force.
   preferences_.putUInt(bookPositionKey(currentBookPath_).c_str(), static_cast<uint32_t>(wordIndex));
   preferences_.putUInt(kPrefLegacyWordIndex, static_cast<uint32_t>(wordIndex));
+  if (furthestWordIndex_ != lastSavedFurthestWordIndex_) {
+    preferences_.putUInt(bookFurthestKey(currentBookPath_).c_str(), furthestWordIndex_);
+    lastSavedFurthestWordIndex_ = furthestWordIndex_;
+  }
   if (force) {
     preferences_.putString(kPrefBookPath, currentBookPath_);
     preferences_.putUInt(bookWordCountKey(currentBookPath_).c_str(),
@@ -6954,6 +6988,17 @@ bool App::loadBookAtIndex(size_t index, uint32_t nowMs,
   }
 
   {
+    // Restore the furthest-read marker. Never less than the position we just restored, so the
+    // "Latest progress" jump is always valid even for books saved before this feature existed.
+    furthestWordIndex_ = preferences_.getUInt(bookFurthestKey(currentBookPath_).c_str(), 0);
+    const uint32_t current = static_cast<uint32_t>(reader_.currentIndex());
+    if (current > furthestWordIndex_) {
+      furthestWordIndex_ = current;
+    }
+    lastSavedFurthestWordIndex_ = furthestWordIndex_;
+  }
+
+  {
     // Keep, rebuild, or invalidate the time estimate based on how the book was opened.
     if (options.rebuildTimeEstimate) {
       rebuildTimeEstimateCache();
@@ -6982,6 +7027,12 @@ String App::bookPositionKey(const String &bookPath) const {
 String App::bookWordCountKey(const String &bookPath) const {
   char key[10];
   std::snprintf(key, sizeof(key), "c%08lx", static_cast<unsigned long>(hashBookPath(bookPath)));
+  return String(key);
+}
+
+String App::bookFurthestKey(const String &bookPath) const {
+  char key[10];
+  std::snprintf(key, sizeof(key), "f%08lx", static_cast<unsigned long>(hashBookPath(bookPath)));
   return String(key);
 }
 

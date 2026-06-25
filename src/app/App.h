@@ -401,6 +401,7 @@ class App {
                        const BookOpenOptions &options = BookOpenOptions());
   String bookPositionKey(const String &bookPath) const;
   String bookWordCountKey(const String &bookPath) const;
+  String bookFurthestKey(const String &bookPath) const;
   String bookmarkKey(const String &bookPath) const;
   std::vector<uint32_t> loadBookmarks(const String &bookPath);
   void saveBookmarks(const String &bookPath, const std::vector<uint32_t> &marks);
@@ -550,6 +551,11 @@ class App {
   uint32_t lastLowBatteryWarningMs_ = 0;
   uint32_t batteryWarningRestoreAtMs_ = 0;
   size_t lastSavedWordIndex_ = static_cast<size_t>(-1);
+  // Furthest word ever reached in the current book. Never decreases when the reader jumps backward
+  // (e.g. to an earlier bookmark), so the Bookmarks menu can always offer a "Latest progress" jump
+  // back to the leading edge. Persisted per-book under bookFurthestKey() so it survives reopen.
+  uint32_t furthestWordIndex_ = 0;
+  uint32_t lastSavedFurthestWordIndex_ = 0;
   size_t contextPreviewStartIndex_ = 0;
   size_t contextPreviewCurrentLocalIndex_ = static_cast<size_t>(-1);
   size_t currentBookIndex_ = 0;
@@ -559,6 +565,10 @@ class App {
   size_t bookmarksSelectedIndex_ = 0;
   std::vector<String> bookmarksMenuItems_;
   std::vector<uint32_t> bookmarkPositions_;
+  // True when the Bookmarks menu currently shows the auto "Latest progress" row (sits between
+  // "+ Bookmark here" and the manual bookmarks). Recorded at rebuild time so selection math stays
+  // in sync with what is on screen.
+  bool bookmarksHasLatestRow_ = false;
   size_t settingsSelectedIndex_ = 0;
   size_t wifiNetworkSelectedIndex_ = 0;
   size_t bookPickerSelectedIndex_ = 0;
