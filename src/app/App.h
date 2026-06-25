@@ -661,7 +661,9 @@ class App {
   bool batteryRuntimeEstimateReady_ = false;
   uint8_t batteryCriticalSampleCount_ = 0;
   bool phantomWordsEnabled_ = true;
-  bool readerBatteryVisibleWhilePlaying_ = true;
+  // Hidden while the words are running (matches the book-progress label), for a clean reading view.
+  // Re-enable via Settings -> Display -> "Reading battery".
+  bool readerBatteryVisibleWhilePlaying_ = false;
   bool readerChapterVisibleWhilePlaying_ = false;
   bool readerProgressVisibleWhilePlaying_ = false;
   bool readerControlsSwapped_ = false;
