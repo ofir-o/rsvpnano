@@ -1132,8 +1132,12 @@ void App::updateIdleStandby(uint32_t nowMs) {
     return;
   }
 
-  Serial.println("[app] standby idle timeout reached");
-  enterStandby(nowMs);
+  Serial.println("[app] idle timeout reached -> light sleep");
+  // Drop into low-power light sleep (near-off, ~mA instead of the ~tens of mA the awake screen-off
+  // standby drew) so the device barely sips battery in a pocket/bag. It wakes on the small BOOT
+  // button and resumes exactly where you left off. lastActivityMs_ is reset inside wakeFromSleep so
+  // it does not immediately sleep again on wake.
+  enterSleep(nowMs);
 }
 
 const char *App::stateName(AppState state) const {
@@ -6651,6 +6655,8 @@ void App::wakeFromSleep(bool fullPeripheralReset) {
   wpmFeedbackVisible_ = false;
   menuScreen_ = MenuScreen::Main;
   lastStateLogMs_ = nowMs;
+  // Reset the idle timer so the device doesn't immediately fall back to sleep right after waking.
+  lastActivityMs_ = nowMs;
   state_ = AppState::Paused;
 
   const bool displayReady = fullPeripheralReset ? display_.begin() : display_.wakeFromSleep();
