@@ -328,6 +328,9 @@ class App {
   String firmwareUpdateMenuLabel() const;
   String firmwareVersionLabel() const;
   String touchStatusLabel() const;
+  // Picks the rotating second line for the boot welcome screen (time-aware ~1/3 of the time,
+  // otherwise a random nice/Poopik/funny line, avoiding an immediate repeat).
+  String pickWelcomeLine();
   String themeModeLabel() const;
   String phantomWordsLabel() const;
   String focusHighlightLabel() const;
@@ -609,6 +612,9 @@ class App {
   // "Memory limit reached"), surfaced on the "Book open failed" screen so it can be read without a
   // serial console.
   String lastStorageFailureDetail_;
+  // While true (during the boot welcome window), storage/loading status screens are not drawn so the
+  // welcome message stays on screen. Cleared when the boot splash ends.
+  bool bootStatusSilent_ = false;
   String pendingUpdateCurrentVersion_;
   String pendingUpdateNewVersion_;
   String batteryLabel_;
