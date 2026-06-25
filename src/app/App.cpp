@@ -11,6 +11,7 @@
 
 #include "app/MenuRepeat.h"
 #include "board/BoardConfig.h"
+#include "board/BoardStorage.h"
 #include "settings/PreferenceKeys.h"
 
 #ifndef RSVP_USB_TRANSFER_ENABLED
@@ -225,7 +226,9 @@ constexpr size_t kSettingsHomeRestructuredPacingIndex = 2;
 constexpr size_t kSettingsHomeRestructuredTypographyIndex = 3;
 constexpr size_t kSettingsHomeRestructuredWifiIndex = 4;
 constexpr size_t kSettingsHomeRestructuredBatteryIndex = 5;
-constexpr size_t kSettingsHomeRestructuredUpdateIndex = 6;
+// Slot 6 hosts "Storage" (library usage). It replaced the old "Firmware update" entry -- this board
+// updates over USB -- reusing the same index so nothing below it had to be renumbered.
+constexpr size_t kSettingsHomeRestructuredStorageIndex = 6;
 constexpr size_t kSettingsHomeRestructuredFirmwareVersionIndex = 7;
 constexpr size_t kSettingsHomeRestructuredSdCardIndex = 8;
 constexpr size_t kSettingsDisplayThemeIndex = 1;
@@ -4280,8 +4283,8 @@ void App::selectRestructuredSettingsItem(uint32_t nowMs) {
       case kSettingsHomeRestructuredBatteryIndex:
         openBatterySettings();
         return;
-      case kSettingsHomeRestructuredUpdateIndex:
-        runFirmwareUpdate(preferredOtaConfig(), false, nowMs);
+      case kSettingsHomeRestructuredStorageIndex:
+        runStorageUsage(nowMs);
         return;
       case kSettingsHomeRestructuredFirmwareVersionIndex:
         return;
@@ -5194,7 +5197,7 @@ void App::rebuildSettingsMenuItems() {
       settingsMenuItems_.push_back(uiText(UiText::TypographyTune));
       settingsMenuItems_.push_back("Wi-Fi");
       settingsMenuItems_.push_back("Battery");
-      settingsMenuItems_.push_back(firmwareUpdateMenuLabel());
+      settingsMenuItems_.push_back("Storage");
       settingsMenuItems_.push_back("Installed: " + firmwareVersionLabel());
     } else if (menuScreen_ == MenuScreen::SettingsDisplay) {
       settingsMenuItems_.push_back(uiText(UiText::Back));
@@ -6120,6 +6123,33 @@ void App::exitCompanionSync(uint32_t nowMs) {
   storage_.refreshBooks();
   menuScreen_ = MenuScreen::Main;
   setState(AppState::Paused, nowMs);
+}
+
+void App::runStorageUsage(uint32_t nowMs) {
+  (void)nowMs;
+  const uint64_t total = Board::Storage::totalBytes();
+  const uint64_t used = Board::Storage::usedBytes();
+  const uint64_t freeBytes = total > used ? total - used : 0;
+  const size_t books = storage_.bookCount();
+  const float toMb = 1.0f / (1024.0f * 1024.0f);
+  const String line1 =
+      "Free " + String(static_cast<float>(freeBytes) * toMb, 1) + " of " +
+      String(static_cast<float>(total) * toMb, 1) + " MB";
+  const String line2 = String(static_cast<unsigned int>(books)) +
+                       (books == 1 ? " book, " : " books, ") +
+                       String(static_cast<float>(used) * toMb, 1) + " MB used";
+  Serial.printf("[app] storage usage: %s | %s\n", line1.c_str(), line2.c_str());
+  display_.renderStatus("Storage", line1, line2);
+  delay(3500);
+
+  if (Board::Config::ENABLE_RESTRUCTURED_MENU && menuScreen_ == MenuScreen::SettingsHome) {
+    settingsSelectedIndex_ = kSettingsHomeRestructuredStorageIndex;
+    rebuildSettingsMenuItems();
+    renderSettings();
+    return;
+  }
+  menuScreen_ = MenuScreen::Main;
+  renderMenu();
 }
 
 void App::runSdCardCheck(uint32_t nowMs) {
