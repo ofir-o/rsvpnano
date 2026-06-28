@@ -16,6 +16,7 @@
 #include "board/BoardClock.h"
 #include "board/BoardConfig.h"
 #include "board/BoardStorage.h"
+#include "display/EmbeddedPoopik.h"  // kPoopikPurringFrameCount for the pet animation timing
 #include "settings/PreferenceKeys.h"
 
 #ifndef RSVP_USB_TRANSFER_ENABLED
@@ -3167,6 +3168,23 @@ void App::applyMenuTouchGesture(const TouchEvent &event, uint32_t nowMs) {
   pausedTouch_.active = false;
   menuRepeatDirection_ = 0;
 
+  // Reverse-gesture close (checked before the list-scroll handling so it wins). The main menu opens
+  // with a top-edge down-swipe -> a strong up-swipe closes it (the 7-item menu never needs to
+  // scroll). The pet opens with a bottom-edge up-swipe -> a strong down-swipe closes it. Scrolling
+  // list menus (Bookmarks/Books/Chapters/Settings) are left untouched.
+  {
+    const bool strongVertical = absDeltaY >= static_cast<int>(kMenuSwipeTriggerPx) &&
+                                absDeltaY > absDeltaX + static_cast<int>(kAxisBiasPx);
+    if (strongVertical && menuScreen_ == MenuScreen::Main && deltaY < 0) {
+      navigateBackInMenu(nowMs);
+      return;
+    }
+    if (strongVertical && menuScreen_ == MenuScreen::Shuli && deltaY > 0) {
+      navigateBackInMenu(nowMs);
+      return;
+    }
+  }
+
   if (menuScreen_ == MenuScreen::TextEntry) {
     if (MenuRepeat::isRightSwipe(deltaX, deltaY, kSwipeThresholdPx, kAxisBiasPx)) {
       navigateBackInMenu(nowMs);
@@ -3936,10 +3954,13 @@ void App::updatePetAnimation(uint32_t nowMs) {
   if (state_ != AppState::Menu || menuScreen_ != MenuScreen::Shuli) {
     return;
   }
-  // ~12 fps cat purr animation; renderShuliView re-renders only when the frame actually changes
-  // (the frame index is part of the render cache key).
-  constexpr uint32_t kPoopikFrameIntervalMs = 90;
-  if (nowMs - lastPoopikFrameMs_ < kPoopikFrameIntervalMs) {
+  // Gentle purr animation. Slower than before, and the last frame (the settled smile) lingers
+  // longer so there's a little pause before the loop restarts. renderShuliView only actually
+  // redraws when the frame changes (the frame index is part of the render cache key).
+  const uint8_t frameCount = kPoopikPurringFrameCount;
+  const bool onLastFrame = frameCount > 0 && (poopikFrame_ % frameCount) == (frameCount - 1);
+  const uint32_t intervalMs = onLastFrame ? 750 : 160;
+  if (nowMs - lastPoopikFrameMs_ < intervalMs) {
     return;
   }
   lastPoopikFrameMs_ = nowMs;
