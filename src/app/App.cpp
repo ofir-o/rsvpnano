@@ -1360,18 +1360,14 @@ void App::updateState(uint32_t nowMs) {
       return;
     }
 
-    // Welcome window is over: allow normal status rendering again and establish the reader state.
+    // Welcome window is over: allow normal status rendering again and resume straight into the book.
+    // Powering the device on (or waking it from the idle power-off) should land you back on your
+    // reading, not on the pet screen -- so a tap immediately runs the words. Poopik stays one
+    // bottom-edge swipe away. (Previously a power-on opened Poopik, but with the 1.75's idle
+    // power-off a wake is a fresh PMU boot, which made the pet hijack every wake.)
     bootStatusSilent_ = false;
     setState((playLocked_ || pauseAtSentenceEndRequested_) ? AppState::Playing : AppState::Paused,
              nowMs);
-    // Poopik is the default opening screen on a real power-on (swipe right drops into reading, and
-    // the bottom-edge swipe reopens the pet later). But when this boot is actually a wake from deep
-    // sleep -- the device escalated to deep sleep in a bag and a button press rebooted it -- go
-    // straight back to reading instead, so resuming feels like resuming, not a fresh start.
-    if (esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_UNDEFINED) {
-      openShuliScreen();
-      setState(AppState::Menu, nowMs);
-    }
     return;
   }
 
@@ -3261,16 +3257,22 @@ void App::applyMenuTouchGesture(const TouchEvent &event, uint32_t nowMs) {
     }
   }
 
-  // On the pet screen, a left swipe cycles Poopik's daily word goal in place (a right swipe still
-  // backs out, and a tap pets him). Keeps the goal adjustable without a Settings trip.
-  if (menuScreen_ == MenuScreen::Shuli &&
-      absDeltaX >= static_cast<int>(kSwipeThresholdPx) &&
-      absDeltaX > absDeltaY + static_cast<int>(kAxisBiasPx) && deltaX < 0) {
-    shuli_.cycleGoal();
-    shuli_.flush();
-    petInteractionActive_ = false;
-    poopikFrame_ = 0;
-    renderShuliView();
+  // Pet-screen gestures. A horizontal swipe (either direction) adjusts Poopik's daily word goal in
+  // place -- right/forward steps up a preset, left/back steps down -- and never exits, so a swipe
+  // can't accidentally drop you to the reader. To leave the pet, swipe down (handled above). Any
+  // other touch (a tap or a rub) pets him: he purrs, or bites if he's been neglected.
+  if (menuScreen_ == MenuScreen::Shuli) {
+    if (absDeltaX >= static_cast<int>(kSwipeThresholdPx) &&
+        absDeltaX > absDeltaY + static_cast<int>(kAxisBiasPx)) {
+      shuli_.cycleGoal(deltaX > 0 ? 1 : -1);
+      shuli_.flush();
+      petInteractionActive_ = false;
+      poopikFrame_ = 0;
+      renderShuliView();
+      return;
+    }
+    // Tap or rub -> pet him (the pet interaction lives in selectMenuItem's Shuli case).
+    selectMenuItem(nowMs);
     return;
   }
 

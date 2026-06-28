@@ -38,7 +38,7 @@ class ShuliPet {
   uint8_t missedDays() const { return missedDays_; }
 
   void setGoalWords(uint32_t goal);
-  void cycleGoal();                // step through a few preset daily goals (Settings)
+  void cycleGoal(int direction = 1);  // step through preset daily goals (+1 next, -1 previous)
   String goalLabel() const;        // e.g. "2000 words"
 
  private:

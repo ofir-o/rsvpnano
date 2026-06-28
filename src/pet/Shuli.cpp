@@ -192,7 +192,7 @@ void ShuliPet::setGoalWords(uint32_t goal) {
   persist(true);
 }
 
-void ShuliPet::cycleGoal() {
+void ShuliPet::cycleGoal(int direction) {
   const size_t count = sizeof(kGoalPresets) / sizeof(kGoalPresets[0]);
   size_t idx = 0;
   for (size_t i = 0; i < count; ++i) {
@@ -201,7 +201,10 @@ void ShuliPet::cycleGoal() {
       break;
     }
   }
-  setGoalWords(kGoalPresets[(idx + 1) % count]);
+  const int step = direction < 0 ? -1 : 1;
+  const int n = static_cast<int>(count);
+  const int next = (static_cast<int>(idx) + step + n) % n;
+  setGoalWords(kGoalPresets[next]);
 }
 
 String ShuliPet::goalLabel() const { return String(goalWords_) + " words"; }
