@@ -63,6 +63,7 @@ constexpr const char *kPrefCpuMenu = "cpu_menu";
 constexpr const char *kPrefCpuStandby = "cpu_stby";
 constexpr const char *kPrefAutoDimLevel = "dim_lvl";
 constexpr const char *kPrefAutoDimDelay = "dim_dly";
+constexpr const char *kPrefDeepSleepRailCut = "ds_railcut";
 constexpr const char *kPrefTimerDurationByGenre[] = {
     "tmr_dur_0",
     "tmr_dur_1",

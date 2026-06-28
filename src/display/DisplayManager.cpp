@@ -13,6 +13,8 @@
 #include "display/EmbeddedAtkinsonFont70.h"
 #include "display/EmbeddedOpenDyslexicFont.h"
 #include "display/EmbeddedOpenDyslexicFont70.h"
+#include "display/EmbeddedHebrewFont.h"
+#include "display/EmbeddedPoopik.h"
 #include "display/EmbeddedSerifFont.h"
 #include "display/EmbeddedSerifFont70.h"
 #include "text/LatinText.h"
@@ -662,7 +664,114 @@ int textLayoutWidth(const TextLayoutMetrics &layout) {
   return std::max(0, layout.maxX - layout.minX);
 }
 
+// --- Hebrew (right-to-left) support ---------------------------------------
+//
+// Hebrew letters are preserved through the text pipeline as their raw 2-byte
+// UTF-8 encoding (lead byte 0xD7 for the whole U+05D0..U+05EA block). The Latin
+// glyph path is byte-oriented and left-to-right, so for any word that contains
+// Hebrew we take a separate path: decode the bytes into "units" (a Hebrew
+// codepoint, or a single Latin byte), reverse the unit order for RTL, and lay
+// the visual run out left-to-right using the embedded Hebrew glyph font. ORP /
+// focus highlighting is skipped for Hebrew words -- they render centered.
+
+// Decode a Hebrew letter at byte offset i. Returns the number of bytes consumed
+// (2) and sets cp, or 0 if the bytes there are not a supported Hebrew letter.
+size_t decodeHebrewLetter(const String &word, size_t i, uint32_t &cp) {
+  const uint8_t b0 = static_cast<uint8_t>(word[i]);
+  if ((b0 & 0xE0) != 0xC0 || i + 1 >= word.length()) {
+    return 0;
+  }
+  const uint8_t b1 = static_cast<uint8_t>(word[i + 1]);
+  if ((b1 & 0xC0) != 0x80) {
+    return 0;
+  }
+  const uint32_t c = (static_cast<uint32_t>(b0 & 0x1F) << 6) | (b1 & 0x3F);
+  if (c < kEmbeddedHebrewFirstCodepoint || c > kEmbeddedHebrewLastCodepoint) {
+    return 0;
+  }
+  cp = c;
+  return 2;
+}
+
+bool wordIsHebrew(const String &word) {
+  for (size_t i = 0; i < word.length();) {
+    uint32_t cp = 0;
+    const size_t consumed = decodeHebrewLetter(word, i, cp);
+    if (consumed > 0) {
+      return true;
+    }
+    ++i;
+  }
+  return false;
+}
+
+ReaderGlyph hebrewGlyphForCodepoint(uint32_t cp) {
+  const uint32_t index = cp - kEmbeddedHebrewFirstCodepoint;
+  const EmbeddedHebrewGlyph &glyph = kEmbeddedHebrewGlyphs[index];
+  return {kEmbeddedHebrewBitmaps + glyph.bitmapOffset, glyph.xOffset, glyph.width, glyph.xAdvance,
+          kEmbeddedHebrewHeight};
+}
+
+struct HebrewPositionedGlyph {
+  ReaderGlyph glyph;
+  int x;  // left edge relative to cursor origin 0, already scaled
+};
+
+struct HebrewLayoutResult {
+  std::vector<HebrewPositionedGlyph> glyphs;
+  TextLayoutMetrics metrics;
+};
+
+// Lay out a Hebrew (possibly Hebrew+ASCII) word in visual left-to-right order at
+// the given scale. scalePercent 100 == native Hebrew glyph size (matches the
+// Large serif cell). Latin bytes inside the word reuse the serif glyphs.
+HebrewLayoutResult layoutHebrewWord(const String &word, uint8_t scalePercent) {
+  struct Unit {
+    bool hebrew;
+    uint32_t cp;
+    char latin;
+  };
+  std::vector<Unit> logical;
+  for (size_t i = 0; i < word.length();) {
+    uint32_t cp = 0;
+    const size_t consumed = decodeHebrewLetter(word, i, cp);
+    if (consumed > 0) {
+      logical.push_back({true, cp, 0});
+      i += consumed;
+    } else {
+      logical.push_back({false, 0, word[i]});
+      ++i;
+    }
+  }
+
+  HebrewLayoutResult result;
+  int cursorX = 0;
+  // Reverse for RTL: the last logical letter is drawn leftmost.
+  for (size_t k = logical.size(); k-- > 0;) {
+    const Unit &unit = logical[k];
+    const ReaderGlyph glyph =
+        unit.hebrew ? hebrewGlyphForCodepoint(unit.cp)
+                    : glyphFor(unit.latin, DisplayManager::ReaderTypeface::Standard);
+    const int xOffset = scaledSignedPercent(glyph.xOffset, scalePercent);
+    const int width = glyph.width == 0 ? 0 : scaledPercentDimension(glyph.width, scalePercent);
+    const int advance = std::max(1, scaledPercentDimension(glyph.xAdvance, scalePercent));
+    const int left = cursorX + xOffset;
+    updateTextLayoutBounds(result.metrics, left, width);
+    result.glyphs.push_back({glyph, left});
+    cursorX += advance;
+  }
+
+  if (result.metrics.hasPixels) {
+    result.metrics.focusCenterX = result.metrics.minX + (textLayoutWidth(result.metrics) / 2);
+  }
+  return result;
+}
+
 TextLayoutMetrics serifWordLayout(const String &word, int focusIndex, int divisor = 1) {
+  if (wordIsHebrew(word)) {
+    const uint8_t pct = divisor <= 1 ? 100 : static_cast<uint8_t>(std::max(1, 100 / divisor));
+    return layoutHebrewWord(word, pct).metrics;
+  }
   TextLayoutMetrics layout;
   int cursorX = 0;
   const bool trackFocus = focusIndex >= 0;
@@ -699,6 +808,9 @@ TextLayoutMetrics serifWordLayout(const String &word, int focusIndex, int diviso
 
 TextLayoutMetrics serifWordLayoutScaledPercent(const String &word, int focusIndex,
                                                uint8_t scalePercent) {
+  if (wordIsHebrew(word)) {
+    return layoutHebrewWord(word, scalePercent).metrics;
+  }
   TextLayoutMetrics layout;
   int cursorX = 0;
   const bool trackFocus = focusIndex >= 0;
@@ -735,6 +847,9 @@ TextLayoutMetrics serifWordLayoutScaledPercent(const String &word, int focusInde
 }
 
 TextLayoutMetrics serif70WordLayout(const String &word, int focusIndex) {
+  if (wordIsHebrew(word)) {
+    return layoutHebrewWord(word, 70).metrics;
+  }
   TextLayoutMetrics layout;
   int cursorX = 0;
   const bool trackFocus = focusIndex >= 0;
@@ -812,6 +927,11 @@ int orpOrdinalForLength(int length) {
 }
 
 int findFocusLetterIndex(const String &word) {
+  // Hebrew renders right-to-left and centered; the byte-indexed ORP pivot does
+  // not apply, so center the word (focusIndex < 0).
+  if (wordIsHebrew(word)) {
+    return -1;
+  }
   int wordCharacterCount = 0;
   for (size_t i = 0; i < word.length(); ++i) {
     if (isWordCharacter(word[i])) {
@@ -1644,6 +1764,62 @@ void DisplayManager::drawSerifGlyphScaledPercent(int x, int y, char c, uint16_t 
   }
 }
 
+void DisplayManager::drawHebrewWordVisual(const String &word, int x, int y, uint8_t scalePercent,
+                                          uint16_t color) {
+  if (scalePercent == 0) {
+    scalePercent = 100;
+  }
+  const HebrewLayoutResult layout = layoutHebrewWord(word, scalePercent);
+  for (const HebrewPositionedGlyph &positioned : layout.glyphs) {
+    const ReaderGlyph &glyph = positioned.glyph;
+    if (glyph.width == 0 || glyph.bitmap == nullptr) {
+      continue;
+    }
+    const int glyphHeight = glyph.height;
+    const int scaledWidth =
+        std::max(1, scalePercent == 100 ? static_cast<int>(glyph.width)
+                                        : scaledPercentDimension(glyph.width, scalePercent));
+    const int scaledHeight =
+        std::max(1, scalePercent == 100 ? glyphHeight
+                                        : scaledPercentDimension(glyphHeight, scalePercent));
+    const int glyphLeft = x + positioned.x;
+
+    for (int dstRow = 0; dstRow < scaledHeight; ++dstRow) {
+      const int dstY = y + dstRow;
+      if (dstY < 0 || dstY >= kVirtualBufferHeight) {
+        continue;
+      }
+      const int sourceYStart = (dstRow * glyphHeight) / scaledHeight;
+      const int sourceYEnd =
+          std::min(glyphHeight, ((dstRow + 1) * glyphHeight + scaledHeight - 1) / scaledHeight);
+      for (int dstCol = 0; dstCol < scaledWidth; ++dstCol) {
+        const int dstX = glyphLeft + dstCol;
+        if (dstX < 0 || dstX >= kVirtualBufferWidth) {
+          continue;
+        }
+        const int sourceXStart = (dstCol * glyph.width) / scaledWidth;
+        const int sourceXEnd =
+            std::min(static_cast<int>(glyph.width),
+                     ((dstCol + 1) * glyph.width + scaledWidth - 1) / scaledWidth);
+        uint32_t alphaSum = 0;
+        uint32_t sampleCount = 0;
+        for (int sourceY = sourceYStart; sourceY < sourceYEnd; ++sourceY) {
+          for (int sourceX = sourceXStart; sourceX < sourceXEnd; ++sourceX) {
+            alphaSum += glyph.bitmap[sourceY * glyph.width + sourceX];
+            ++sampleCount;
+          }
+        }
+        const uint8_t alpha = sampleCount == 0 ? 0 : static_cast<uint8_t>(alphaSum / sampleCount);
+        if (alpha < kGlyphAlphaThreshold) {
+          continue;
+        }
+        virtualFrame_[dstY * kVirtualBufferWidth + dstX] =
+            panelColor(blendOverBackground(color, alpha));
+      }
+    }
+  }
+}
+
 void DisplayManager::fillVirtualRect(int x, int y, int width, int height, uint16_t color) {
   const uint16_t panel = panelColor(color);
   const int xEnd = std::min(kVirtualBufferWidth, x + width);
@@ -2001,6 +2177,10 @@ void DisplayManager::drawRsvpAnchorGuide(int anchorX, int textY, int textHeight)
 }
 
 void DisplayManager::drawWordAt(const String &word, int x, int y, uint16_t color) {
+  if (wordIsHebrew(word)) {
+    drawHebrewWordVisual(word, x, y, 100, color);
+    return;
+  }
   int cursorX = x;
   const ReaderTypeface typeface = effectiveReaderTypefaceForText(word);
   for (size_t i = 0; i < word.length(); ++i) {
@@ -2019,6 +2199,11 @@ void DisplayManager::drawWordAt(const String &word, int x, int y, uint16_t color
 void DisplayManager::drawRsvpWordScaledAt(const String &word, int x, int y, int focusIndex,
                                           int divisor) {
   divisor = std::max(1, divisor);
+  if (wordIsHebrew(word)) {
+    const uint8_t pct = divisor <= 1 ? 100 : static_cast<uint8_t>(std::max(1, 100 / divisor));
+    drawHebrewWordVisual(word, x, y, pct, wordColor());
+    return;
+  }
   const bool highlightFocus = currentFocusHighlightEnabled();
   int cursorX = x;
   const ReaderTypeface typeface = effectiveReaderTypefaceForText(word);
@@ -2041,6 +2226,10 @@ void DisplayManager::drawRsvpWordScaledAt(const String &word, int x, int y, int 
 }
 
 void DisplayManager::drawRsvp70WordAt(const String &word, int x, int y, int focusIndex) {
+  if (wordIsHebrew(word)) {
+    drawHebrewWordVisual(word, x, y, 70, wordColor());
+    return;
+  }
   const bool highlightFocus = currentFocusHighlightEnabled();
   int cursorX = x;
   const ReaderTypeface typeface = effectiveReaderTypefaceForText(word);
@@ -2061,6 +2250,10 @@ void DisplayManager::drawRsvp70WordAt(const String &word, int x, int y, int focu
 
 void DisplayManager::drawRsvpWordScaledPercentAt(const String &word, int x, int y, int focusIndex,
                                                  uint8_t scalePercent) {
+  if (wordIsHebrew(word)) {
+    drawHebrewWordVisual(word, x, y, scalePercent, wordColor());
+    return;
+  }
   const bool highlightFocus = currentFocusHighlightEnabled();
   int cursorX = x;
   const ReaderTypeface typeface = effectiveReaderTypefaceForText(word);
@@ -3514,20 +3707,23 @@ void DisplayManager::renderLifeScreensaver(const std::vector<uint32_t> &cells, u
 }
 
 void DisplayManager::renderShuliScreen(int mood, const String &status, const String &stat,
-                                       uint8_t goalPercent) {
+                                       uint8_t goalPercent, uint8_t spriteFrame) {
   const int w = logicalWidth();
   const int h = logicalHeight();
 
-  String key = "shuli|" + String(mood) + "|" + status + "|" + stat + "|" +
-               String(static_cast<int>(goalPercent)) + "|o:" +
-               String(static_cast<int>(uiOrientation_)) + "|b:" + batteryLabel_;
+  String key = "poopik|" + String(mood) + "|f:" + String(static_cast<int>(spriteFrame)) + "|" +
+               status + "|" + stat + "|" + String(static_cast<int>(goalPercent)) + "|o:" +
+               String(static_cast<int>(uiOrientation_)) + "|t:" +
+               String(static_cast<int>(themePalette_)) + "|d:" + String(darkMode_ ? 1 : 0) + "|n:" +
+               String(nightMode_ ? 1 : 0) + "|b:" + batteryLabel_;
   if (!initialized_ || key == lastRenderKey_) {
     return;
   }
   lastRenderKey_ = key;
 
-  // Shuli's cozy room is always dark so her orange/white fur pops (and it saves AMOLED power).
-  fillVirtualRect(0, 0, w, h, kTrueBlack);
+  // Follow the current theme's background instead of forcing black, so the pet screen matches the
+  // rest of the UI (e.g. on a light theme it is no longer a black rectangle).
+  fillVirtualRect(0, 0, w, h, backgroundColor());
 
   const uint16_t furOrange = rgb565(245, 150, 70);
   const uint16_t furWhite = rgb565(245, 238, 226);
@@ -3602,124 +3798,78 @@ void DisplayManager::renderShuliScreen(int mood, const String &status, const Str
   const int mx = cx;
   const int my = headY + static_cast<int>(R * 0.5f);
 
-  drawTinyTextCentered("Shuli", static_cast<int>(h * 0.06f), gold, 3);
+  // The old procedural cat was replaced by the pixel-art sprite below; keep the palette/geometry
+  // definitions referenced so the build stays warning-free without deleting them.
+  (void)furOrange;
+  (void)furWhite;
+  (void)pink;
+  (void)pinkDk;
+  (void)dark;
+  (void)tear;
+  (void)sickTint;
+  (void)whisker;
+  (void)bag;
+  (void)eo;
+  (void)eyeY;
+  (void)er;
+  (void)th;
+  (void)mx;
+  (void)my;
+  (void)mood;
+  (void)disc;
+  (void)ellipse;
+  (void)triUp;
+  (void)triDown;
+  (void)line;
+  (void)heart;
 
-  // Body, tail, then ears behind the head.
-  const int bodyCY = headY + static_cast<int>(R * 1.15f);
-  ellipse(cx + static_cast<int>(R * 1.15f), bodyCY + R / 3, static_cast<int>(R * 0.5f),
-          static_cast<int>(R * 0.22f), furOrange);
-  ellipse(cx, bodyCY, static_cast<int>(R * 1.25f), static_cast<int>(R * 0.95f), furWhite);
-  ellipse(cx + R / 2, bodyCY, static_cast<int>(R * 0.5f), static_cast<int>(R * 0.6f), furOrange);
+  drawTinyTextCentered("Poopik", static_cast<int>(h * 0.07f), footerColor(), 3);
 
-  const int earApexY = headY - static_cast<int>(R * 1.15f);
-  const int earH = static_cast<int>(R * 0.85f);
-  const int earHB = static_cast<int>(R * 0.55f);
-  triUp(cx - static_cast<int>(R * 0.62f), earApexY, earHB, earH, furOrange);
-  triUp(cx + static_cast<int>(R * 0.62f), earApexY, earHB, earH, furOrange);
-  triUp(cx - static_cast<int>(R * 0.62f), earApexY + earH / 4, earHB / 2, earH / 2, pink);
-  triUp(cx + static_cast<int>(R * 0.62f), earApexY + earH / 4, earHB / 2, earH / 2, pink);
-
-  // Head + white muzzle + forehead blaze.
-  disc(cx, headY, R, furOrange);
-  ellipse(cx, headY + static_cast<int>(R * 0.35f), static_cast<int>(R * 0.7f),
-          static_cast<int>(R * 0.5f), furWhite);
-  ellipse(cx, headY - static_cast<int>(R * 0.1f), static_cast<int>(R * 0.22f),
-          static_cast<int>(R * 0.6f), furWhite);
-
-  // Whiskers (both sides).
-  for (int i = -1; i <= 1; ++i) {
-    line(cx - er, my - er / 3 + i * er / 2, cx - eo - er, my - er / 2 + i * er, 2, whisker);
-    line(cx + er, my - er / 3 + i * er / 2, cx + eo + er, my - er / 2 + i * er, 2, whisker);
+  // Pixel-art Poopik. The art has a transparent background, so the themed background shows through.
+  // spriteFrame selects the animation frame; on a light theme the white outline is recolored to the
+  // theme ink so it stays visible (the near-black body already reads on a light background).
+  const uint8_t poopikFrameCount = kPoopikPurringFrameCount;
+  const uint8_t poopikFrame =
+      poopikFrameCount > 0 ? static_cast<uint8_t>(spriteFrame % poopikFrameCount) : 0;
+  const uint8_t *poopikPixels = kPoopikPurringFrames[poopikFrame];
+  const int poopikScale = std::max(1, static_cast<int>(std::min(w, h) * 0.42f) / kPoopikWidth);
+  const int poopikArtW = kPoopikWidth * poopikScale;
+  const int poopikArtH = kPoopikHeight * poopikScale;
+  const int poopikArtX = (w - poopikArtW) / 2;
+  const int poopikArtY = std::max(static_cast<int>(h * 0.12f), headY - poopikArtH / 2);
+  auto poopikLum = [](uint16_t c) {
+    const int r = ((c >> 11) & 0x1F) << 3;
+    const int g = ((c >> 5) & 0x3F) << 2;
+    const int b = (c & 0x1F) << 3;
+    return (r * 30 + g * 59 + b * 11) / 100;
+  };
+  const bool poopikLightBg = poopikLum(backgroundColor()) > 140;
+  const uint16_t poopikOutline = wordColor();
+  for (int sy = 0; sy < kPoopikHeight; ++sy) {
+    for (int sx = 0; sx < kPoopikWidth; ++sx) {
+      const uint8_t pidx = poopikPixels[sy * kPoopikWidth + sx];
+      if (kPoopikPaletteAlpha[pidx] == 0) {
+        continue;
+      }
+      uint16_t pcolor = kPoopikPalette565[pidx];
+      if (poopikLightBg && pcolor == 0xFFFF) {
+        pcolor = poopikOutline;
+      }
+      fillVirtualRect(poopikArtX + sx * poopikScale, poopikArtY + sy * poopikScale, poopikScale,
+                      poopikScale, pcolor);
+    }
   }
 
-  // Nose.
-  triDown(cx, headY + static_cast<int>(R * 0.26f), R / 12, R / 12, pinkDk);
-
-  const int eL = cx - eo;
-  const int eR = cx + eo;
-  switch (mood) {
-    case 0:  // Happy: closed ^^ eyes, big smile, blush, hearts
-      line(eL - er, eyeY + er / 3, eL, eyeY - er / 3, th, dark);
-      line(eL, eyeY - er / 3, eL + er, eyeY + er / 3, th, dark);
-      line(eR - er, eyeY + er / 3, eR, eyeY - er / 3, th, dark);
-      line(eR, eyeY - er / 3, eR + er, eyeY + er / 3, th, dark);
-      line(mx - er, my, mx, my + er / 2, th, dark);
-      line(mx, my + er / 2, mx + er, my, th, dark);
-      disc(eL - er / 2, my - er / 4, er / 2, pink);
-      disc(eR + er / 2, my - er / 4, er / 2, pink);
-      heart(cx - R, headY - R, R / 5, pinkDk);
-      heart(cx + R, headY - R, R / 5, pinkDk);
-      break;
-    case 1:  // Needy: big pleading eyes, tiny worried mouth, blush
-      disc(eL, eyeY, er, furWhite); disc(eL, eyeY, er * 7 / 10, dark);
-      disc(eL - er / 4, eyeY - er / 4, er * 3 / 10, furWhite);
-      disc(eR, eyeY, er, furWhite); disc(eR, eyeY, er * 7 / 10, dark);
-      disc(eR - er / 4, eyeY - er / 4, er * 3 / 10, furWhite);
-      disc(mx, my, er / 3, dark);
-      disc(eL - er / 2, my - er / 4, er / 2, pink);
-      disc(eR + er / 2, my - er / 4, er / 2, pink);
-      break;
-    case 2:  // Grumpy: angry brows, narrowed eyes, frown
-      line(eL - er, eyeY - er, eL + er / 2, eyeY - er / 3, th, dark);
-      line(eR + er, eyeY - er, eR - er / 2, eyeY - er / 3, th, dark);
-      fillVirtualRect(eL - er / 2, eyeY, er, th, dark);
-      fillVirtualRect(eR - er / 2, eyeY, er, th, dark);
-      line(mx - er, my + er / 3, mx, my - er / 4, th, dark);
-      line(mx, my - er / 4, mx + er, my + er / 3, th, dark);
-      break;
-    case 3:  // Sad: droopy eyes, raised-outer brows, tear, frown
-      disc(eL, eyeY + er / 4, er * 8 / 10, furWhite); disc(eL, eyeY + er / 4, er / 2, dark);
-      disc(eR, eyeY + er / 4, er * 8 / 10, furWhite); disc(eR, eyeY + er / 4, er / 2, dark);
-      line(eL - er, eyeY - er, eL, eyeY - er / 2, th, dark);
-      line(eR + er, eyeY - er, eR, eyeY - er / 2, th, dark);
-      triDown(eL, eyeY + er, er / 4, er * 3 / 4, tear);
-      line(mx - er, my + er / 3, mx, my - er / 4, th, dark);
-      line(mx, my - er / 4, mx + er, my + er / 3, th, dark);
-      break;
-    case 4:  // Sick: X eyes, greenish cheeks, flat mouth, sweat
-      line(eL - er / 2, eyeY - er / 2, eL + er / 2, eyeY + er / 2, th, dark);
-      line(eL - er / 2, eyeY + er / 2, eL + er / 2, eyeY - er / 2, th, dark);
-      line(eR - er / 2, eyeY - er / 2, eR + er / 2, eyeY + er / 2, th, dark);
-      line(eR - er / 2, eyeY + er / 2, eR + er / 2, eyeY - er / 2, th, dark);
-      disc(eL - er / 2, my - er / 4, er / 2, sickTint);
-      disc(eR + er / 2, my - er / 4, er / 2, sickTint);
-      fillVirtualRect(mx - er, my, 2 * er, th, dark);
-      triDown(cx + static_cast<int>(R * 0.55f), headY - R / 3, er / 4, er * 3 / 4, tear);
-      break;
-    default:  // 5 Miserable: X eyes, eyebags, big frown, sick cheeks
-      line(eL - er / 2, eyeY - er / 2, eL + er / 2, eyeY + er / 2, th, dark);
-      line(eL - er / 2, eyeY + er / 2, eL + er / 2, eyeY - er / 2, th, dark);
-      line(eR - er / 2, eyeY - er / 2, eR + er / 2, eyeY + er / 2, th, dark);
-      line(eR - er / 2, eyeY + er / 2, eR + er / 2, eyeY - er / 2, th, dark);
-      fillVirtualRect(eL - er, eyeY + er / 2, 2 * er, th, bag);
-      fillVirtualRect(eR - er, eyeY + er / 2, 2 * er, th, bag);
-      line(mx - er, my + er / 2, mx, my - er / 3, th, dark);
-      line(mx, my - er / 3, mx + er, my + er / 2, th, dark);
-      disc(eL - er / 2, my, er / 2, sickTint);
-      disc(eR + er / 2, my, er / 2, sickTint);
-      break;
-  }
-
-  // Posh little crown on top of her head (her snobby look), drawn last so it sits in front.
-  const int crownW = static_cast<int>(R * 0.7f);
-  const int bandH = std::max(3, R / 8);
-  const int bandY = headY - static_cast<int>(R * 0.82f);
-  fillVirtualRect(cx - crownW / 2, bandY, crownW, bandH, gold);
-  triUp(cx - crownW / 2 + crownW / 6, bandY - R / 5, crownW / 8, R / 5, gold);
-  triUp(cx, bandY - R / 4, crownW / 8, R / 4, gold);
-  triUp(cx + crownW / 2 - crownW / 6, bandY - R / 5, crownW / 8, R / 5, gold);
-  disc(cx, bandY + bandH / 2, std::max(2, R / 16), pinkDk);
-
-  // Status text + daily goal bar.
-  int ty = bodyCY + static_cast<int>(R * 1.1f);
-  drawTinyTextCentered(status, ty, furWhite, 2);
-  ty += kTinyGlyphHeight * 2 + 12;
+  // Status line + daily goal bar, below the pet (kept inside the round safe area).
+  int ty = poopikArtY + poopikArtH + 16;
+  drawTinyTextCentered(status, ty, wordColor(), 2);
+  ty += kTinyGlyphHeight * 2 + 8;
   drawTinyTextCentered(stat, ty, focusColor(), 2);
   ty += kTinyGlyphHeight * 2 + 12;
-  const int barW = static_cast<int>(w * 0.5f);
+  const int barW = static_cast<int>(w * 0.42f);
   const int barX = cx - barW / 2;
-  const int barH = std::max(6, R / 12);
-  fillVirtualRect(barX, ty, barW, barH, rgb565(60, 60, 60));
+  const int barH = std::max(6, poopikScale);
+  fillVirtualRect(barX, ty, barW, barH, blendOverBackground(wordColor(), 48));
   fillVirtualRect(barX, ty, barW * std::min<int>(goalPercent, 100) / 100, barH, gold);
 
   flushScaledFrame(1, w, h);

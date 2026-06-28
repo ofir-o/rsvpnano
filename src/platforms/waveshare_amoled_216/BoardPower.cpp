@@ -10,6 +10,8 @@ void prepareDeepSleepPowerHold() {}
 
 void resetWakePeripherals() {}
 
+void setDeepSleepRailCut(bool) {}
+
 bool enableAudioPowerIfAvailable() { return true; }
 
 bool readBatteryStatus(BatteryStatus &status) {

@@ -42,6 +42,8 @@ void prepareDeepSleepPowerHold() {}
 
 void resetWakePeripherals() {}
 
+void setDeepSleepRailCut(bool) {}
+
 bool enableAudioPowerIfAvailable() {
   return configureOutputPin(Config::TCA9554_PIN_AUDIO_ENABLE, true);
 }

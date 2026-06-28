@@ -11,6 +11,7 @@
 
 #include "app/MenuRepeat.h"
 #include <esp_random.h>
+#include <esp_sleep.h>
 
 #include "board/BoardClock.h"
 #include "board/BoardConfig.h"
@@ -27,8 +28,16 @@
 
 static const char *kAppTag = "app";
 constexpr uint32_t kOtaCheckTaskStackBytes = 10240;
-// Boot welcome screen dwell time -- long enough to read the greeting, short enough to feel snappy.
-constexpr uint32_t kBootSplashMs = 1800;
+// Boot welcome screen dwell time -- long enough to glimpse the greeting, short enough that turning
+// the device on feels snappy.
+constexpr uint32_t kBootSplashMs = 900;
+// How long the device stays in (instant-resume) light sleep before escalating to true deep sleep to
+// stop draining the battery when it has been forgotten in a bag/pocket. Kept short so a forgotten
+// device reaches the ~microamp deep-sleep state quickly.
+constexpr uint32_t kLightSleepBeforeDeepMs = 90UL * 1000UL;
+// A manually screen-off (Standby) device keeps the CPU running at ~mA; after this grace it drops to
+// real sleep so it can reach deep sleep instead of draining in a bag.
+constexpr uint32_t kStandbyToSleepMs = 45UL * 1000UL;
 constexpr uint32_t kWpmFeedbackMs = 900;
 constexpr uint32_t kBrightnessToastMs = 1500;
 constexpr uint32_t kPowerOffHoldMs = 1600;
@@ -316,6 +325,7 @@ constexpr size_t kSettingsBatteryCpuMenuIndex = 4;
 constexpr size_t kSettingsBatteryCpuStandbyIndex = 5;
 constexpr size_t kSettingsBatteryAutoDimDelayIndex = 6;
 constexpr size_t kSettingsBatteryAutoDimLevelIndex = 7;
+constexpr size_t kSettingsBatteryDeepSleepSaverIndex = 8;
 
 constexpr size_t kBookPickerBackIndex = 0;
 constexpr size_t kChapterPickerBackIndex = 0;
@@ -920,6 +930,8 @@ void App::begin() {
   autoDimDelayMs_ =
       sanitizeAutoDimDelayMs(preferences_.getUInt(kPrefAutoDimDelay, autoDimDelayMs_),
                              autoDimDelayMs_);
+  deepSleepRailCutEnabled_ = preferences_.getBool(kPrefDeepSleepRailCut, deepSleepRailCutEnabled_);
+  Board::Power::setDeepSleepRailCut(deepSleepRailCutEnabled_);
   pacingLongWordDelayMs_ =
       loadPacingDelayMs(preferences_, kPrefPacingLongMs, kPrefLegacyPacingLong);
   pacingComplexWordDelayMs_ =
@@ -1100,6 +1112,7 @@ void App::update(uint32_t nowMs) {
   updateAutoRotate(nowMs);
   updateReader(nowMs);
   handleTouch(nowMs);
+  updatePetAnimation(nowMs);
   updateWpmFeedback(nowMs);
   updateBrightnessToast(nowMs);
   updateAutoDim(nowMs);
@@ -1127,7 +1140,18 @@ void App::update(uint32_t nowMs) {
 }
 
 void App::updateIdleStandby(uint32_t nowMs) {
-  if (state_ == AppState::Standby || state_ == AppState::Sleeping || powerOffStarted_) {
+  if (state_ == AppState::Sleeping || powerOffStarted_) {
+    return;
+  }
+
+  // A screen-off Standby still runs the CPU (~mA). Don't let it sit there forever (e.g. pocketed
+  // after a manual screen-off) -- after a short grace, drop into real sleep so it can reach the
+  // ~microamp deep-sleep state and stop draining the battery.
+  if (state_ == AppState::Standby) {
+    if (nowMs - standbyEnteredMs_ >= kStandbyToSleepMs) {
+      Serial.println("[app] standby idle -> sleep");
+      enterSleep(nowMs);
+    }
     return;
   }
 
@@ -1149,11 +1173,11 @@ void App::updateIdleStandby(uint32_t nowMs) {
     return;
   }
 
-  Serial.println("[app] idle timeout reached -> light sleep");
-  // Drop into low-power light sleep (near-off, ~mA instead of the ~tens of mA the awake screen-off
-  // standby drew) so the device barely sips battery in a pocket/bag. It wakes on the small BOOT
-  // button and resumes exactly where you left off. lastActivityMs_ is reset inside wakeFromSleep so
-  // it does not immediately sleep again on wake.
+  Serial.println("[app] idle timeout reached -> sleep");
+  // Enter the two-stage sleep: instant-resume light sleep first, then automatic deep sleep if the
+  // device is left untouched (see enterSleep). This is what keeps a forgotten device in a bag from
+  // draining its battery. It wakes on the small BOOT button; lastActivityMs_ is reset inside
+  // wakeFromSleep so it does not immediately sleep again on wake.
   enterSleep(nowMs);
 }
 
@@ -1311,10 +1335,18 @@ void App::updateState(uint32_t nowMs) {
       return;
     }
 
-    // Welcome window is over: allow normal status rendering again and enter the reader.
+    // Welcome window is over: allow normal status rendering again and establish the reader state.
     bootStatusSilent_ = false;
     setState((playLocked_ || pauseAtSentenceEndRequested_) ? AppState::Playing : AppState::Paused,
              nowMs);
+    // Poopik is the default opening screen on a real power-on (swipe right drops into reading, and
+    // the bottom-edge swipe reopens the pet later). But when this boot is actually a wake from deep
+    // sleep -- the device escalated to deep sleep in a bag and a button press rebooted it -- go
+    // straight back to reading instead, so resuming feels like resuming, not a fresh start.
+    if (esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_UNDEFINED) {
+      openShuliScreen();
+      setState(AppState::Menu, nowMs);
+    }
     return;
   }
 
@@ -3708,7 +3740,7 @@ bool App::moveMenuSelection(int direction, bool wrap) {
           selectedLabel = "Books";
           break;
         case MenuShuli:
-          selectedLabel = "Shuli";
+          selectedLabel = "Poopik";
           break;
         case MenuFocusTimer:
           selectedLabel = "Focus Timer";
@@ -3894,7 +3926,24 @@ void App::openArticlesMenu() {
 void App::openShuliScreen() {
   shuli_.update();
   menuSelectedIndex_ = 0;
+  poopikFrame_ = 0;
+  lastPoopikFrameMs_ = millis();
   menuScreen_ = MenuScreen::Shuli;
+  renderShuliView();
+}
+
+void App::updatePetAnimation(uint32_t nowMs) {
+  if (state_ != AppState::Menu || menuScreen_ != MenuScreen::Shuli) {
+    return;
+  }
+  // ~12 fps cat purr animation; renderShuliView re-renders only when the frame actually changes
+  // (the frame index is part of the render cache key).
+  constexpr uint32_t kPoopikFrameIntervalMs = 90;
+  if (nowMs - lastPoopikFrameMs_ < kPoopikFrameIntervalMs) {
+    return;
+  }
+  lastPoopikFrameMs_ = nowMs;
+  ++poopikFrame_;
   renderShuliView();
 }
 
@@ -3908,7 +3957,7 @@ void App::renderShuliView() {
     stat = String(shuli_.wordsToday()) + " / " + String(shuli_.goalWords()) + " words today";
   }
   display_.renderShuliScreen(static_cast<int>(shuli_.mood()), shuli_.statusLine(), stat,
-                             shuli_.goalPercent());
+                             shuli_.goalPercent(), poopikFrame_);
 }
 
 String App::bookmarkKey(const String &bookPath) const {
@@ -4775,6 +4824,13 @@ void App::selectBatterySettingsItem(uint32_t nowMs) {
       Serial.printf("[battery] auto-dim level -> %u%%\n",
                     static_cast<unsigned int>(autoDimBrightnessPercent_));
       break;
+    case kSettingsBatteryDeepSleepSaverIndex:
+      deepSleepRailCutEnabled_ = !deepSleepRailCutEnabled_;
+      preferences_.putBool(kPrefDeepSleepRailCut, deepSleepRailCutEnabled_);
+      Board::Power::setDeepSleepRailCut(deepSleepRailCutEnabled_);
+      Serial.printf("[battery] deep-sleep rail saver -> %s\n",
+                    deepSleepRailCutEnabled_ ? "on" : "off");
+      break;
     default:
       return;
   }
@@ -5388,6 +5444,7 @@ void App::rebuildSettingsMenuItems() {
       settingsMenuItems_.push_back(standbyLabel);
       settingsMenuItems_.push_back("Auto-dim delay: " + autoDimDelayLabel());
       settingsMenuItems_.push_back("Auto-dim level: " + autoDimBrightnessLabel());
+      settingsMenuItems_.push_back("Deep sleep saver: " + onOffLabel(deepSleepRailCutEnabled_));
     } else if (menuScreen_ == MenuScreen::WifiNetworkSettings) {
       settingsMenuItems_.push_back(uiText(UiText::Back));
       settingsMenuItems_.push_back("Choose network: " +
@@ -6779,7 +6836,20 @@ void App::enterSleep(uint32_t nowMs) {
   Input::Touch::end();
   touchInitialized_ = false;
 
+  // Two-stage power saving. First drop into light sleep, which resumes instantly on a button press
+  // (great for short breaks). But also arm a timer: if the device is left untouched past
+  // kLightSleepBeforeDeepMs (forgotten in a bag/pocket), the timer -- not a button -- wakes it and
+  // we escalate to true deep sleep so it sips ~microamps instead of slowly draining the battery.
+  esp_sleep_enable_timer_wakeup(static_cast<uint64_t>(kLightSleepBeforeDeepMs) * 1000ULL);
   Board::System::lightSleepUntilBootButton();
+  const esp_sleep_wakeup_cause_t wakeCause = esp_sleep_get_wakeup_cause();
+  esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_TIMER);
+  if (wakeCause == ESP_SLEEP_WAKEUP_TIMER) {
+    Serial.println("[app] idle too long in light sleep -> deep sleep to save battery");
+    Serial.flush();
+    Board::System::holdBacklightOffForDeepSleep();
+    Board::System::deepSleepUntilConfiguredWake();  // does not return; wakes via a fresh boot
+  }
   wakeFromSleep();
 }
 
@@ -7253,7 +7323,7 @@ void App::renderMainMenu() {
   items.push_back(uiText(UiText::Chapters));
   items.push_back("Bookmarks");
   items.push_back("Books");
-  items.push_back("Shuli");
+  items.push_back("Poopik");
   items.push_back("Focus Timer");
   items.push_back(uiText(UiText::Settings));
   items.push_back("SD card check");
@@ -8120,8 +8190,11 @@ void App::updateAutoRotate(uint32_t nowMs) {
 
   // Only auto-rotate in interactive reader/menu contexts. Leave standby,
   // sleeping, USB transfer, OTA and boot screens alone.
-  const bool rotatableContext = state_ == AppState::Paused || state_ == AppState::Playing ||
-                                state_ == AppState::Menu;
+  //
+  // Battery: skip IMU sampling entirely while words are actively playing -- that is the longest-
+  // running state, and re-orienting mid-word is jarring anyway. Orientation is re-checked the moment
+  // you pause, so the only cost is that a rotation made while reading takes effect on pause.
+  const bool rotatableContext = state_ == AppState::Paused || state_ == AppState::Menu;
   if (!rotatableContext) {
     return;
   }

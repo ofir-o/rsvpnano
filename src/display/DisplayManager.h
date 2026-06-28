@@ -142,8 +142,10 @@ class DisplayManager {
   void renderFocusTimerScreen(const String &mode, const String &genre, const String &timer,
                               const String &instruction, const String &footer = "",
                               int progressPercent = -1, bool breakAccent = false);
-  // Shuli the cat. mood: 0=Happy 1=Needy 2=Grumpy 3=Sad 4=Sick 5=Miserable.
-  void renderShuliScreen(int mood, const String &status, const String &stat, uint8_t goalPercent);
+  // Poopik the pixel-art pet. mood: 0=Happy 1=Needy 2=Grumpy 3=Sad 4=Sick 5=Miserable.
+  // spriteFrame selects the animation frame (cycled by the app while the pet screen is open).
+  void renderShuliScreen(int mood, const String &status, const String &stat, uint8_t goalPercent,
+                         uint8_t spriteFrame = 0);
 
   // Horizontal inset (px) from each left/right edge that a row at y must keep to stay inside the
   // round panel's inscribed circle. 0 on rectangular panels. Public so screen layout in App can
@@ -184,6 +186,10 @@ class DisplayManager {
   void drawSerifGlyphScaledPercent(int x, int y, char c, uint16_t color, uint8_t scalePercent);
   void drawSerifGlyphScaledPercent(int x, int y, char c, uint16_t color, uint8_t scalePercent,
                                    ReaderTypeface typeface);
+  // Draws a Hebrew (or Hebrew+ASCII) word right-to-left at the given scale, with
+  // its left edge at x. scalePercent 100 == native Hebrew glyph size.
+  void drawHebrewWordVisual(const String &word, int x, int y, uint8_t scalePercent,
+                            uint16_t color);
   void fillVirtualRect(int x, int y, int width, int height, uint16_t color);
   void drawSerifTextAt(const String &text, int x, int y, uint16_t color, int divisor);
   void drawSerif70TextAt(const String &text, int x, int y, uint16_t color);
