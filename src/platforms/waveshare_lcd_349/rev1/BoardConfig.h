@@ -53,6 +53,7 @@ constexpr int PANEL_NATIVE_WIDTH = 172;
 constexpr int PANEL_NATIVE_HEIGHT = 640;
 constexpr int DISPLAY_WIDTH = 640;
 constexpr int DISPLAY_HEIGHT = 172;
+constexpr bool DISPLAY_IS_ROUND = false;
 constexpr int READER_CHROME_MARGIN_X = 12;
 constexpr int READER_CHROME_MARGIN_TOP = 8;
 constexpr int READER_CHROME_MARGIN_BOTTOM = 8;
