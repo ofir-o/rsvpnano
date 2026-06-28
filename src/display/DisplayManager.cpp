@@ -3185,11 +3185,23 @@ void DisplayManager::renderScrollView(const std::vector<ContextWord> &words, uin
     y += kScrollLineHeight;
   }
 
+  // Smooth scroll: advance the focus continuously through the current line (by word position plus
+  // the within-word progress) toward the next line, so the page glides word-by-word instead of
+  // snapping a whole line at the end of each line.
   const int currentCenterY = lineTops[currentLineIndex] + (contextGlyphHeight / 2);
-  const int nextCenterY = lineTops[nextLineIndex] + (contextGlyphHeight / 2);
+  const size_t belowLineIndex =
+      (currentLineIndex + 1 < lines.size()) ? currentLineIndex + 1 : currentLineIndex;
+  const int belowCenterY = lineTops[belowLineIndex] + (contextGlyphHeight / 2);
+  const ContextLine &curLine = lines[currentLineIndex];
+  const int lineWordCount =
+      std::max(1, static_cast<int>(curLine.end) - static_cast<int>(curLine.start));
+  const int wordsIntoLine = std::max(
+      0, std::min(lineWordCount - 1,
+                  static_cast<int>(currentLocalIndex) - static_cast<int>(curLine.start)));
+  const int lineFractionPermille = std::min(
+      1000, ((wordsIntoLine * 1000) + static_cast<int>(scrollProgressPermille)) / lineWordCount);
   const int focusCenterY =
-      currentCenterY +
-      (((nextCenterY - currentCenterY) * static_cast<int>(scrollProgressPermille)) / 1000);
+      currentCenterY + (((belowCenterY - currentCenterY) * lineFractionPermille) / 1000);
   const int preferredFocusY = textTop + ((textBottom - textTop) / 2);
   int scrollOffset = preferredFocusY - focusCenterY;
   const int minScrollOffset = std::min(0, textBottom - contentBottom);
