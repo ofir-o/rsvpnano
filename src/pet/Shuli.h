@@ -48,7 +48,7 @@ class ShuliPet {
   void persist(bool force);
 
   Preferences *prefs_ = nullptr;
-  uint32_t goalWords_ = 2000;
+  uint32_t goalWords_ = 1500;
   uint32_t wordsToday_ = 0;
   uint32_t dayNumber_ = 0;   // the civil-day the daily counter applies to (0 = unknown)
   uint8_t missedDays_ = 0;

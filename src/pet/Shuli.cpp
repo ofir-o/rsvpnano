@@ -5,7 +5,7 @@
 #include "board/BoardClock.h"
 
 namespace {
-constexpr uint32_t kGoalPresets[] = {1000, 2000, 3000, 5000};
+constexpr uint32_t kGoalPresets[] = {1500, 2000, 3000, 5000};
 constexpr uint8_t kMaxMissedDays = 200;
 
 const char *kPrefGoal = "shuli_goal";
@@ -51,7 +51,7 @@ void ShuliPet::begin(Preferences *prefs) {
     goalMetToday_ = prefs_->getBool(kPrefMet, false);
   }
   if (goalWords_ == 0) {
-    goalWords_ = 2000;
+    goalWords_ = 1500;
   }
   dirty_ = false;
   update();

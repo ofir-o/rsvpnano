@@ -3250,6 +3250,19 @@ void App::applyMenuTouchGesture(const TouchEvent &event, uint32_t nowMs) {
     }
   }
 
+  // On the pet screen, a left swipe cycles Poopik's daily word goal in place (a right swipe still
+  // backs out, and a tap pets him). Keeps the goal adjustable without a Settings trip.
+  if (menuScreen_ == MenuScreen::Shuli &&
+      absDeltaX >= static_cast<int>(kSwipeThresholdPx) &&
+      absDeltaX > absDeltaY + static_cast<int>(kAxisBiasPx) && deltaX < 0) {
+    shuli_.cycleGoal();
+    shuli_.flush();
+    petInteractionActive_ = false;
+    poopikFrame_ = 0;
+    renderShuliView();
+    return;
+  }
+
   if (MenuRepeat::isRightSwipe(deltaX, deltaY, kSwipeThresholdPx, kAxisBiasPx)) {
     navigateBackInMenu(nowMs);
     return;
@@ -3877,9 +3890,16 @@ void App::selectMenuItem(uint32_t nowMs) {
     return;
   }
   if (menuScreen_ == MenuScreen::Shuli) {
-    // The Shuli screen isn't a list; a tap cycles her daily word goal.
-    shuli_.cycleGoal();
-    shuli_.flush();
+    // The Shuli screen isn't a list; a tap pets Poopik. He purrs when he's content and bites when
+    // he's been neglected (a missed day with the goal still unmet). Either way it plays a short
+    // animation, then he settles back to his resting pose. (A left swipe cycles the daily goal.)
+    shuli_.update();
+    const bool angry = shuli_.missedDays() > 0 && !shuli_.goalMetToday();
+    petInteractionAngry_ = angry;
+    petInteractionActive_ = true;
+    poopikFrame_ = 0;
+    lastPoopikFrameMs_ = nowMs;
+    petInteractionEndMs_ = nowMs + 2600;  // ~two purr loops, or holds the bite for the placeholder
     renderShuliView();
     return;
   }
@@ -3969,6 +3989,9 @@ void App::openShuliScreen() {
   menuSelectedIndex_ = 0;
   poopikFrame_ = 0;
   lastPoopikFrameMs_ = millis();
+  petInteractionActive_ = false;
+  petInteractionAngry_ = false;
+  petInteractionEndMs_ = 0;
   menuScreen_ = MenuScreen::Shuli;
   renderShuliView();
 }
@@ -3977,11 +4000,26 @@ void App::updatePetAnimation(uint32_t nowMs) {
   if (state_ != AppState::Menu || menuScreen_ != MenuScreen::Shuli) {
     return;
   }
-  // Gentle purr animation. Slower than before, and the last frame (the settled smile) lingers
-  // longer so there's a little pause before the loop restarts. renderShuliView only actually
-  // redraws when the frame changes (the frame index is part of the render cache key).
-  const uint8_t frameCount = kPoopikPurringFrameCount;
-  const bool onLastFrame = frameCount > 0 && (poopikFrame_ % frameCount) == (frameCount - 1);
+  // Poopik only animates while you're petting him; the rest of the time he holds a static pose
+  // (idle/happy/angry) so the screen stays still and battery-friendly.
+  if (!petInteractionActive_) {
+    return;
+  }
+  // The interaction lasts a fixed window (a couple of purr loops); then he settles back to rest.
+  if (nowMs >= petInteractionEndMs_) {
+    petInteractionActive_ = false;
+    poopikFrame_ = 0;
+    renderShuliView();
+    return;
+  }
+  // Slow, gentle cadence. The last frame lingers longer so there's a small pause before the loop
+  // restarts. renderShuliView only redraws when the frame index actually changes (it's in the key).
+  const uint8_t frameCount =
+      petInteractionAngry_ ? kPoopikAngryFrameCount : kPoopikPurringFrameCount;
+  if (frameCount == 0) {
+    return;
+  }
+  const bool onLastFrame = (poopikFrame_ % frameCount) == (frameCount - 1);
   const uint32_t intervalMs = onLastFrame ? 750 : 160;
   if (nowMs - lastPoopikFrameMs_ < intervalMs) {
     return;
@@ -3993,6 +4031,26 @@ void App::updatePetAnimation(uint32_t nowMs) {
 
 void App::renderShuliView() {
   shuli_.update();
+
+  // Poopik's resting pose comes straight from today's reading:
+  //   - angry  : a day was missed and the goal still isn't met (he stays angry until you finish it)
+  //   - happy  : goal met, or at least a quarter of the daily goal read -> frame 2 (the content pose)
+  //   - idle   : nothing read yet today -> frame 1 (the default pose)
+  // Petting him (a tap) plays a short animation: a purr when content, a bite when neglected.
+  const bool angry = shuli_.missedDays() > 0 && !shuli_.goalMetToday();
+  const bool happy =
+      !angry && (shuli_.goalMetToday() || shuli_.wordsToday() >= shuli_.goalWords() / 4);
+
+  bool useAngrySprite;
+  uint8_t frame;
+  if (petInteractionActive_) {
+    useAngrySprite = petInteractionAngry_;
+    frame = poopikFrame_;
+  } else {
+    useAngrySprite = angry;
+    frame = angry ? 0 : (happy ? 1 : 0);
+  }
+
   String stat;
   if (!shuli_.goalMetToday() && shuli_.missedDays() > 0) {
     const uint8_t days = shuli_.missedDays();
@@ -4001,7 +4059,7 @@ void App::renderShuliView() {
     stat = String(shuli_.wordsToday()) + " / " + String(shuli_.goalWords()) + " words today";
   }
   display_.renderShuliScreen(static_cast<int>(shuli_.mood()), shuli_.statusLine(), stat,
-                             shuli_.goalPercent(), poopikFrame_);
+                             shuli_.goalPercent(), frame, useAngrySprite);
 }
 
 String App::bookmarkKey(const String &bookPath) const {

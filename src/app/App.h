@@ -524,6 +524,11 @@ class App {
   // Poopik pet-screen animation: current frame and when it last advanced.
   uint8_t poopikFrame_ = 0;
   uint32_t lastPoopikFrameMs_ = 0;
+  // Pet interaction: tapping Poopik plays a short animation -- a purr when he's content, a bite when
+  // he's angry (missed days). Outside an interaction he holds a single static pose.
+  uint32_t petInteractionEndMs_ = 0;
+  bool petInteractionAngry_ = false;
+  bool petInteractionActive_ = false;
   ReadingLoop reader_;
   Input::Buttons::Button button_;
   Input::Buttons::Button powerButton_;

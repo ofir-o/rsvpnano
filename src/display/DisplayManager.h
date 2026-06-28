@@ -145,7 +145,7 @@ class DisplayManager {
   // Poopik the pixel-art pet. mood: 0=Happy 1=Needy 2=Grumpy 3=Sad 4=Sick 5=Miserable.
   // spriteFrame selects the animation frame (cycled by the app while the pet screen is open).
   void renderShuliScreen(int mood, const String &status, const String &stat, uint8_t goalPercent,
-                         uint8_t spriteFrame = 0);
+                         uint8_t spriteFrame = 0, bool useAngrySprite = false);
 
   // Horizontal inset (px) from each left/right edge that a row at y must keep to stay inside the
   // round panel's inscribed circle. 0 on rectangular panels. Public so screen layout in App can

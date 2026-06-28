@@ -3765,11 +3765,13 @@ void DisplayManager::renderLifeScreensaver(const std::vector<uint32_t> &cells, u
 }
 
 void DisplayManager::renderShuliScreen(int mood, const String &status, const String &stat,
-                                       uint8_t goalPercent, uint8_t spriteFrame) {
+                                       uint8_t goalPercent, uint8_t spriteFrame,
+                                       bool useAngrySprite) {
   const int w = logicalWidth();
   const int h = logicalHeight();
 
-  String key = "poopik|" + String(mood) + "|f:" + String(static_cast<int>(spriteFrame)) + "|" +
+  String key = "poopik|" + String(mood) + "|f:" + String(static_cast<int>(spriteFrame)) + "|a:" +
+               String(useAngrySprite ? 1 : 0) + "|" +
                status + "|" + stat + "|" + String(static_cast<int>(goalPercent)) + "|o:" +
                String(static_cast<int>(uiOrientation_)) + "|t:" +
                String(static_cast<int>(themePalette_)) + "|d:" + String(darkMode_ ? 1 : 0) + "|n:" +
@@ -3886,10 +3888,12 @@ void DisplayManager::renderShuliScreen(int mood, const String &status, const Str
   // Pixel-art Poopik. The art has a transparent background, so the themed background shows through.
   // spriteFrame selects the animation frame; on a light theme the white outline is recolored to the
   // theme ink so it stays visible (the near-black body already reads on a light background).
-  const uint8_t poopikFrameCount = kPoopikPurringFrameCount;
+  const uint8_t poopikFrameCount =
+      useAngrySprite ? kPoopikAngryFrameCount : kPoopikPurringFrameCount;
   const uint8_t poopikFrame =
       poopikFrameCount > 0 ? static_cast<uint8_t>(spriteFrame % poopikFrameCount) : 0;
-  const uint8_t *poopikPixels = kPoopikPurringFrames[poopikFrame];
+  const uint8_t *poopikPixels =
+      useAngrySprite ? kPoopikAngryFrames[poopikFrame] : kPoopikPurringFrames[poopikFrame];
   const int poopikScale = std::max(1, static_cast<int>(std::min(w, h) * 0.42f) / kPoopikWidth);
   const int poopikArtW = kPoopikWidth * poopikScale;
   const int poopikArtH = kPoopikHeight * poopikScale;
