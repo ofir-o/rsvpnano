@@ -325,6 +325,7 @@ constexpr size_t kSettingsBatteryCpuMenuIndex = 4;
 constexpr size_t kSettingsBatteryCpuStandbyIndex = 5;
 constexpr size_t kSettingsBatteryAutoDimDelayIndex = 6;
 constexpr size_t kSettingsBatteryAutoDimLevelIndex = 7;
+constexpr size_t kSettingsBatteryDeepSleepSaverIndex = 8;
 
 constexpr size_t kBookPickerBackIndex = 0;
 constexpr size_t kChapterPickerBackIndex = 0;
@@ -929,6 +930,8 @@ void App::begin() {
   autoDimDelayMs_ =
       sanitizeAutoDimDelayMs(preferences_.getUInt(kPrefAutoDimDelay, autoDimDelayMs_),
                              autoDimDelayMs_);
+  deepSleepRailCutEnabled_ = preferences_.getBool(kPrefDeepSleepRailCut, deepSleepRailCutEnabled_);
+  Board::Power::setDeepSleepRailCut(deepSleepRailCutEnabled_);
   pacingLongWordDelayMs_ =
       loadPacingDelayMs(preferences_, kPrefPacingLongMs, kPrefLegacyPacingLong);
   pacingComplexWordDelayMs_ =
@@ -4821,6 +4824,13 @@ void App::selectBatterySettingsItem(uint32_t nowMs) {
       Serial.printf("[battery] auto-dim level -> %u%%\n",
                     static_cast<unsigned int>(autoDimBrightnessPercent_));
       break;
+    case kSettingsBatteryDeepSleepSaverIndex:
+      deepSleepRailCutEnabled_ = !deepSleepRailCutEnabled_;
+      preferences_.putBool(kPrefDeepSleepRailCut, deepSleepRailCutEnabled_);
+      Board::Power::setDeepSleepRailCut(deepSleepRailCutEnabled_);
+      Serial.printf("[battery] deep-sleep rail saver -> %s\n",
+                    deepSleepRailCutEnabled_ ? "on" : "off");
+      break;
     default:
       return;
   }
@@ -5434,6 +5444,7 @@ void App::rebuildSettingsMenuItems() {
       settingsMenuItems_.push_back(standbyLabel);
       settingsMenuItems_.push_back("Auto-dim delay: " + autoDimDelayLabel());
       settingsMenuItems_.push_back("Auto-dim level: " + autoDimBrightnessLabel());
+      settingsMenuItems_.push_back("Deep sleep saver: " + onOffLabel(deepSleepRailCutEnabled_));
     } else if (menuScreen_ == MenuScreen::WifiNetworkSettings) {
       settingsMenuItems_.push_back(uiText(UiText::Back));
       settingsMenuItems_.push_back("Choose network: " +

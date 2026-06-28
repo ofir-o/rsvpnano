@@ -1,10 +1,22 @@
 #include "drivers/power/axp2101/Axp2101.h"
 
 #include <Wire.h>
+#include <esp_attr.h>
 
 #include "drivers/power/BatteryCurve.h"
 
+// ALDO rail state saved before a deep sleep that cut the peripheral rails. RTC_DATA_ATTR survives
+// deep sleep but is re-initialized to the 0xFF "nothing cut" sentinel on a true power-on, so begin()
+// only restores rails after a deep-sleep wake that actually cut them. (Mask is 4 bits, so 0xFF is a
+// safe sentinel.)
+RTC_DATA_ATTR static uint8_t gSavedAldoMaskForWake = 0xFF;
+
 namespace BoardDrivers::Axp2101 {
+
+// Runtime opt-in (a Settings toggle, off by default). Set each boot by the app from the saved
+// preference. When false, cutAldoRailsForDeepSleep() does nothing.
+static bool gDeepSleepRailCutEnabled = false;
+
 namespace {
 
 constexpr uint8_t kAddress = 0x34;
@@ -138,6 +150,22 @@ bool begin() {
 
   gContext.ready = true;
   captureDiagnostics(value);
+
+  if (gSavedAldoMaskForWake != 0xFF) {
+    // We cut the ALDO peripheral rails before the deep sleep that this boot is waking from. Restore
+    // them now -- before any display/touch init -- so those controllers have power again.
+    uint8_t ldoState = 0;
+    if (readRegister(kLdoOnOffCtrl0Reg, ldoState)) {
+      const uint8_t restored = static_cast<uint8_t>((ldoState & ~kAldoRailMask) |
+                                                    (gSavedAldoMaskForWake & kAldoRailMask));
+      writeRegister(kLdoOnOffCtrl0Reg, restored);
+      Serial.printf("[board] AXP2101 deep-sleep wake: restored ALDO rails 0x%02X\n",
+                    gSavedAldoMaskForWake & kAldoRailMask);
+      delay(50);  // let the peripheral rails settle before they are initialized
+    }
+    gSavedAldoMaskForWake = 0xFF;
+  }
+
   if (!updateRegisterBits(kAdcChannelCtrlReg, 0x01, 0x01)) {
     Serial.println("[board] AXP2101 battery voltage ADC enable failed");
   }
@@ -337,6 +365,27 @@ bool consumeLongPress() {
   const bool pending = gContext.longPressPending;
   gContext.longPressPending = false;
   return pending;
+}
+
+void setDeepSleepRailCutEnabled(bool enabled) { gDeepSleepRailCutEnabled = enabled; }
+
+void cutAldoRailsForDeepSleep() {
+  if (!gDeepSleepRailCutEnabled) {
+    return;
+  }
+  if (!gContext.ready && !begin()) {
+    return;
+  }
+  uint8_t ldoState = 0;
+  if (!readRegister(kLdoOnOffCtrl0Reg, ldoState)) {
+    return;
+  }
+  // Remember which ALDO rails were on so the wake boot can restore exactly those, then cut them.
+  // DCDC1 (the ESP32 system rail) lives in a different register and is never touched here.
+  gSavedAldoMaskForWake = static_cast<uint8_t>(ldoState & kAldoRailMask);
+  writeRegister(kLdoOnOffCtrl0Reg, static_cast<uint8_t>(ldoState & ~kAldoRailMask));
+  Serial.printf("[board] AXP2101 deep-sleep: cut ALDO rails (saved 0x%02X)\n",
+                gSavedAldoMaskForWake);
 }
 
 }  // namespace BoardDrivers::Axp2101

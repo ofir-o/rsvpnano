@@ -592,9 +592,7 @@ class App {
   size_t focusTimerGenreSelectedIndex_ = 0;
   // Default: sleep (screen off) after 2 minutes idle to save battery (index 2 == "2 min").
   uint8_t standbyTimerIndex_ = 2;
-  // Default brightness index into kBrightnessLevels ({40,55,70,85,100}%). 2 == 70%: plenty readable
-  // on the AMOLED while drawing noticeably less than full brightness. (Saved value overrides this.)
-  uint8_t brightnessLevelIndex_ = 2;
+  uint8_t brightnessLevelIndex_ = 4;
   uint8_t readerFontSizeIndex_ = 0;
   uint16_t menuRepeatDelayMs_ = MenuRepeat::kDefaultDelayMs;
   uint16_t pacingLongWordDelayMs_ = 200;
@@ -654,6 +652,9 @@ class App {
   uint32_t cpuMhzStandby_ = 80;
   uint8_t autoDimBrightnessPercent_ = 10;
   uint32_t autoDimDelayMs_ = 60000;
+  // Opt-in (Settings > Battery): cut peripheral power rails in deep sleep to save battery. Off by
+  // default because it needs on-device confirmation that wake + touch still recover.
+  bool deepSleepRailCutEnabled_ = false;
   TextEntrySession textEntrySession_;
   bool touchInitialized_ = false;
   bool menuRepeatGestureConsumed_ = false;
