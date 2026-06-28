@@ -47,6 +47,13 @@ def main() -> None:
     if not anims:
         raise SystemExit(f"no Poopik PNGs found in {SRC_DIR}")
 
+    # The firmware always references a kPoopikAngry* symbol. If no angry art exists yet, emit a
+    # placeholder (a copy of the first purring frame); add docs/poopik/angry_*.png to replace it.
+    has_angry_art = "angry" in anims
+    if not has_angry_art:
+        base = anims.get("purring") or next(iter(anims.values()))
+        anims["angry"] = [base[0].copy()]
+
     # Uniform canvas across every frame so the cat never jumps.
     width = max(fr.width for frames in anims.values() for fr in frames)
     height = max(fr.height for frames in anims.values() for fr in frames)
@@ -92,6 +99,7 @@ def main() -> None:
         "",
         f"constexpr uint8_t kPoopikWidth = {width};",
         f"constexpr uint8_t kPoopikHeight = {height};",
+        f"constexpr bool kPoopikHasAngryArt = {'true' if has_angry_art else 'false'};",
         "",
         f"static const uint16_t kPoopikPalette565[{len(palette)}] PROGMEM = {{",
         "    " + ", ".join(f"0x{rgb565(r, g, b):04X}" for (r, g, b, a) in palette),
