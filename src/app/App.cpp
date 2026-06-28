@@ -1316,14 +1316,18 @@ void App::updateState(uint32_t nowMs) {
       return;
     }
 
-    // Welcome window is over: allow normal status rendering again. Establish the reader state
-    // underneath, then open Poopik as the default opening screen -- a swipe right (back) drops
-    // straight into reading, and the bottom-edge swipe reopens the pet later.
+    // Welcome window is over: allow normal status rendering again and establish the reader state.
     bootStatusSilent_ = false;
     setState((playLocked_ || pauseAtSentenceEndRequested_) ? AppState::Playing : AppState::Paused,
              nowMs);
-    openShuliScreen();
-    setState(AppState::Menu, nowMs);
+    // Poopik is the default opening screen on a real power-on (swipe right drops into reading, and
+    // the bottom-edge swipe reopens the pet later). But when this boot is actually a wake from deep
+    // sleep -- the device escalated to deep sleep in a bag and a button press rebooted it -- go
+    // straight back to reading instead, so resuming feels like resuming, not a fresh start.
+    if (esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_UNDEFINED) {
+      openShuliScreen();
+      setState(AppState::Menu, nowMs);
+    }
     return;
   }
 
