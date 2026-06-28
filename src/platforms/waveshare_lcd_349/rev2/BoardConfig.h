@@ -63,6 +63,8 @@ constexpr int PIN_DEEP_SLEEP_WAKE = PIN_PWR_BUTTON;
 constexpr bool SUPPORTS_SOFTWARE_POWEROFF = true;
 constexpr bool RELEASE_BATTERY_HOLD_BEFORE_DEEP_SLEEP = true;
 constexpr bool REQUEST_PMU_SHUTDOWN_ON_POWEROFF = false;
+// Keep the existing two-stage light/deep sleep on idle (wakes on the BOOT button).
+constexpr bool IDLE_TIMEOUT_POWERS_OFF = false;
 constexpr bool SOFTWARE_POWEROFF_USES_SOFT_LOOP = false;
 constexpr bool SOFT_OFF_WAKE_USES_POWER_BUTTON = false;
 constexpr bool SOFT_OFF_WAKE_USES_BOOT_BUTTON = false;

@@ -83,7 +83,13 @@ constexpr int PIN_DEEP_SLEEP_WAKE = PIN_BOOT_BUTTON;
 constexpr bool SUPPORTS_SOFTWARE_POWEROFF = true;
 constexpr bool RELEASE_BATTERY_HOLD_BEFORE_DEEP_SLEEP = false;
 constexpr bool REQUEST_PMU_SHUTDOWN_ON_POWEROFF = true;
-constexpr bool SOFTWARE_POWEROFF_USES_SOFT_LOOP = true;
+// Idle timeout truly powers the board off (PMU rail cut, ~microamps) so a forgotten device in a bag
+// does not drain; a long press of the big PWR key powers it back on through the PMU.
+constexpr bool IDLE_TIMEOUT_POWERS_OFF = true;
+// On battery, perform a real PMU power cut on power-off (so the rails actually drop and the big PWR
+// key wakes it) rather than the CPU-awake soft-off loop. enterPowerOff still falls back to the
+// recoverable loop if the cut does not take (e.g. when USB keeps VSYS alive), so it is never bricked.
+constexpr bool SOFTWARE_POWEROFF_USES_SOFT_LOOP = false;
 constexpr bool SOFT_OFF_WAKE_USES_POWER_BUTTON = true;
 constexpr bool SOFT_OFF_WAKE_USES_BOOT_BUTTON = true;
 constexpr uint32_t SOFT_OFF_WAKE_CONFIRM_MS = 90;

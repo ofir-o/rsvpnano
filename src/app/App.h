@@ -385,6 +385,7 @@ class App {
   void updateStandbyScreensaver(uint32_t nowMs, bool force = false);
   void enterPowerOff(uint32_t nowMs);
   void forceHardPowerOff();
+  void enterIdlePowerSave(uint32_t nowMs);
   void enterSleep(uint32_t nowMs);
   void wakeFromSleep(bool fullPeripheralReset = false);
   bool restoreSavedBook(uint32_t nowMs);
