@@ -3718,8 +3718,9 @@ void DisplayManager::renderShuliScreen(int mood, const String &status, const Str
   }
   lastRenderKey_ = key;
 
-  // Shuli's cozy room is always dark so her orange/white fur pops (and it saves AMOLED power).
-  fillVirtualRect(0, 0, w, h, kTrueBlack);
+  // Follow the current theme's background instead of forcing black, so the pet screen matches the
+  // rest of the UI (e.g. on a light theme it is no longer a black rectangle).
+  fillVirtualRect(0, 0, w, h, backgroundColor());
 
   const uint16_t furOrange = rgb565(245, 150, 70);
   const uint16_t furWhite = rgb565(245, 238, 226);
@@ -3904,14 +3905,14 @@ void DisplayManager::renderShuliScreen(int mood, const String &status, const Str
 
   // Status text + daily goal bar.
   int ty = bodyCY + static_cast<int>(R * 1.1f);
-  drawTinyTextCentered(status, ty, furWhite, 2);
+  drawTinyTextCentered(status, ty, wordColor(), 2);
   ty += kTinyGlyphHeight * 2 + 12;
   drawTinyTextCentered(stat, ty, focusColor(), 2);
   ty += kTinyGlyphHeight * 2 + 12;
   const int barW = static_cast<int>(w * 0.5f);
   const int barX = cx - barW / 2;
   const int barH = std::max(6, R / 12);
-  fillVirtualRect(barX, ty, barW, barH, rgb565(60, 60, 60));
+  fillVirtualRect(barX, ty, barW, barH, blendOverBackground(wordColor(), 48));
   fillVirtualRect(barX, ty, barW * std::min<int>(goalPercent, 100) / 100, barH, gold);
 
   flushScaledFrame(1, w, h);
