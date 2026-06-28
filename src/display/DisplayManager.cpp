@@ -3185,11 +3185,23 @@ void DisplayManager::renderScrollView(const std::vector<ContextWord> &words, uin
     y += kScrollLineHeight;
   }
 
+  // Smooth scroll: advance the focus continuously through the current line (by word position plus
+  // the within-word progress) toward the next line, so the page glides word-by-word instead of
+  // snapping a whole line at the end of each line.
   const int currentCenterY = lineTops[currentLineIndex] + (contextGlyphHeight / 2);
-  const int nextCenterY = lineTops[nextLineIndex] + (contextGlyphHeight / 2);
+  const size_t belowLineIndex =
+      (currentLineIndex + 1 < lines.size()) ? currentLineIndex + 1 : currentLineIndex;
+  const int belowCenterY = lineTops[belowLineIndex] + (contextGlyphHeight / 2);
+  const ContextLine &curLine = lines[currentLineIndex];
+  const int lineWordCount =
+      std::max(1, static_cast<int>(curLine.end) - static_cast<int>(curLine.start));
+  const int wordsIntoLine = std::max(
+      0, std::min(lineWordCount - 1,
+                  static_cast<int>(currentLocalIndex) - static_cast<int>(curLine.start)));
+  const int lineFractionPermille = std::min(
+      1000, ((wordsIntoLine * 1000) + static_cast<int>(scrollProgressPermille)) / lineWordCount);
   const int focusCenterY =
-      currentCenterY +
-      (((nextCenterY - currentCenterY) * static_cast<int>(scrollProgressPermille)) / 1000);
+      currentCenterY + (((belowCenterY - currentCenterY) * lineFractionPermille) / 1000);
   const int preferredFocusY = textTop + ((textBottom - textTop) / 2);
   int scrollOffset = preferredFocusY - focusCenterY;
   const int minScrollOffset = std::min(0, textBottom - contentBottom);
@@ -3208,6 +3220,22 @@ void DisplayManager::renderScrollView(const std::vector<ContextWord> &words, uin
   lastRenderKey_ = renderKey;
   clearVirtualBuffer(virtualWidth, virtualHeight);
 
+  // Right-to-left page when the window is predominantly Hebrew: words on each line flow from the
+  // right edge leftward (the first word of the sentence sits rightmost), so a Hebrew page reads
+  // correctly. Latin-majority pages stay left-to-right.
+  int hebrewWords = 0;
+  int countedWords = 0;
+  for (const ContextWord &w : words) {
+    if (w.text.isEmpty()) {
+      continue;
+    }
+    ++countedWords;
+    if (wordIsHebrew(w.text)) {
+      ++hebrewWords;
+    }
+  }
+  const bool rtl = countedWords > 0 && hebrewWords * 2 >= countedWords;
+
   for (size_t lineIndex = 0; lineIndex < lines.size(); ++lineIndex) {
     const ContextLine &line = lines[lineIndex];
     const int lineY = lineTops[lineIndex] + scrollOffset;
@@ -3216,6 +3244,23 @@ void DisplayManager::renderScrollView(const std::vector<ContextWord> &words, uin
     }
     if (lineY > textBottom) {
       break;
+    }
+
+    if (rtl) {
+      int xRight =
+          virtualWidth - kScrollMarginX - (line.paragraphStart ? kScrollParagraphIndent : 0);
+      for (size_t wordIndex = line.start; wordIndex < line.end && wordIndex < words.size();
+           ++wordIndex) {
+        const ContextWord &word = words[wordIndex];
+        const uint16_t color =
+            (word.current && currentFocusHighlightEnabled()) ? focusColor() : wordColor();
+        const String visibleWord =
+            fitSerifText(word.text, xRight - kScrollMarginX, kScrollSerifDivisor);
+        const int w = measureSerifTextWidth(visibleWord, kScrollSerifDivisor);
+        drawSerifTextAt(visibleWord, xRight - w, lineY, color, kScrollSerifDivisor);
+        xRight -= w + kScrollSpaceWidth;
+      }
+      continue;
     }
 
     int x = kScrollMarginX + (line.paragraphStart ? kScrollParagraphIndent : 0);

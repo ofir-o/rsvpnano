@@ -94,7 +94,10 @@ constexpr size_t kContextPreviewMaxParagraphSnapWords = 48;
 // Throttle the in-reading position autosave. Longer interval = fewer NVS writes = less flash-page
 // churn and rarer compaction stalls (the occasional ~1-2 s freeze on the current word). The
 // position is also force-saved on pause/standby/menu/power-off, so this is just a crash backstop.
-constexpr uint32_t kProgressSaveIntervalMs = 45000;
+// Position is force-saved on every stop (pause/standby/sleep/menu/bookmark), so the periodic
+// in-playback autosave only needs to be a rare crash safety net. Keep it long so an NVS commit
+// (and its occasional ~1-2s compaction stall) almost never lands mid-reading.
+constexpr uint32_t kProgressSaveIntervalMs = 600000;
 constexpr uint32_t kUsbTransferExitHoldMs = 1200;
 constexpr size_t kTimeEstimateBlockWords = 256;
 constexpr size_t kTimeEstimateBlocksPerUpdate = 1;
@@ -1076,11 +1079,15 @@ void App::update(uint32_t nowMs) {
     return;
   }
 
-  // Keep Shuli's day-tracking current and persist her progress occasionally.
+  // Keep Shuli's day-tracking current (in RAM). Only commit to NVS when NOT actively reading, so a
+  // flash write (and its possible compaction stall) never lands mid-word. Accumulated words are
+  // flushed on pause/standby/sleep instead.
   if (nowMs - lastShuliUpdateMs_ >= 60000) {
     lastShuliUpdateMs_ = nowMs;
     shuli_.update();
-    shuli_.flush();
+    if (state_ != AppState::Playing) {
+      shuli_.flush();
+    }
   }
 
   const bool clockChanged = updateClock(nowMs);
@@ -1287,6 +1294,7 @@ void App::setState(AppState nextState, uint32_t nowMs) {
 
   if (state_ == AppState::Paused && previousState == AppState::Playing) {
     saveReadingPosition(true);
+    shuli_.flush();  // persist words read this session (pet NVS writes are skipped while reading)
   }
 
   applyStateCpuFrequency();
@@ -6609,6 +6617,7 @@ void App::enterStandby(uint32_t nowMs) {
   if (state_ == AppState::Playing) {
     saveReadingPosition(true);
   }
+  shuli_.flush();  // persist words read this session (pet NVS writes are skipped while reading)
 
   pausedTouch_.active = false;
   pausedTouchIntent_ = TouchIntent::None;
@@ -6862,6 +6871,7 @@ void App::enterPowerOff(uint32_t nowMs) {
 void App::enterSleep(uint32_t nowMs) {
   Serial.println("[app] entering light sleep; press BOOT to wake");
   saveReadingPosition(true);
+  shuli_.flush();  // persist words read this session (pet NVS writes are skipped while reading)
   setState(AppState::Sleeping, nowMs);
   Serial.flush();
   delay(200);
