@@ -2581,30 +2581,29 @@ void App::updateBatteryRuntimeLabel(uint32_t nowMs) {
   }
 }
 
+// The reader chrome is drawn at fixed corners (see DisplayManager drawBatteryBadge/drawFooter/
+// drawPreviousSentenceHint): book progress/metric in the TOP-LEFT, the battery badge in the
+// TOP-RIGHT, and the rewind hint ("<<") in the BOTTOM-RIGHT. The tap targets below must match those
+// positions so a tap on a label toggles that same label (battery -> battery, book -> book) instead
+// of landing on a neighbour. (The old readerControlsSwapped_ layout is no longer drawn, so it no
+// longer affects where you tap.)
 bool App::isFooterMetricTap(uint16_t x, uint16_t y) const {
-  return x >= Board::Config::DISPLAY_WIDTH - kReaderChromeMarginXPx - kFooterMetricTapWidthPx &&
-         y >= Board::Config::DISPLAY_HEIGHT - kReaderChromeBottomMarginPx - kFooterMetricTapHeightPx;
+  // Book progress / metric: top-left corner.
+  return x <= kReaderBatteryMarginXPx + kFooterMetricTapWidthPx &&
+         y <= kReaderBatteryTopMarginPx + kFooterMetricTapHeightPx;
 }
 
 bool App::isBatteryBadgeTap(uint16_t x, uint16_t y) const {
-  if (readerControlsSwapped_) {
-    return x <= kReaderBatteryMarginXPx + kBatteryBadgeTapWidthPx &&
-           y <= kReaderBatteryTopMarginPx + kBatteryBadgeTapHeightPx;
-  }
-
+  // Battery badge: top-right corner.
   return x >= Board::Config::DISPLAY_WIDTH - kReaderBatteryMarginXPx - kBatteryBadgeTapWidthPx &&
          y <= kReaderBatteryTopMarginPx + kBatteryBadgeTapHeightPx;
 }
 
 bool App::isPreviousSentenceTap(uint16_t x, uint16_t y) const {
-  if (readerControlsSwapped_) {
-    return x >= Board::Config::DISPLAY_WIDTH - kReaderChromeMarginXPx -
-                    kPreviousSentenceTapWidthPx &&
-           y <= kReaderChromeTopMarginPx + kPreviousSentenceTapHeightPx;
-  }
-
-  return x <= kReaderChromeMarginXPx + kPreviousSentenceTapWidthPx &&
-         y <= kReaderChromeTopMarginPx + kPreviousSentenceTapHeightPx;
+  // Rewind hint ("<<"): bottom-right corner.
+  return x >= Board::Config::DISPLAY_WIDTH - kReaderChromeMarginXPx - kPreviousSentenceTapWidthPx &&
+         y >= Board::Config::DISPLAY_HEIGHT - kReaderChromeBottomMarginPx -
+                  kPreviousSentenceTapHeightPx;
 }
 
 bool App::isActivelyReading() const { return state_ == AppState::Playing; }
