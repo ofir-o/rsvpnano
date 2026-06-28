@@ -3208,6 +3208,22 @@ void DisplayManager::renderScrollView(const std::vector<ContextWord> &words, uin
   lastRenderKey_ = renderKey;
   clearVirtualBuffer(virtualWidth, virtualHeight);
 
+  // Right-to-left page when the window is predominantly Hebrew: words on each line flow from the
+  // right edge leftward (the first word of the sentence sits rightmost), so a Hebrew page reads
+  // correctly. Latin-majority pages stay left-to-right.
+  int hebrewWords = 0;
+  int countedWords = 0;
+  for (const ContextWord &w : words) {
+    if (w.text.isEmpty()) {
+      continue;
+    }
+    ++countedWords;
+    if (wordIsHebrew(w.text)) {
+      ++hebrewWords;
+    }
+  }
+  const bool rtl = countedWords > 0 && hebrewWords * 2 >= countedWords;
+
   for (size_t lineIndex = 0; lineIndex < lines.size(); ++lineIndex) {
     const ContextLine &line = lines[lineIndex];
     const int lineY = lineTops[lineIndex] + scrollOffset;
@@ -3216,6 +3232,23 @@ void DisplayManager::renderScrollView(const std::vector<ContextWord> &words, uin
     }
     if (lineY > textBottom) {
       break;
+    }
+
+    if (rtl) {
+      int xRight =
+          virtualWidth - kScrollMarginX - (line.paragraphStart ? kScrollParagraphIndent : 0);
+      for (size_t wordIndex = line.start; wordIndex < line.end && wordIndex < words.size();
+           ++wordIndex) {
+        const ContextWord &word = words[wordIndex];
+        const uint16_t color =
+            (word.current && currentFocusHighlightEnabled()) ? focusColor() : wordColor();
+        const String visibleWord =
+            fitSerifText(word.text, xRight - kScrollMarginX, kScrollSerifDivisor);
+        const int w = measureSerifTextWidth(visibleWord, kScrollSerifDivisor);
+        drawSerifTextAt(visibleWord, xRight - w, lineY, color, kScrollSerifDivisor);
+        xRight -= w + kScrollSpaceWidth;
+      }
+      continue;
     }
 
     int x = kScrollMarginX + (line.paragraphStart ? kScrollParagraphIndent : 0);
