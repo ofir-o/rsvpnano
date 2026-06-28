@@ -16,6 +16,7 @@
 #include "board/BoardClock.h"
 #include "board/BoardConfig.h"
 #include "board/BoardStorage.h"
+#include "display/EmbeddedPoopik.h"  // kPoopikPurringFrameCount for the pet animation timing
 #include "settings/PreferenceKeys.h"
 
 #ifndef RSVP_USB_TRANSFER_ENABLED
@@ -58,6 +59,11 @@ constexpr uint32_t kScrollAnimationFrameMs = 16;
 constexpr uint16_t kSwipeThresholdPx = 40;
 constexpr uint16_t kAxisBiasPx = 12;
 constexpr uint16_t kTapSlopPx = 26;
+// A quick tap toggles play/pause even with a little finger drift: a short press that stayed within
+// this slop counts as a tap, and scrub/speed gestures only engage on a longer/larger drag. This
+// stops a tap from being misread as a word-scrub.
+constexpr uint16_t kReaderQuickTapMaxMs = 200;
+constexpr uint16_t kReaderQuickTapSlopPx = 48;
 constexpr uint16_t kPreviousSentenceTapWidthPx = 96;
 constexpr uint16_t kPreviousSentenceTapHeightPx = 60;
 constexpr uint16_t kFooterMetricTapWidthPx = 220;
@@ -2838,6 +2844,12 @@ void App::applyPausedTouchGesture(const TouchEvent &event, uint32_t nowMs) {
   const bool ended = event.phase == TouchPhase::End;
   const bool tapLike = absDeltaX <= static_cast<int>(kTapSlopPx) &&
                        absDeltaY <= static_cast<int>(kTapSlopPx);
+  // A quick, low-movement press counts as a tap (toggles play/pause) even if the finger drifted a
+  // little -- so a tap is never misread as a word-scrub.
+  const bool quickTap = pressDurationMs <= kReaderQuickTapMaxMs &&
+                        absDeltaX <= static_cast<int>(kReaderQuickTapSlopPx) &&
+                        absDeltaY <= static_cast<int>(kReaderQuickTapSlopPx);
+  const bool sustainedDrag = pressDurationMs > kReaderQuickTapMaxMs;
   const bool previewBrowseMode = contextViewVisible_ && !scrollModeEnabled();
 
   if (handleTopEdgeMenuSwipe(event, nowMs, deltaX, deltaY, ended)) {
@@ -2848,8 +2860,10 @@ void App::applyPausedTouchGesture(const TouchEvent &event, uint32_t nowMs) {
   }
 
   if (state_ == AppState::Playing) {
-    // Allow a vertical drag to change reading speed while running, just like when paused.
-    if (pausedTouchIntent_ == TouchIntent::None && !previewBrowseMode &&
+    // Allow a sustained vertical drag to change reading speed while running, just like when paused.
+    // The sustainedDrag gate keeps a quick tap (even with slight drift) from being read as a speed
+    // change, so a tap reliably pauses.
+    if (pausedTouchIntent_ == TouchIntent::None && !previewBrowseMode && sustainedDrag &&
         absDeltaY >= static_cast<int>(kSwipeThresholdPx) &&
         absDeltaY > absDeltaX + static_cast<int>(kAxisBiasPx)) {
       pausedTouchIntent_ = TouchIntent::Wpm;
@@ -2858,17 +2872,17 @@ void App::applyPausedTouchGesture(const TouchEvent &event, uint32_t nowMs) {
       if (ended) {
         pausedTouch_.active = false;
         pausedTouchIntent_ = TouchIntent::None;
-        if (tapLike) {
-          if (handleBatteryBadgeTap(event.x, event.y, nowMs)) {
-            return;
-          }
-          if (handleFooterMetricTap(event.x, event.y, nowMs)) {
-            return;
-          }
-          if (handlePreviousSentenceTap(event.x, event.y, nowMs)) {
-            return;
-          }
-          // A plain tap on the reading screen pauses reading.
+        if (tapLike && handleBatteryBadgeTap(event.x, event.y, nowMs)) {
+          return;
+        }
+        if (tapLike && handleFooterMetricTap(event.x, event.y, nowMs)) {
+          return;
+        }
+        if (tapLike && handlePreviousSentenceTap(event.x, event.y, nowMs)) {
+          return;
+        }
+        // A plain tap on the reading screen pauses reading.
+        if (tapLike || quickTap) {
           setState(AppState::Paused, nowMs);
         }
       }
@@ -2877,7 +2891,9 @@ void App::applyPausedTouchGesture(const TouchEvent &event, uint32_t nowMs) {
     // A speed gesture is in progress: fall through to the shared WPM handler below.
   }
 
-  if (pausedTouchIntent_ == TouchIntent::None) {
+  // Only start a scrub / speed / browse gesture once the press is a sustained drag, so a quick tap
+  // (even with slight drift) falls through to the play/pause toggle instead of jumping words.
+  if (pausedTouchIntent_ == TouchIntent::None && (sustainedDrag || !quickTap)) {
     if (absDeltaX >= static_cast<int>(kSwipeThresholdPx) &&
         absDeltaX > absDeltaY + static_cast<int>(kAxisBiasPx)) {
       pausedTouchIntent_ = TouchIntent::Scrub;
@@ -2944,7 +2960,7 @@ void App::applyPausedTouchGesture(const TouchEvent &event, uint32_t nowMs) {
       return;
     }
     // A plain tap on the reading screen resumes reading.
-    if (tapLike) {
+    if (tapLike || quickTap) {
       setState(AppState::Playing, nowMs);
     }
   }
@@ -3166,6 +3182,23 @@ void App::applyMenuTouchGesture(const TouchEvent &event, uint32_t nowMs) {
 
   pausedTouch_.active = false;
   menuRepeatDirection_ = 0;
+
+  // Reverse-gesture close (checked before the list-scroll handling so it wins). The main menu opens
+  // with a top-edge down-swipe -> a strong up-swipe closes it (the 7-item menu never needs to
+  // scroll). The pet opens with a bottom-edge up-swipe -> a strong down-swipe closes it. Scrolling
+  // list menus (Bookmarks/Books/Chapters/Settings) are left untouched.
+  {
+    const bool strongVertical = absDeltaY >= static_cast<int>(kMenuSwipeTriggerPx) &&
+                                absDeltaY > absDeltaX + static_cast<int>(kAxisBiasPx);
+    if (strongVertical && menuScreen_ == MenuScreen::Main && deltaY < 0) {
+      navigateBackInMenu(nowMs);
+      return;
+    }
+    if (strongVertical && menuScreen_ == MenuScreen::Shuli && deltaY > 0) {
+      navigateBackInMenu(nowMs);
+      return;
+    }
+  }
 
   if (menuScreen_ == MenuScreen::TextEntry) {
     if (MenuRepeat::isRightSwipe(deltaX, deltaY, kSwipeThresholdPx, kAxisBiasPx)) {
@@ -3936,10 +3969,13 @@ void App::updatePetAnimation(uint32_t nowMs) {
   if (state_ != AppState::Menu || menuScreen_ != MenuScreen::Shuli) {
     return;
   }
-  // ~12 fps cat purr animation; renderShuliView re-renders only when the frame actually changes
-  // (the frame index is part of the render cache key).
-  constexpr uint32_t kPoopikFrameIntervalMs = 90;
-  if (nowMs - lastPoopikFrameMs_ < kPoopikFrameIntervalMs) {
+  // Gentle purr animation. Slower than before, and the last frame (the settled smile) lingers
+  // longer so there's a little pause before the loop restarts. renderShuliView only actually
+  // redraws when the frame changes (the frame index is part of the render cache key).
+  const uint8_t frameCount = kPoopikPurringFrameCount;
+  const bool onLastFrame = frameCount > 0 && (poopikFrame_ % frameCount) == (frameCount - 1);
+  const uint32_t intervalMs = onLastFrame ? 750 : 160;
+  if (nowMs - lastPoopikFrameMs_ < intervalMs) {
     return;
   }
   lastPoopikFrameMs_ = nowMs;

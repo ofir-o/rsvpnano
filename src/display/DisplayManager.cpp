@@ -1837,6 +1837,11 @@ void DisplayManager::fillVirtualRect(int x, int y, int width, int height, uint16
 void DisplayManager::drawSerifTextAt(const String &text, int x, int y, uint16_t color,
                                      int divisor) {
   divisor = std::max(1, divisor);
+  if (wordIsHebrew(text)) {
+    drawHebrewWordVisual(text, x, y, divisor <= 1 ? 100 : static_cast<uint8_t>(std::max(1, 100 / divisor)),
+                         color);
+    return;
+  }
   int cursorX = x;
   const ReaderTypeface typeface = effectiveReaderTypefaceForText(text);
   for (size_t i = 0; i < text.length(); ++i) {
@@ -1856,6 +1861,10 @@ void DisplayManager::drawSerifTextAt(const String &text, int x, int y, uint16_t 
 }
 
 void DisplayManager::drawSerif70TextAt(const String &text, int x, int y, uint16_t color) {
+  if (wordIsHebrew(text)) {
+    drawHebrewWordVisual(text, x, y, 70, color);
+    return;
+  }
   int cursorX = x;
   const ReaderTypeface typeface = effectiveReaderTypefaceForText(text);
   for (size_t i = 0; i < text.length(); ++i) {
@@ -1873,6 +1882,10 @@ void DisplayManager::drawSerif70TextAt(const String &text, int x, int y, uint16_
 
 void DisplayManager::drawSerifTextScaledAt(const String &text, int x, int y, uint16_t color,
                                            uint8_t scalePercent) {
+  if (wordIsHebrew(text)) {
+    drawHebrewWordVisual(text, x, y, scalePercent, color);
+    return;
+  }
   int cursorX = x;
   const ReaderTypeface typeface = effectiveReaderTypefaceForText(text);
   for (size_t i = 0; i < text.length(); ++i) {
