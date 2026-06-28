@@ -8190,8 +8190,11 @@ void App::updateAutoRotate(uint32_t nowMs) {
 
   // Only auto-rotate in interactive reader/menu contexts. Leave standby,
   // sleeping, USB transfer, OTA and boot screens alone.
-  const bool rotatableContext = state_ == AppState::Paused || state_ == AppState::Playing ||
-                                state_ == AppState::Menu;
+  //
+  // Battery: skip IMU sampling entirely while words are actively playing -- that is the longest-
+  // running state, and re-orienting mid-word is jarring anyway. Orientation is re-checked the moment
+  // you pause, so the only cost is that a rotation made while reading takes effect on pause.
+  const bool rotatableContext = state_ == AppState::Paused || state_ == AppState::Menu;
   if (!rotatableContext) {
     return;
   }
