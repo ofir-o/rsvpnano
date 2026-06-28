@@ -1105,6 +1105,7 @@ void App::update(uint32_t nowMs) {
   updateAutoRotate(nowMs);
   updateReader(nowMs);
   handleTouch(nowMs);
+  updatePetAnimation(nowMs);
   updateWpmFeedback(nowMs);
   updateBrightnessToast(nowMs);
   updateAutoDim(nowMs);
@@ -3907,7 +3908,24 @@ void App::openArticlesMenu() {
 void App::openShuliScreen() {
   shuli_.update();
   menuSelectedIndex_ = 0;
+  poopikFrame_ = 0;
+  lastPoopikFrameMs_ = millis();
   menuScreen_ = MenuScreen::Shuli;
+  renderShuliView();
+}
+
+void App::updatePetAnimation(uint32_t nowMs) {
+  if (state_ != AppState::Menu || menuScreen_ != MenuScreen::Shuli) {
+    return;
+  }
+  // ~12 fps cat purr animation; renderShuliView re-renders only when the frame actually changes
+  // (the frame index is part of the render cache key).
+  constexpr uint32_t kPoopikFrameIntervalMs = 90;
+  if (nowMs - lastPoopikFrameMs_ < kPoopikFrameIntervalMs) {
+    return;
+  }
+  lastPoopikFrameMs_ = nowMs;
+  ++poopikFrame_;
   renderShuliView();
 }
 
@@ -3921,7 +3939,7 @@ void App::renderShuliView() {
     stat = String(shuli_.wordsToday()) + " / " + String(shuli_.goalWords()) + " words today";
   }
   display_.renderShuliScreen(static_cast<int>(shuli_.mood()), shuli_.statusLine(), stat,
-                             shuli_.goalPercent());
+                             shuli_.goalPercent(), poopikFrame_);
 }
 
 String App::bookmarkKey(const String &bookPath) const {

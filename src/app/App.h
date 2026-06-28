@@ -279,6 +279,8 @@ class App {
   void openArticlesMenu();
   void openShuliScreen();
   void renderShuliView();
+  // Advances the Poopik pet-screen animation while the pet screen is open.
+  void updatePetAnimation(uint32_t nowMs);
   void selectArticlesItem(uint32_t nowMs);
   void openQuickSettings(uint32_t nowMs);
   void selectQuickSettingsItem(uint32_t nowMs);
@@ -519,6 +521,9 @@ class App {
   FocusTimer focusTimer_;
   ShuliPet shuli_;
   uint32_t lastShuliUpdateMs_ = 0;
+  // Poopik pet-screen animation: current frame and when it last advanced.
+  uint8_t poopikFrame_ = 0;
+  uint32_t lastPoopikFrameMs_ = 0;
   ReadingLoop reader_;
   Input::Buttons::Button button_;
   Input::Buttons::Button powerButton_;

@@ -14,6 +14,7 @@
 #include "display/EmbeddedOpenDyslexicFont.h"
 #include "display/EmbeddedOpenDyslexicFont70.h"
 #include "display/EmbeddedHebrewFont.h"
+#include "display/EmbeddedPoopik.h"
 #include "display/EmbeddedSerifFont.h"
 #include "display/EmbeddedSerifFont70.h"
 #include "text/LatinText.h"
@@ -3706,13 +3707,15 @@ void DisplayManager::renderLifeScreensaver(const std::vector<uint32_t> &cells, u
 }
 
 void DisplayManager::renderShuliScreen(int mood, const String &status, const String &stat,
-                                       uint8_t goalPercent) {
+                                       uint8_t goalPercent, uint8_t spriteFrame) {
   const int w = logicalWidth();
   const int h = logicalHeight();
 
-  String key = "shuli|" + String(mood) + "|" + status + "|" + stat + "|" +
-               String(static_cast<int>(goalPercent)) + "|o:" +
-               String(static_cast<int>(uiOrientation_)) + "|b:" + batteryLabel_;
+  String key = "poopik|" + String(mood) + "|f:" + String(static_cast<int>(spriteFrame)) + "|" +
+               status + "|" + stat + "|" + String(static_cast<int>(goalPercent)) + "|o:" +
+               String(static_cast<int>(uiOrientation_)) + "|t:" +
+               String(static_cast<int>(themePalette_)) + "|d:" + String(darkMode_ ? 1 : 0) + "|n:" +
+               String(nightMode_ ? 1 : 0) + "|b:" + batteryLabel_;
   if (!initialized_ || key == lastRenderKey_) {
     return;
   }
@@ -3795,123 +3798,77 @@ void DisplayManager::renderShuliScreen(int mood, const String &status, const Str
   const int mx = cx;
   const int my = headY + static_cast<int>(R * 0.5f);
 
-  drawTinyTextCentered("Poopik", static_cast<int>(h * 0.06f), gold, 3);
+  // The old procedural cat was replaced by the pixel-art sprite below; keep the palette/geometry
+  // definitions referenced so the build stays warning-free without deleting them.
+  (void)furOrange;
+  (void)furWhite;
+  (void)pink;
+  (void)pinkDk;
+  (void)dark;
+  (void)tear;
+  (void)sickTint;
+  (void)whisker;
+  (void)bag;
+  (void)eo;
+  (void)eyeY;
+  (void)er;
+  (void)th;
+  (void)mx;
+  (void)my;
+  (void)mood;
+  (void)disc;
+  (void)ellipse;
+  (void)triUp;
+  (void)triDown;
+  (void)line;
+  (void)heart;
 
-  // Body, tail, then ears behind the head.
-  const int bodyCY = headY + static_cast<int>(R * 1.15f);
-  ellipse(cx + static_cast<int>(R * 1.15f), bodyCY + R / 3, static_cast<int>(R * 0.5f),
-          static_cast<int>(R * 0.22f), furOrange);
-  ellipse(cx, bodyCY, static_cast<int>(R * 1.25f), static_cast<int>(R * 0.95f), furWhite);
-  ellipse(cx + R / 2, bodyCY, static_cast<int>(R * 0.5f), static_cast<int>(R * 0.6f), furOrange);
+  drawTinyTextCentered("Poopik", static_cast<int>(h * 0.07f), footerColor(), 3);
 
-  const int earApexY = headY - static_cast<int>(R * 1.15f);
-  const int earH = static_cast<int>(R * 0.85f);
-  const int earHB = static_cast<int>(R * 0.55f);
-  triUp(cx - static_cast<int>(R * 0.62f), earApexY, earHB, earH, furOrange);
-  triUp(cx + static_cast<int>(R * 0.62f), earApexY, earHB, earH, furOrange);
-  triUp(cx - static_cast<int>(R * 0.62f), earApexY + earH / 4, earHB / 2, earH / 2, pink);
-  triUp(cx + static_cast<int>(R * 0.62f), earApexY + earH / 4, earHB / 2, earH / 2, pink);
-
-  // Head + white muzzle + forehead blaze.
-  disc(cx, headY, R, furOrange);
-  ellipse(cx, headY + static_cast<int>(R * 0.35f), static_cast<int>(R * 0.7f),
-          static_cast<int>(R * 0.5f), furWhite);
-  ellipse(cx, headY - static_cast<int>(R * 0.1f), static_cast<int>(R * 0.22f),
-          static_cast<int>(R * 0.6f), furWhite);
-
-  // Whiskers (both sides).
-  for (int i = -1; i <= 1; ++i) {
-    line(cx - er, my - er / 3 + i * er / 2, cx - eo - er, my - er / 2 + i * er, 2, whisker);
-    line(cx + er, my - er / 3 + i * er / 2, cx + eo + er, my - er / 2 + i * er, 2, whisker);
+  // Pixel-art Poopik. The art has a transparent background, so the themed background shows through.
+  // spriteFrame selects the animation frame; on a light theme the white outline is recolored to the
+  // theme ink so it stays visible (the near-black body already reads on a light background).
+  const uint8_t poopikFrameCount = kPoopikPurringFrameCount;
+  const uint8_t poopikFrame =
+      poopikFrameCount > 0 ? static_cast<uint8_t>(spriteFrame % poopikFrameCount) : 0;
+  const uint8_t *poopikPixels = kPoopikPurringFrames[poopikFrame];
+  const int poopikScale = std::max(1, static_cast<int>(std::min(w, h) * 0.42f) / kPoopikWidth);
+  const int poopikArtW = kPoopikWidth * poopikScale;
+  const int poopikArtH = kPoopikHeight * poopikScale;
+  const int poopikArtX = (w - poopikArtW) / 2;
+  const int poopikArtY = std::max(static_cast<int>(h * 0.12f), headY - poopikArtH / 2);
+  auto poopikLum = [](uint16_t c) {
+    const int r = ((c >> 11) & 0x1F) << 3;
+    const int g = ((c >> 5) & 0x3F) << 2;
+    const int b = (c & 0x1F) << 3;
+    return (r * 30 + g * 59 + b * 11) / 100;
+  };
+  const bool poopikLightBg = poopikLum(backgroundColor()) > 140;
+  const uint16_t poopikOutline = wordColor();
+  for (int sy = 0; sy < kPoopikHeight; ++sy) {
+    for (int sx = 0; sx < kPoopikWidth; ++sx) {
+      const uint8_t pidx = poopikPixels[sy * kPoopikWidth + sx];
+      if (kPoopikPaletteAlpha[pidx] == 0) {
+        continue;
+      }
+      uint16_t pcolor = kPoopikPalette565[pidx];
+      if (poopikLightBg && pcolor == 0xFFFF) {
+        pcolor = poopikOutline;
+      }
+      fillVirtualRect(poopikArtX + sx * poopikScale, poopikArtY + sy * poopikScale, poopikScale,
+                      poopikScale, pcolor);
+    }
   }
 
-  // Nose.
-  triDown(cx, headY + static_cast<int>(R * 0.26f), R / 12, R / 12, pinkDk);
-
-  const int eL = cx - eo;
-  const int eR = cx + eo;
-  switch (mood) {
-    case 0:  // Happy: closed ^^ eyes, big smile, blush, hearts
-      line(eL - er, eyeY + er / 3, eL, eyeY - er / 3, th, dark);
-      line(eL, eyeY - er / 3, eL + er, eyeY + er / 3, th, dark);
-      line(eR - er, eyeY + er / 3, eR, eyeY - er / 3, th, dark);
-      line(eR, eyeY - er / 3, eR + er, eyeY + er / 3, th, dark);
-      line(mx - er, my, mx, my + er / 2, th, dark);
-      line(mx, my + er / 2, mx + er, my, th, dark);
-      disc(eL - er / 2, my - er / 4, er / 2, pink);
-      disc(eR + er / 2, my - er / 4, er / 2, pink);
-      heart(cx - R, headY - R, R / 5, pinkDk);
-      heart(cx + R, headY - R, R / 5, pinkDk);
-      break;
-    case 1:  // Needy: big pleading eyes, tiny worried mouth, blush
-      disc(eL, eyeY, er, furWhite); disc(eL, eyeY, er * 7 / 10, dark);
-      disc(eL - er / 4, eyeY - er / 4, er * 3 / 10, furWhite);
-      disc(eR, eyeY, er, furWhite); disc(eR, eyeY, er * 7 / 10, dark);
-      disc(eR - er / 4, eyeY - er / 4, er * 3 / 10, furWhite);
-      disc(mx, my, er / 3, dark);
-      disc(eL - er / 2, my - er / 4, er / 2, pink);
-      disc(eR + er / 2, my - er / 4, er / 2, pink);
-      break;
-    case 2:  // Grumpy: angry brows, narrowed eyes, frown
-      line(eL - er, eyeY - er, eL + er / 2, eyeY - er / 3, th, dark);
-      line(eR + er, eyeY - er, eR - er / 2, eyeY - er / 3, th, dark);
-      fillVirtualRect(eL - er / 2, eyeY, er, th, dark);
-      fillVirtualRect(eR - er / 2, eyeY, er, th, dark);
-      line(mx - er, my + er / 3, mx, my - er / 4, th, dark);
-      line(mx, my - er / 4, mx + er, my + er / 3, th, dark);
-      break;
-    case 3:  // Sad: droopy eyes, raised-outer brows, tear, frown
-      disc(eL, eyeY + er / 4, er * 8 / 10, furWhite); disc(eL, eyeY + er / 4, er / 2, dark);
-      disc(eR, eyeY + er / 4, er * 8 / 10, furWhite); disc(eR, eyeY + er / 4, er / 2, dark);
-      line(eL - er, eyeY - er, eL, eyeY - er / 2, th, dark);
-      line(eR + er, eyeY - er, eR, eyeY - er / 2, th, dark);
-      triDown(eL, eyeY + er, er / 4, er * 3 / 4, tear);
-      line(mx - er, my + er / 3, mx, my - er / 4, th, dark);
-      line(mx, my - er / 4, mx + er, my + er / 3, th, dark);
-      break;
-    case 4:  // Sick: X eyes, greenish cheeks, flat mouth, sweat
-      line(eL - er / 2, eyeY - er / 2, eL + er / 2, eyeY + er / 2, th, dark);
-      line(eL - er / 2, eyeY + er / 2, eL + er / 2, eyeY - er / 2, th, dark);
-      line(eR - er / 2, eyeY - er / 2, eR + er / 2, eyeY + er / 2, th, dark);
-      line(eR - er / 2, eyeY + er / 2, eR + er / 2, eyeY - er / 2, th, dark);
-      disc(eL - er / 2, my - er / 4, er / 2, sickTint);
-      disc(eR + er / 2, my - er / 4, er / 2, sickTint);
-      fillVirtualRect(mx - er, my, 2 * er, th, dark);
-      triDown(cx + static_cast<int>(R * 0.55f), headY - R / 3, er / 4, er * 3 / 4, tear);
-      break;
-    default:  // 5 Miserable: X eyes, eyebags, big frown, sick cheeks
-      line(eL - er / 2, eyeY - er / 2, eL + er / 2, eyeY + er / 2, th, dark);
-      line(eL - er / 2, eyeY + er / 2, eL + er / 2, eyeY - er / 2, th, dark);
-      line(eR - er / 2, eyeY - er / 2, eR + er / 2, eyeY + er / 2, th, dark);
-      line(eR - er / 2, eyeY + er / 2, eR + er / 2, eyeY - er / 2, th, dark);
-      fillVirtualRect(eL - er, eyeY + er / 2, 2 * er, th, bag);
-      fillVirtualRect(eR - er, eyeY + er / 2, 2 * er, th, bag);
-      line(mx - er, my + er / 2, mx, my - er / 3, th, dark);
-      line(mx, my - er / 3, mx + er, my + er / 2, th, dark);
-      disc(eL - er / 2, my, er / 2, sickTint);
-      disc(eR + er / 2, my, er / 2, sickTint);
-      break;
-  }
-
-  // Posh little crown on top of her head (her snobby look), drawn last so it sits in front.
-  const int crownW = static_cast<int>(R * 0.7f);
-  const int bandH = std::max(3, R / 8);
-  const int bandY = headY - static_cast<int>(R * 0.82f);
-  fillVirtualRect(cx - crownW / 2, bandY, crownW, bandH, gold);
-  triUp(cx - crownW / 2 + crownW / 6, bandY - R / 5, crownW / 8, R / 5, gold);
-  triUp(cx, bandY - R / 4, crownW / 8, R / 4, gold);
-  triUp(cx + crownW / 2 - crownW / 6, bandY - R / 5, crownW / 8, R / 5, gold);
-  disc(cx, bandY + bandH / 2, std::max(2, R / 16), pinkDk);
-
-  // Status text + daily goal bar.
-  int ty = bodyCY + static_cast<int>(R * 1.1f);
+  // Status line + daily goal bar, below the pet (kept inside the round safe area).
+  int ty = poopikArtY + poopikArtH + 16;
   drawTinyTextCentered(status, ty, wordColor(), 2);
-  ty += kTinyGlyphHeight * 2 + 12;
+  ty += kTinyGlyphHeight * 2 + 8;
   drawTinyTextCentered(stat, ty, focusColor(), 2);
   ty += kTinyGlyphHeight * 2 + 12;
-  const int barW = static_cast<int>(w * 0.5f);
+  const int barW = static_cast<int>(w * 0.42f);
   const int barX = cx - barW / 2;
-  const int barH = std::max(6, R / 12);
+  const int barH = std::max(6, poopikScale);
   fillVirtualRect(barX, ty, barW, barH, blendOverBackground(wordColor(), 48));
   fillVirtualRect(barX, ty, barW * std::min<int>(goalPercent, 100) / 100, barH, gold);
 
