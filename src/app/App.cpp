@@ -11,6 +11,7 @@
 
 #include "app/MenuRepeat.h"
 #include <esp_random.h>
+#include <esp_sleep.h>
 
 #include "board/BoardClock.h"
 #include "board/BoardConfig.h"
@@ -27,8 +28,12 @@
 
 static const char *kAppTag = "app";
 constexpr uint32_t kOtaCheckTaskStackBytes = 10240;
-// Boot welcome screen dwell time -- long enough to read the greeting, short enough to feel snappy.
-constexpr uint32_t kBootSplashMs = 1800;
+// Boot welcome screen dwell time -- long enough to glimpse the greeting, short enough that turning
+// the device on feels snappy.
+constexpr uint32_t kBootSplashMs = 900;
+// How long the device stays in (instant-resume) light sleep before escalating to true deep sleep to
+// stop draining the battery when it has been forgotten in a bag/pocket.
+constexpr uint32_t kLightSleepBeforeDeepMs = 5UL * 60UL * 1000UL;
 constexpr uint32_t kWpmFeedbackMs = 900;
 constexpr uint32_t kBrightnessToastMs = 1500;
 constexpr uint32_t kPowerOffHoldMs = 1600;
@@ -1149,11 +1154,11 @@ void App::updateIdleStandby(uint32_t nowMs) {
     return;
   }
 
-  Serial.println("[app] idle timeout reached -> light sleep");
-  // Drop into low-power light sleep (near-off, ~mA instead of the ~tens of mA the awake screen-off
-  // standby drew) so the device barely sips battery in a pocket/bag. It wakes on the small BOOT
-  // button and resumes exactly where you left off. lastActivityMs_ is reset inside wakeFromSleep so
-  // it does not immediately sleep again on wake.
+  Serial.println("[app] idle timeout reached -> sleep");
+  // Enter the two-stage sleep: instant-resume light sleep first, then automatic deep sleep if the
+  // device is left untouched (see enterSleep). This is what keeps a forgotten device in a bag from
+  // draining its battery. It wakes on the small BOOT button; lastActivityMs_ is reset inside
+  // wakeFromSleep so it does not immediately sleep again on wake.
   enterSleep(nowMs);
 }
 
@@ -6783,7 +6788,20 @@ void App::enterSleep(uint32_t nowMs) {
   Input::Touch::end();
   touchInitialized_ = false;
 
+  // Two-stage power saving. First drop into light sleep, which resumes instantly on a button press
+  // (great for short breaks). But also arm a timer: if the device is left untouched past
+  // kLightSleepBeforeDeepMs (forgotten in a bag/pocket), the timer -- not a button -- wakes it and
+  // we escalate to true deep sleep so it sips ~microamps instead of slowly draining the battery.
+  esp_sleep_enable_timer_wakeup(static_cast<uint64_t>(kLightSleepBeforeDeepMs) * 1000ULL);
   Board::System::lightSleepUntilBootButton();
+  const esp_sleep_wakeup_cause_t wakeCause = esp_sleep_get_wakeup_cause();
+  esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_TIMER);
+  if (wakeCause == ESP_SLEEP_WAKEUP_TIMER) {
+    Serial.println("[app] idle too long in light sleep -> deep sleep to save battery");
+    Serial.flush();
+    Board::System::holdBacklightOffForDeepSleep();
+    Board::System::deepSleepUntilConfiguredWake();  // does not return; wakes via a fresh boot
+  }
   wakeFromSleep();
 }
 
