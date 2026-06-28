@@ -592,7 +592,9 @@ class App {
   size_t focusTimerGenreSelectedIndex_ = 0;
   // Default: sleep (screen off) after 2 minutes idle to save battery (index 2 == "2 min").
   uint8_t standbyTimerIndex_ = 2;
-  uint8_t brightnessLevelIndex_ = 4;
+  // Default brightness index into kBrightnessLevels ({40,55,70,85,100}%). 2 == 70%: plenty readable
+  // on the AMOLED while drawing noticeably less than full brightness. (Saved value overrides this.)
+  uint8_t brightnessLevelIndex_ = 2;
   uint8_t readerFontSizeIndex_ = 0;
   uint16_t menuRepeatDelayMs_ = MenuRepeat::kDefaultDelayMs;
   uint16_t pacingLongWordDelayMs_ = 200;

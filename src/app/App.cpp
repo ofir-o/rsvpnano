@@ -32,8 +32,12 @@ constexpr uint32_t kOtaCheckTaskStackBytes = 10240;
 // the device on feels snappy.
 constexpr uint32_t kBootSplashMs = 900;
 // How long the device stays in (instant-resume) light sleep before escalating to true deep sleep to
-// stop draining the battery when it has been forgotten in a bag/pocket.
-constexpr uint32_t kLightSleepBeforeDeepMs = 5UL * 60UL * 1000UL;
+// stop draining the battery when it has been forgotten in a bag/pocket. Kept short so a forgotten
+// device reaches the ~microamp deep-sleep state quickly.
+constexpr uint32_t kLightSleepBeforeDeepMs = 90UL * 1000UL;
+// A manually screen-off (Standby) device keeps the CPU running at ~mA; after this grace it drops to
+// real sleep so it can reach deep sleep instead of draining in a bag.
+constexpr uint32_t kStandbyToSleepMs = 45UL * 1000UL;
 constexpr uint32_t kWpmFeedbackMs = 900;
 constexpr uint32_t kBrightnessToastMs = 1500;
 constexpr uint32_t kPowerOffHoldMs = 1600;
@@ -1133,7 +1137,18 @@ void App::update(uint32_t nowMs) {
 }
 
 void App::updateIdleStandby(uint32_t nowMs) {
-  if (state_ == AppState::Standby || state_ == AppState::Sleeping || powerOffStarted_) {
+  if (state_ == AppState::Sleeping || powerOffStarted_) {
+    return;
+  }
+
+  // A screen-off Standby still runs the CPU (~mA). Don't let it sit there forever (e.g. pocketed
+  // after a manual screen-off) -- after a short grace, drop into real sleep so it can reach the
+  // ~microamp deep-sleep state and stop draining the battery.
+  if (state_ == AppState::Standby) {
+    if (nowMs - standbyEnteredMs_ >= kStandbyToSleepMs) {
+      Serial.println("[app] standby idle -> sleep");
+      enterSleep(nowMs);
+    }
     return;
   }
 
