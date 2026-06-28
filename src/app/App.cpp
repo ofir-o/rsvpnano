@@ -1162,8 +1162,8 @@ void App::updateIdleStandby(uint32_t nowMs) {
   // ~microamp deep-sleep state and stop draining the battery.
   if (state_ == AppState::Standby) {
     if (nowMs - standbyEnteredMs_ >= kStandbyToSleepMs) {
-      Serial.println("[app] standby idle -> sleep");
-      enterSleep(nowMs);
+      Serial.println("[app] standby idle -> power save");
+      enterIdlePowerSave(nowMs);
     }
     return;
   }
@@ -1186,12 +1186,23 @@ void App::updateIdleStandby(uint32_t nowMs) {
     return;
   }
 
-  Serial.println("[app] idle timeout reached -> sleep");
-  // Enter the two-stage sleep: instant-resume light sleep first, then automatic deep sleep if the
-  // device is left untouched (see enterSleep). This is what keeps a forgotten device in a bag from
-  // draining its battery. It wakes on the small BOOT button; lastActivityMs_ is reset inside
-  // wakeFromSleep so it does not immediately sleep again on wake.
-  enterSleep(nowMs);
+  Serial.println("[app] idle timeout reached -> power save");
+  enterIdlePowerSave(nowMs);
+}
+
+void App::enterIdlePowerSave(uint32_t nowMs) {
+  // What "idle for a few minutes" does depends on how the board can power down:
+  //   - Boards that can truly cut their rails via the PMU (the round 1.75) do a real power-off here.
+  //     The rails drop to ~microamps -- so a device forgotten in a bag does NOT drain the battery --
+  //     and a long press of the big PWR key powers it back on through the PMU, exactly like a normal
+  //     device. (If the PMU cut does not take, e.g. on USB, enterPowerOff falls back to a recoverable
+  //     wake loop, so it is never bricked.)
+  //   - Other boards keep the previous two-stage light/deep sleep that wakes on the BOOT button.
+  if (Board::Config::IDLE_TIMEOUT_POWERS_OFF) {
+    enterPowerOff(nowMs);
+  } else {
+    enterSleep(nowMs);
+  }
 }
 
 const char *App::stateName(AppState state) const {
