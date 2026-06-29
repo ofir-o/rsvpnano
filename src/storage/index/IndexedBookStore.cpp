@@ -175,7 +175,16 @@ bool IndexedBookStore::loadWordWindow(size_t index) const {
         return false;
     }
 
-    const size_t start = (index / kWordCacheSize) * kWordCacheSize;
+    // Centre the window on the requested word instead of using fixed block alignment. With block
+    // alignment the faded previous/next words rendered beside the current word straddle the window
+    // edge at every boundary, which forced 2-3 reloads back-to-back for a single word (a visible
+    // stutter). Centring keeps a half-window of margin on both sides, so the neighbours are always
+    // cached and a reload only happens after reading ~half a window away from the last load.
+    const size_t half = kWordCacheSize / 2;
+    size_t start = index > half ? index - half : 0;
+    if (wordCount() > kWordCacheSize && start + kWordCacheSize > wordCount()) {
+        start = wordCount() - kWordCacheSize;
+    }
     const size_t count = std::min(kWordCacheSize, wordCount() - start);
     std::vector<WordRecord> records;
     if (!readRecords(start, count, records) || records.empty()) {

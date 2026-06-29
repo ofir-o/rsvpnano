@@ -38,7 +38,10 @@ public:
 
     static constexpr uint32_t kMagic = 0x58444952UL; // RIDX
     static constexpr uint32_t kVersion = 5;
-    static constexpr size_t kWordCacheSize = 256;
+    // Larger window = fewer flash reloads while reading (each reload is a brief stall). Centred on
+    // the current word (see loadWordWindow), so a reload happens only after ~half a window of
+    // reading. 1024 short words is a small amount of RAM on the PSRAM-equipped boards.
+    static constexpr size_t kWordCacheSize = 1024;
 
     IndexedBookStore() = default;
     IndexedBookStore(const IndexedBookStore&) = delete;
