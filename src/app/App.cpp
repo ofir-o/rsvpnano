@@ -1255,11 +1255,14 @@ void App::setState(AppState nextState, uint32_t nowMs) {
     flushPendingTimeEstimateRebuild();
   }
 
+  // Always drop any open context/scrub preview on a state change. Notably when entering Paused: if a
+  // scrub left the preview open, a leftover contextViewVisible_ made the first tap-to-resume dismiss
+  // the preview instead of starting playback (so "one tap won't run the words").
+  contextViewVisible_ = false;
+  invalidateContextPreviewWindow();
   if (nextState != AppState::Paused) {
     pausedTouch_.active = false;
     pausedTouchIntent_ = TouchIntent::None;
-    contextViewVisible_ = false;
-    invalidateContextPreviewWindow();
     wpmFeedbackVisible_ = false;
   }
   if (nextState != AppState::Playing) {

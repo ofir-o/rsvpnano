@@ -369,6 +369,16 @@ bool isDottedInitialism(const String &word) {
 }
 
 bool looksLikeAbbreviation(const String &word, bool nextWordStartsLowercase) {
+  // Abbreviation heuristics are English/ASCII-only. Non-ASCII scripts (Hebrew is stored as 2-byte
+  // UTF-8) have no ASCII "readable characters", so the length checks below would wrongly flag a
+  // Hebrew word ending in '.' as an abbreviation and swallow its sentence-end pause. Any byte >= 0x80
+  // means it isn't an English abbreviation -> let the sentence pause apply.
+  for (size_t i = 0; i < word.length(); ++i) {
+    if (static_cast<uint8_t>(word[i]) >= 0x80) {
+      return false;
+    }
+  }
+
   String lowered = word;
   lowered.toLowerCase();
 
