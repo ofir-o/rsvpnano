@@ -722,8 +722,8 @@ ReaderGlyph hebrewGlyphForCodepoint(uint32_t cp) {
 
 struct HebrewPositionedGlyph {
   ReaderGlyph glyph;
-  int x;  // left edge relative to cursor origin 0, already scaled
-  bool isFocus = false;  // true for the ORP letter, which the reader colours
+  int x;         // left edge relative to cursor origin 0, already scaled
+  bool isFocus;  // true for the ORP letter (set explicitly at every push; keep this an aggregate)
 };
 
 struct HebrewLayoutResult {
