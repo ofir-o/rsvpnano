@@ -97,7 +97,9 @@ void ShuliPet::addWordsRead(uint32_t words) {
   if (!goalMetToday_ && goalWords_ > 0 && wordsToday_ >= goalWords_) {
     goalMetToday_ = true;
     missedDays_ = 0;  // feeding her revives her mood immediately
-    persist(true);
+    // Stay RAM-only here: writing the 5 NVS keys mid-word triggers a flash compaction stall that
+    // freezes the current word while reading. dirty_ is already set, so the next flush (on pause /
+    // standby / sleep) persists the goal-met state.
   }
 }
 
