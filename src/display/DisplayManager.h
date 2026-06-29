@@ -197,6 +197,10 @@ class DisplayManager {
                              uint8_t scalePercent);
   void drawTinyGlyph(int x, int y, char c, uint16_t color, int scale);
   void drawTinyTextAt(const String &text, int x, int y, uint16_t color, int scale);
+  // Draws a list-row label, left-aligned at leftX for Latin but right-aligned to rightEdge for
+  // Hebrew (so right-to-left titles read correctly).
+  void drawTinyRowLabel(const String &text, int leftX, int rightEdge, int y, uint16_t color,
+                        int scale);
   void drawTinyTextAt180(const String &text, int x, int y, uint16_t color, int scale);
   void drawTinyTextCentered(const String &text, int y, uint16_t color, int scale);
   void drawTinyTextCentered(const String &text, int y, uint16_t color, int scale, int width,

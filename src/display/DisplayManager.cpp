@@ -2074,6 +2074,16 @@ void DisplayManager::drawTinyTextCentered(const String &text, int y, uint16_t co
   drawTinyTextAt(text, std::max(0, (kVirtualBufferWidth - textWidth) / 2), y, color, scale);
 }
 
+void DisplayManager::drawTinyRowLabel(const String &text, int leftX, int rightEdge, int y,
+                                      uint16_t color, int scale) {
+  int x = leftX;
+  if (wordIsHebrew(text)) {
+    // Right-align Hebrew so it reads correctly; clamp so it never spills past the left inset.
+    x = std::max(leftX, rightEdge - measureTinyTextWidth(text, scale));
+  }
+  drawTinyTextAt(text, x, y, color, scale);
+}
+
 void DisplayManager::drawTinyTextCentered(const String &text, int y, uint16_t color, int scale,
                                           int width, int xOffset) {
   const int textWidth = measureTinyTextWidth(text, scale);
@@ -3473,8 +3483,8 @@ void DisplayManager::renderMenu(const std::vector<String> &items, size_t selecte
       fillVirtualRect(std::max(10, rowInset), y + 2, 5, kTinyGlyphHeight * kTinyScale + 2,
                       selectedBarColor());
     }
-    drawTinyTextAt(fitTinyText(items[itemIndex], maxWidth, kTinyScale), textX, y + 3, color,
-                   kTinyScale);
+    drawTinyRowLabel(fitTinyText(items[itemIndex], maxWidth, kTinyScale), textX, textX + maxWidth,
+                     y + 3, color, kTinyScale);
     y += rowHeight;
   }
 
@@ -3553,14 +3563,15 @@ void DisplayManager::renderLibrary(const std::vector<LibraryItem> &items, size_t
     }
 
     const String title = fitTinyText(item.title, maxWidth, kTinyScale);
+    const int rightEdge = textX + maxWidth;
     if (item.subtitle.isEmpty()) {
-      drawTinyTextAt(title, textX, rowY + 12, titleColor, kTinyScale);
+      drawTinyRowLabel(title, textX, rightEdge, rowY + 12, titleColor, kTinyScale);
       continue;
     }
 
-    drawTinyTextAt(title, textX, rowY + kLibraryTitleYOffset, titleColor, kTinyScale);
-    drawTinyTextAt(fitTinyText(item.subtitle, maxWidth, kTinyScale), textX,
-                   rowY + kLibrarySubtitleYOffset, subtitleColor, kTinyScale);
+    drawTinyRowLabel(title, textX, rightEdge, rowY + kLibraryTitleYOffset, titleColor, kTinyScale);
+    drawTinyRowLabel(fitTinyText(item.subtitle, maxWidth, kTinyScale), textX, rightEdge,
+                     rowY + kLibrarySubtitleYOffset, subtitleColor, kTinyScale);
   }
 
   drawBatteryBadge();
