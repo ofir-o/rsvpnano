@@ -705,6 +705,14 @@ bool wordIsHebrew(const String &word) {
   return false;
 }
 
+// Scale (as a percent of the native Hebrew glyph height) that makes the reader's Hebrew font come
+// out about as tall as the tiny bitmap font at the given integer tiny-text scale. Used so menus,
+// book titles and badges can show real Hebrew letters instead of ASCII gibberish.
+uint8_t tinyHebrewScalePercent(int scale) {
+  const int pct = (kTinyGlyphHeight * std::max(1, scale) * 100) / kEmbeddedHebrewHeight;
+  return static_cast<uint8_t>(std::max(8, pct));
+}
+
 ReaderGlyph hebrewGlyphForCodepoint(uint32_t cp) {
   const uint32_t index = cp - kEmbeddedHebrewFirstCodepoint;
   const EmbeddedHebrewGlyph &glyph = kEmbeddedHebrewGlyphs[index];
@@ -715,6 +723,7 @@ ReaderGlyph hebrewGlyphForCodepoint(uint32_t cp) {
 struct HebrewPositionedGlyph {
   ReaderGlyph glyph;
   int x;  // left edge relative to cursor origin 0, already scaled
+  bool isFocus = false;  // true for the ORP letter, which the reader colours
 };
 
 struct HebrewLayoutResult {
@@ -725,7 +734,11 @@ struct HebrewLayoutResult {
 // Lay out a Hebrew (possibly Hebrew+ASCII) word in visual left-to-right order at
 // the given scale. scalePercent 100 == native Hebrew glyph size (matches the
 // Large serif cell). Latin bytes inside the word reuse the serif glyphs.
-HebrewLayoutResult layoutHebrewWord(const String &word, uint8_t scalePercent) {
+//
+// focusOrdinal selects the ORP (optimal recognition point) letter, counted in reading order from
+// the right (logical letter 0). When >= 0 the layout records that glyph's visual centre as
+// focusCenterX and flags it so the reader can colour it; when < 0 the word is centred as a whole.
+HebrewLayoutResult layoutHebrewWord(const String &word, uint8_t scalePercent, int focusOrdinal = -1) {
   struct Unit {
     bool hebrew;
     uint32_t cp;
@@ -744,8 +757,29 @@ HebrewLayoutResult layoutHebrewWord(const String &word, uint8_t scalePercent) {
     }
   }
 
+  // Map the focus letter ordinal (counting non-space letters in reading order) to a logical index.
+  int focusLogicalIndex = -1;
+  if (focusOrdinal >= 0 && !logical.empty()) {
+    int ord = 0;
+    for (size_t k = 0; k < logical.size(); ++k) {
+      const bool isSpace = !logical[k].hebrew && logical[k].latin == ' ';
+      if (isSpace) {
+        continue;
+      }
+      if (ord == focusOrdinal) {
+        focusLogicalIndex = static_cast<int>(k);
+        break;
+      }
+      ++ord;
+    }
+    if (focusLogicalIndex < 0) {
+      focusLogicalIndex = static_cast<int>(logical.size()) - 1;
+    }
+  }
+
   HebrewLayoutResult result;
   int cursorX = 0;
+  bool haveFocusCenter = false;
   // Reverse for RTL: the last logical letter is drawn leftmost.
   for (size_t k = logical.size(); k-- > 0;) {
     const Unit &unit = logical[k];
@@ -757,11 +791,16 @@ HebrewLayoutResult layoutHebrewWord(const String &word, uint8_t scalePercent) {
     const int advance = std::max(1, scaledPercentDimension(glyph.xAdvance, scalePercent));
     const int left = cursorX + xOffset;
     updateTextLayoutBounds(result.metrics, left, width);
-    result.glyphs.push_back({glyph, left});
+    const bool isFocus = static_cast<int>(k) == focusLogicalIndex;
+    result.glyphs.push_back({glyph, left, isFocus});
+    if (isFocus) {
+      result.metrics.focusCenterX = width > 0 ? left + (width / 2) : cursorX + (advance / 2);
+      haveFocusCenter = true;
+    }
     cursorX += advance;
   }
 
-  if (result.metrics.hasPixels) {
+  if (result.metrics.hasPixels && !haveFocusCenter) {
     result.metrics.focusCenterX = result.metrics.minX + (textLayoutWidth(result.metrics) / 2);
   }
   return result;
@@ -770,7 +809,7 @@ HebrewLayoutResult layoutHebrewWord(const String &word, uint8_t scalePercent) {
 TextLayoutMetrics serifWordLayout(const String &word, int focusIndex, int divisor = 1) {
   if (wordIsHebrew(word)) {
     const uint8_t pct = divisor <= 1 ? 100 : static_cast<uint8_t>(std::max(1, 100 / divisor));
-    return layoutHebrewWord(word, pct).metrics;
+    return layoutHebrewWord(word, pct, focusIndex).metrics;
   }
   TextLayoutMetrics layout;
   int cursorX = 0;
@@ -809,7 +848,7 @@ TextLayoutMetrics serifWordLayout(const String &word, int focusIndex, int diviso
 TextLayoutMetrics serifWordLayoutScaledPercent(const String &word, int focusIndex,
                                                uint8_t scalePercent) {
   if (wordIsHebrew(word)) {
-    return layoutHebrewWord(word, scalePercent).metrics;
+    return layoutHebrewWord(word, scalePercent, focusIndex).metrics;
   }
   TextLayoutMetrics layout;
   int cursorX = 0;
@@ -848,7 +887,7 @@ TextLayoutMetrics serifWordLayoutScaledPercent(const String &word, int focusInde
 
 TextLayoutMetrics serif70WordLayout(const String &word, int focusIndex) {
   if (wordIsHebrew(word)) {
-    return layoutHebrewWord(word, 70).metrics;
+    return layoutHebrewWord(word, 70, focusIndex).metrics;
   }
   TextLayoutMetrics layout;
   int cursorX = 0;
@@ -927,10 +966,28 @@ int orpOrdinalForLength(int length) {
 }
 
 int findFocusLetterIndex(const String &word) {
-  // Hebrew renders right-to-left and centered; the byte-indexed ORP pivot does
-  // not apply, so center the word (focusIndex < 0).
+  // Hebrew renders right-to-left, so the byte-indexed ORP does not apply. Instead return the ORP
+  // letter ordinal counted in reading order from the right (logical letter 0); the Hebrew layout
+  // turns that into the right glyph's position and colour. (< 0 would centre the word with no ORP.)
   if (wordIsHebrew(word)) {
-    return -1;
+    int letters = 0;
+    for (size_t i = 0; i < word.length();) {
+      uint32_t cp = 0;
+      const size_t consumed = decodeHebrewLetter(word, i, cp);
+      if (consumed > 0) {
+        ++letters;
+        i += consumed;
+      } else {
+        if (word[i] != ' ') {
+          ++letters;
+        }
+        ++i;
+      }
+    }
+    if (letters <= 0) {
+      return -1;
+    }
+    return std::min(orpOrdinalForLength(letters), letters - 1);
   }
   int wordCharacterCount = 0;
   for (size_t i = 0; i < word.length(); ++i) {
@@ -958,6 +1015,23 @@ int findFocusLetterIndex(const String &word) {
   return 0;
 }
 
+// Where the ORP letter (and the anchor guide) sit horizontally. Hebrew reads right-to-left, so its
+// anchor is mirrored into the right half of the screen; Latin keeps the usual left-of-centre anchor.
+int rsvpAnchorX(const String &word, int virtualWidth) {
+  const int base = (virtualWidth * currentAnchorPercent()) / 100;
+  return wordIsHebrew(word) ? virtualWidth - base : base;
+}
+
+// Horizontal placement of a faded phantom (previous/next) word beside the current RSVP word. In
+// left-to-right text the previous word sits to the left and the next word to the right; Hebrew
+// (right-to-left) mirrors them so the ghosts read in the same direction as the main word.
+int phantomFlankX(int currentX, const TextLayoutMetrics &current, const TextLayoutMetrics &flank,
+                  int gap, bool rtl, bool isBefore) {
+  const bool placeRight = rtl ? isBefore : !isBefore;
+  return placeRight ? currentX + current.maxX + gap - flank.minX
+                    : currentX + current.minX - gap - flank.maxX;
+}
+
 int rsvpStartX(const String &word, int focusIndex, int virtualWidth, int divisor = 1,
                bool clampToMargins = true) {
   const TextLayoutMetrics layout = serifWordLayout(word, focusIndex, divisor);
@@ -966,7 +1040,7 @@ int rsvpStartX(const String &word, int focusIndex, int virtualWidth, int divisor
     return ((virtualWidth - wordWidth) / 2) - layout.minX;
   }
 
-  const int anchorX = (virtualWidth * currentAnchorPercent()) / 100;
+  const int anchorX = rsvpAnchorX(word, virtualWidth);
   const int x = anchorX - layout.focusCenterX;
   if (!clampToMargins) {
     return x;
@@ -989,7 +1063,7 @@ int rsvpStartXScaledPercent(const String &word, int focusIndex, int virtualWidth
     return ((virtualWidth - wordWidth) / 2) - layout.minX;
   }
 
-  const int anchorX = (virtualWidth * currentAnchorPercent()) / 100;
+  const int anchorX = rsvpAnchorX(word, virtualWidth);
   const int x = anchorX - layout.focusCenterX;
   if (!clampToMargins) {
     return x;
@@ -1013,7 +1087,7 @@ int rsvpStartX70(const String &word, int focusIndex, int virtualWidth, bool clam
     return ((virtualWidth - wordWidth) / 2) - layout.minX;
   }
 
-  const int anchorX = (virtualWidth * currentAnchorPercent()) / 100;
+  const int anchorX = rsvpAnchorX(word, virtualWidth);
   const int x = anchorX - layout.focusCenterX;
   if (!clampToMargins) {
     return x;
@@ -1483,6 +1557,12 @@ int DisplayManager::measureTinyTextWidth(const String &text, int scale) const {
   if (text.isEmpty()) {
     return 0;
   }
+  // Hebrew has no tiny bitmap font; menus/badges borrow the reader's Hebrew glyphs scaled down to
+  // tiny height, so measure the actual right-to-left layout width instead of counting raw bytes
+  // (each Hebrew letter is two UTF-8 bytes, which the byte count would over-count).
+  if (wordIsHebrew(text)) {
+    return textLayoutWidth(layoutHebrewWord(text, tinyHebrewScalePercent(scale)).metrics);
+  }
   return static_cast<int>(text.length()) * (kTinyGlyphWidth + kTinyGlyphSpacing) * scale -
          kTinyGlyphSpacing * scale;
 }
@@ -1547,7 +1627,13 @@ String DisplayManager::fitTinyText(const String &text, int maxWidth, int scale) 
   String fitted = text;
   const String ellipsis = "...";
   while (!fitted.isEmpty() && measureTinyTextWidth(fitted + ellipsis, scale) > maxWidth) {
-    fitted.remove(fitted.length() - 1);
+    // Drop a whole trailing UTF-8 unit so a 2-byte Hebrew letter is never split into a broken byte.
+    size_t drop = 1;
+    if (fitted.length() >= 2 &&
+        (static_cast<uint8_t>(fitted[fitted.length() - 1]) & 0xC0) == 0x80) {
+      drop = 2;
+    }
+    fitted.remove(fitted.length() - drop, drop);
   }
   while (!fitted.isEmpty() && fitted[fitted.length() - 1] == ' ') {
     fitted.remove(fitted.length() - 1, 1);
@@ -1765,16 +1851,17 @@ void DisplayManager::drawSerifGlyphScaledPercent(int x, int y, char c, uint16_t 
 }
 
 void DisplayManager::drawHebrewWordVisual(const String &word, int x, int y, uint8_t scalePercent,
-                                          uint16_t color) {
+                                          uint16_t color, int focusOrdinal, uint16_t focusColor) {
   if (scalePercent == 0) {
     scalePercent = 100;
   }
-  const HebrewLayoutResult layout = layoutHebrewWord(word, scalePercent);
+  const HebrewLayoutResult layout = layoutHebrewWord(word, scalePercent, focusOrdinal);
   for (const HebrewPositionedGlyph &positioned : layout.glyphs) {
     const ReaderGlyph &glyph = positioned.glyph;
     if (glyph.width == 0 || glyph.bitmap == nullptr) {
       continue;
     }
+    const uint16_t glyphColor = (focusOrdinal >= 0 && positioned.isFocus) ? focusColor : color;
     const int glyphHeight = glyph.height;
     const int scaledWidth =
         std::max(1, scalePercent == 100 ? static_cast<int>(glyph.width)
@@ -1814,7 +1901,7 @@ void DisplayManager::drawHebrewWordVisual(const String &word, int x, int y, uint
           continue;
         }
         virtualFrame_[dstY * kVirtualBufferWidth + dstX] =
-            panelColor(blendOverBackground(color, alpha));
+            panelColor(blendOverBackground(glyphColor, alpha));
       }
     }
   }
@@ -1968,6 +2055,13 @@ void DisplayManager::drawTinyTextAt180(const String &text, int x, int y, uint16_
 }
 
 void DisplayManager::drawTinyTextAt(const String &text, int x, int y, uint16_t color, int scale) {
+  // Hebrew (menus, book titles, badges): render the real right-to-left letters from the reader's
+  // Hebrew font scaled down to tiny height, instead of the ASCII-only bitmap font (which would
+  // print Latin gibberish for the UTF-8 bytes).
+  if (wordIsHebrew(text)) {
+    drawHebrewWordVisual(text, x, y, tinyHebrewScalePercent(scale), color);
+    return;
+  }
   int cursorX = x;
   for (size_t i = 0; i < text.length(); ++i) {
     drawTinyGlyph(cursorX, y, text[i], color, scale);
@@ -2214,7 +2308,8 @@ void DisplayManager::drawRsvpWordScaledAt(const String &word, int x, int y, int 
   divisor = std::max(1, divisor);
   if (wordIsHebrew(word)) {
     const uint8_t pct = divisor <= 1 ? 100 : static_cast<uint8_t>(std::max(1, 100 / divisor));
-    drawHebrewWordVisual(word, x, y, pct, wordColor());
+    const int focus = currentFocusHighlightEnabled() ? focusIndex : -1;
+    drawHebrewWordVisual(word, x, y, pct, wordColor(), focus, focusColor());
     return;
   }
   const bool highlightFocus = currentFocusHighlightEnabled();
@@ -2240,7 +2335,8 @@ void DisplayManager::drawRsvpWordScaledAt(const String &word, int x, int y, int 
 
 void DisplayManager::drawRsvp70WordAt(const String &word, int x, int y, int focusIndex) {
   if (wordIsHebrew(word)) {
-    drawHebrewWordVisual(word, x, y, 70, wordColor());
+    const int focus = currentFocusHighlightEnabled() ? focusIndex : -1;
+    drawHebrewWordVisual(word, x, y, 70, wordColor(), focus, focusColor());
     return;
   }
   const bool highlightFocus = currentFocusHighlightEnabled();
@@ -2264,7 +2360,8 @@ void DisplayManager::drawRsvp70WordAt(const String &word, int x, int y, int focu
 void DisplayManager::drawRsvpWordScaledPercentAt(const String &word, int x, int y, int focusIndex,
                                                  uint8_t scalePercent) {
   if (wordIsHebrew(word)) {
-    drawHebrewWordVisual(word, x, y, scalePercent, wordColor());
+    const int focus = currentFocusHighlightEnabled() ? focusIndex : -1;
+    drawHebrewWordVisual(word, x, y, scalePercent, wordColor(), focus, focusColor());
     return;
   }
   const bool highlightFocus = currentFocusHighlightEnabled();
@@ -2438,7 +2535,7 @@ void DisplayManager::renderRsvpWord(const String &word, const String &chapterLab
   const int y = std::max(0, (virtualHeight - glyphHeight) / 2);
   const int focusIndex = findFocusLetterIndex(word);
   const int x = rsvpStartX(word, focusIndex, virtualWidth, 1, false);
-  const int anchorX = (virtualWidth * currentAnchorPercent()) / 100;
+  const int anchorX = rsvpAnchorX(word, virtualWidth);
 
   clearVirtualBuffer(virtualWidth, virtualHeight);
   drawRsvpAnchorGuide(anchorX, y, glyphHeight);
@@ -2484,7 +2581,7 @@ void DisplayManager::renderRsvpWordWithWpm(const String &word, uint16_t wpm,
       std::max(0, virtualHeight - kTinyGlyphHeight * kTinyScale - kWpmFeedbackBottomMargin - 24);
   const int focusIndex = findFocusLetterIndex(word);
   const int x = rsvpStartX(word, focusIndex, virtualWidth, 1, false);
-  const int anchorX = (virtualWidth * currentAnchorPercent()) / 100;
+  const int anchorX = rsvpAnchorX(word, virtualWidth);
 
   clearVirtualBuffer(virtualWidth, virtualHeight);
   drawRsvpAnchorGuide(anchorX, wordY, glyphHeight);
@@ -2531,7 +2628,7 @@ void DisplayManager::renderPhantomRsvpWord(const String &beforeText, const Strin
     const int textY = std::max(0, (virtualHeight - mediumHeight) / 2);
     const int focusIndex = findFocusLetterIndex(word);
     const int currentX = rsvpStartX70(word, focusIndex, virtualWidth, false);
-    const int anchorX = (virtualWidth * currentAnchorPercent()) / 100;
+    const int anchorX = rsvpAnchorX(word, virtualWidth);
     const TextLayoutMetrics currentLayout = serif70WordLayout(word, focusIndex);
     const uint16_t phantomColor = blendOverBackground(wordColor(), kPhantomAlphaMedium);
 
@@ -2540,14 +2637,14 @@ void DisplayManager::renderPhantomRsvpWord(const String &beforeText, const Strin
     if (!beforeText.isEmpty()) {
       const TextLayoutMetrics beforeLayout = serif70WordLayout(beforeText, -1);
       const int beforeX =
-          currentX + currentLayout.minX - kPhantomCurrentGapMedium - beforeLayout.maxX;
+          phantomFlankX(currentX, currentLayout, beforeLayout, kPhantomCurrentGapMedium, wordIsHebrew(word), true);
       drawSerif70TextAt(beforeText, beforeX, textY, phantomColor);
     }
     drawRsvp70WordAt(word, currentX, textY, focusIndex);
     if (!afterText.isEmpty()) {
       const TextLayoutMetrics afterLayout = serif70WordLayout(afterText, -1);
       const int afterX =
-          currentX + currentLayout.maxX + kPhantomCurrentGapMedium - afterLayout.minX;
+          phantomFlankX(currentX, currentLayout, afterLayout, kPhantomCurrentGapMedium, wordIsHebrew(word), false);
       drawSerif70TextAt(afterText, afterX, textY, phantomColor);
     }
     if (showFooter) {
@@ -2577,7 +2674,7 @@ void DisplayManager::renderPhantomRsvpWord(const String &beforeText, const Strin
   const int focusIndex = findFocusLetterIndex(word);
   const int currentX =
       rsvpStartXScaledPercent(word, focusIndex, virtualWidth, style.scalePercent, false);
-  const int anchorX = (virtualWidth * currentAnchorPercent()) / 100;
+  const int anchorX = rsvpAnchorX(word, virtualWidth);
   const TextLayoutMetrics currentLayout =
       serifWordLayoutScaledPercent(word, focusIndex, style.scalePercent);
   const uint16_t phantomColor = blendOverBackground(wordColor(), style.alpha);
@@ -2587,14 +2684,14 @@ void DisplayManager::renderPhantomRsvpWord(const String &beforeText, const Strin
   if (!beforeText.isEmpty()) {
     const TextLayoutMetrics beforeLayout =
         serifWordLayoutScaledPercent(beforeText, -1, style.scalePercent);
-    const int beforeX = currentX + currentLayout.minX - style.currentGap - beforeLayout.maxX;
+    const int beforeX = phantomFlankX(currentX, currentLayout, beforeLayout, style.currentGap, wordIsHebrew(word), true);
     drawSerifTextScaledAt(beforeText, beforeX, textY, phantomColor, style.scalePercent);
   }
   drawRsvpWordScaledPercentAt(word, currentX, textY, focusIndex, style.scalePercent);
   if (!afterText.isEmpty()) {
     const TextLayoutMetrics afterLayout =
         serifWordLayoutScaledPercent(afterText, -1, style.scalePercent);
-    const int afterX = currentX + currentLayout.maxX + style.currentGap - afterLayout.minX;
+    const int afterX = phantomFlankX(currentX, currentLayout, afterLayout, style.currentGap, wordIsHebrew(word), false);
     drawSerifTextScaledAt(afterText, afterX, textY, phantomColor, style.scalePercent);
   }
   if (showFooter) {
@@ -2889,7 +2986,7 @@ void DisplayManager::renderTypographyPreview(const String &beforeText, const Str
     textY = std::max(textTop, std::min(textY, textBottom - textHeight));
     const int focusIndex = findFocusLetterIndex(word);
     const int currentX = rsvpStartX70(word, focusIndex, virtualWidth, false);
-    const int anchorX = (virtualWidth * currentAnchorPercent()) / 100;
+    const int anchorX = rsvpAnchorX(word, virtualWidth);
     const TextLayoutMetrics currentLayout = serif70WordLayout(word, focusIndex);
     const uint16_t phantomColor = blendOverBackground(wordColor(), kPhantomAlphaMedium);
 
@@ -2897,14 +2994,14 @@ void DisplayManager::renderTypographyPreview(const String &beforeText, const Str
     if (!beforeText.isEmpty()) {
       const TextLayoutMetrics beforeLayout = serif70WordLayout(beforeText, -1);
       const int beforeX =
-          currentX + currentLayout.minX - kPhantomCurrentGapMedium - beforeLayout.maxX;
+          phantomFlankX(currentX, currentLayout, beforeLayout, kPhantomCurrentGapMedium, wordIsHebrew(word), true);
       drawSerif70TextAt(beforeText, beforeX, textY, phantomColor);
     }
     drawRsvp70WordAt(word, currentX, textY, focusIndex);
     if (!afterText.isEmpty()) {
       const TextLayoutMetrics afterLayout = serif70WordLayout(afterText, -1);
       const int afterX =
-          currentX + currentLayout.maxX + kPhantomCurrentGapMedium - afterLayout.minX;
+          phantomFlankX(currentX, currentLayout, afterLayout, kPhantomCurrentGapMedium, wordIsHebrew(word), false);
       drawSerif70TextAt(afterText, afterX, textY, phantomColor);
     }
   } else {
@@ -2916,7 +3013,7 @@ void DisplayManager::renderTypographyPreview(const String &beforeText, const Str
     const int focusIndex = findFocusLetterIndex(word);
     const int currentX =
         rsvpStartXScaledPercent(word, focusIndex, virtualWidth, style.scalePercent, false);
-    const int anchorX = (virtualWidth * currentAnchorPercent()) / 100;
+    const int anchorX = rsvpAnchorX(word, virtualWidth);
     const TextLayoutMetrics currentLayout =
         serifWordLayoutScaledPercent(word, focusIndex, style.scalePercent);
     const uint16_t phantomColor = blendOverBackground(wordColor(), style.alpha);
@@ -2925,14 +3022,14 @@ void DisplayManager::renderTypographyPreview(const String &beforeText, const Str
     if (!beforeText.isEmpty()) {
       const TextLayoutMetrics beforeLayout =
           serifWordLayoutScaledPercent(beforeText, -1, style.scalePercent);
-      const int beforeX = currentX + currentLayout.minX - style.currentGap - beforeLayout.maxX;
+      const int beforeX = phantomFlankX(currentX, currentLayout, beforeLayout, style.currentGap, wordIsHebrew(word), true);
       drawSerifTextScaledAt(beforeText, beforeX, textY, phantomColor, style.scalePercent);
     }
     drawRsvpWordScaledPercentAt(word, currentX, textY, focusIndex, style.scalePercent);
     if (!afterText.isEmpty()) {
       const TextLayoutMetrics afterLayout =
           serifWordLayoutScaledPercent(afterText, -1, style.scalePercent);
-      const int afterX = currentX + currentLayout.maxX + style.currentGap - afterLayout.minX;
+      const int afterX = phantomFlankX(currentX, currentLayout, afterLayout, style.currentGap, wordIsHebrew(word), false);
       drawSerifTextScaledAt(afterText, afterX, textY, phantomColor, style.scalePercent);
     }
   }
@@ -2978,7 +3075,7 @@ void DisplayManager::renderPhantomRsvpWordWithWpm(const String &beforeText, cons
         std::max(0, virtualHeight - kTinyGlyphHeight * kTinyScale - kWpmFeedbackBottomMargin - 24);
     const int focusIndex = findFocusLetterIndex(word);
     const int currentX = rsvpStartX70(word, focusIndex, virtualWidth, false);
-    const int anchorX = (virtualWidth * currentAnchorPercent()) / 100;
+    const int anchorX = rsvpAnchorX(word, virtualWidth);
     const TextLayoutMetrics currentLayout = serif70WordLayout(word, focusIndex);
     const uint16_t phantomColor = blendOverBackground(wordColor(), kPhantomAlphaMedium);
 
@@ -2987,14 +3084,14 @@ void DisplayManager::renderPhantomRsvpWordWithWpm(const String &beforeText, cons
     if (!beforeText.isEmpty()) {
       const TextLayoutMetrics beforeLayout = serif70WordLayout(beforeText, -1);
       const int beforeX =
-          currentX + currentLayout.minX - kPhantomCurrentGapMedium - beforeLayout.maxX;
+          phantomFlankX(currentX, currentLayout, beforeLayout, kPhantomCurrentGapMedium, wordIsHebrew(word), true);
       drawSerif70TextAt(beforeText, beforeX, textY, phantomColor);
     }
     drawRsvp70WordAt(word, currentX, textY, focusIndex);
     if (!afterText.isEmpty()) {
       const TextLayoutMetrics afterLayout = serif70WordLayout(afterText, -1);
       const int afterX =
-          currentX + currentLayout.maxX + kPhantomCurrentGapMedium - afterLayout.minX;
+          phantomFlankX(currentX, currentLayout, afterLayout, kPhantomCurrentGapMedium, wordIsHebrew(word), false);
       drawSerif70TextAt(afterText, afterX, textY, phantomColor);
     }
     drawTinyTextCentered(wpmText, wpmY, focusColor(), kTinyScale);
@@ -3027,7 +3124,7 @@ void DisplayManager::renderPhantomRsvpWordWithWpm(const String &beforeText, cons
   const int focusIndex = findFocusLetterIndex(word);
   const int currentX =
       rsvpStartXScaledPercent(word, focusIndex, virtualWidth, style.scalePercent, false);
-  const int anchorX = (virtualWidth * currentAnchorPercent()) / 100;
+  const int anchorX = rsvpAnchorX(word, virtualWidth);
   const TextLayoutMetrics currentLayout =
       serifWordLayoutScaledPercent(word, focusIndex, style.scalePercent);
   const uint16_t phantomColor = blendOverBackground(wordColor(), style.alpha);
@@ -3037,14 +3134,14 @@ void DisplayManager::renderPhantomRsvpWordWithWpm(const String &beforeText, cons
   if (!beforeText.isEmpty()) {
     const TextLayoutMetrics beforeLayout =
         serifWordLayoutScaledPercent(beforeText, -1, style.scalePercent);
-    const int beforeX = currentX + currentLayout.minX - style.currentGap - beforeLayout.maxX;
+    const int beforeX = phantomFlankX(currentX, currentLayout, beforeLayout, style.currentGap, wordIsHebrew(word), true);
     drawSerifTextScaledAt(beforeText, beforeX, textY, phantomColor, style.scalePercent);
   }
   drawRsvpWordScaledPercentAt(word, currentX, textY, focusIndex, style.scalePercent);
   if (!afterText.isEmpty()) {
     const TextLayoutMetrics afterLayout =
         serifWordLayoutScaledPercent(afterText, -1, style.scalePercent);
-    const int afterX = currentX + currentLayout.maxX + style.currentGap - afterLayout.minX;
+    const int afterX = phantomFlankX(currentX, currentLayout, afterLayout, style.currentGap, wordIsHebrew(word), false);
     drawSerifTextScaledAt(afterText, afterX, textY, phantomColor, style.scalePercent);
   }
   drawTinyTextCentered(wpmText, wpmY, focusColor(), kTinyScale);
