@@ -47,6 +47,15 @@ constexpr const char *kPrefTypographyAnchor = "type_anc";
 constexpr const char *kPrefTypographyGuideWidth = "type_wid";
 constexpr const char *kPrefTypographyGuideGap = "type_gap";
 
+// Hebrew typography (independent overrides applied while reading Hebrew words).
+constexpr const char *kPrefHebFontSize = "hb_font_sz";
+constexpr const char *kPrefHebPhantom = "hb_phantom";
+constexpr const char *kPrefHebFocusHighlight = "hb_hlt";
+constexpr const char *kPrefHebTracking = "hb_trk";
+constexpr const char *kPrefHebAnchor = "hb_anc";
+constexpr const char *kPrefHebGuideWidth = "hb_wid";
+constexpr const char *kPrefHebGuideGap = "hb_gap";
+
 // Word pacing.
 constexpr const char *kPrefLegacyPacingLong = "pace_len";
 constexpr const char *kPrefLegacyPacingComplex = "pace_cpx";

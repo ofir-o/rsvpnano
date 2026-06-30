@@ -1269,6 +1269,8 @@ const char *DisplayManager::hebrewFontName(uint8_t index) const {
   return kEmbeddedHebrewFonts[index].name;
 }
 
+bool DisplayManager::textIsHebrew(const String &text) { return wordIsHebrew(text); }
+
 uint8_t DisplayManager::readerTypefaceCount() const {
   return static_cast<uint8_t>(kBuiltinTypefaceCount + kExtraFontCount);
 }

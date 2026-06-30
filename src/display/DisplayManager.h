@@ -86,6 +86,8 @@ class DisplayManager {
   uint8_t hebrewFontIndex() const;
   uint8_t hebrewFontCount() const;
   const char *hebrewFontName(uint8_t index) const;
+  // True when the text contains Hebrew letters (lets the app pick the Hebrew typography overrides).
+  static bool textIsHebrew(const String &text);
   // Book (reader) typeface count incl. extra embedded faces; name for an extra face value (>=3).
   uint8_t readerTypefaceCount() const;
   const char *extraReaderFontName(uint8_t typefaceValue) const;

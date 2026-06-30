@@ -202,6 +202,7 @@ enum TypographyTuningItem : size_t {
   TypographyTuningFontSize,
   TypographyTuningTypeface,
   TypographyTuningHebrewFont,
+  TypographyTuningHebrewSettings,
   TypographyTuningDeviceFont,
   TypographyTuningPhantomWords,
   TypographyTuningFocusHighlight,
@@ -211,6 +212,21 @@ enum TypographyTuningItem : size_t {
   TypographyTuningGuideGap,
   TypographyTuningReset,
   TypographyTuningItemCount,
+};
+
+// Hebrew typography sub-screen (opened from Typography > Hebrew typography). Mirrors the English
+// typography controls but stores/applies them independently whenever a Hebrew word is on screen.
+enum HebrewTypographyTuningItem : size_t {
+  HebrewTypographyTuningBack,
+  HebrewTypographyTuningFontSize,
+  HebrewTypographyTuningPhantomWords,
+  HebrewTypographyTuningFocusHighlight,
+  HebrewTypographyTuningTracking,
+  HebrewTypographyTuningAnchor,
+  HebrewTypographyTuningGuideWidth,
+  HebrewTypographyTuningGuideGap,
+  HebrewTypographyTuningReset,
+  HebrewTypographyTuningItemCount,
 };
 
 enum RestartConfirmItem : size_t {
@@ -962,6 +978,7 @@ void App::begin() {
   typographyConfig_.guideGap = static_cast<uint8_t>(clampIntSetting(
       preferences_.getUChar(kPrefTypographyGuideGap, typographyConfig_.guideGap),
       kTypographyGuideGapMin, kTypographyGuideGapMax));
+  loadHebrewTypographyPreferences();
   darkMode_ = preferences_.getBool(kPrefDarkMode, darkMode_);
   nightMode_ = preferences_.getBool(kPrefNightMode, nightMode_);
   yellowModeEnabled_ = preferences_.getBool(kPrefYellowMode, yellowModeEnabled_);
@@ -2013,6 +2030,7 @@ void App::reloadRuntimePreferences(uint32_t nowMs, bool rerender) {
   typographyConfig_.guideGap = static_cast<uint8_t>(clampIntSetting(
       preferences_.getUChar(kPrefTypographyGuideGap, typographyConfig_.guideGap),
       kTypographyGuideGapMin, kTypographyGuideGapMax));
+  loadHebrewTypographyPreferences();
   darkMode_ = preferences_.getBool(kPrefDarkMode, darkMode_);
   nightMode_ = preferences_.getBool(kPrefNightMode, nightMode_);
   yellowModeEnabled_ = preferences_.getBool(kPrefYellowMode, yellowModeEnabled_);
@@ -2053,6 +2071,35 @@ void App::applyTypographySettings(uint32_t nowMs, bool rerender) {
   if (state_ == AppState::Paused || state_ == AppState::Playing) {
     renderActiveReader(nowMs);
   }
+}
+
+void App::loadHebrewTypographyPreferences() {
+  // Hebrew typography starts as a copy of the English/Latin settings (and the same font size /
+  // phantom state), then loads any independently-saved Hebrew overrides on top. New users therefore
+  // see Hebrew tuned identically to English until they change it; tweaks to one no longer move both.
+  hebrewTypographyConfig_ = typographyConfig_;
+  hebrewFontSizeIndex_ = readerFontSizeIndex_;
+  hebrewPhantomWordsEnabled_ = phantomWordsEnabled_;
+
+  hebrewFontSizeIndex_ = preferences_.getUChar(kPrefHebFontSize, hebrewFontSizeIndex_);
+  if (hebrewFontSizeIndex_ >= kReaderFontSizeCount) {
+    hebrewFontSizeIndex_ = 0;
+  }
+  hebrewPhantomWordsEnabled_ = preferences_.getBool(kPrefHebPhantom, hebrewPhantomWordsEnabled_);
+  hebrewTypographyConfig_.focusHighlight =
+      preferences_.getBool(kPrefHebFocusHighlight, hebrewTypographyConfig_.focusHighlight);
+  hebrewTypographyConfig_.trackingPx = static_cast<int8_t>(clampIntSetting(
+      preferences_.getChar(kPrefHebTracking, hebrewTypographyConfig_.trackingPx),
+      kTypographyTrackingMin, kTypographyTrackingMax));
+  hebrewTypographyConfig_.anchorPercent = static_cast<uint8_t>(clampIntSetting(
+      preferences_.getUChar(kPrefHebAnchor, hebrewTypographyConfig_.anchorPercent),
+      kTypographyAnchorMin, kTypographyAnchorMax));
+  hebrewTypographyConfig_.guideHalfWidth = static_cast<uint8_t>(clampIntSetting(
+      preferences_.getUChar(kPrefHebGuideWidth, hebrewTypographyConfig_.guideHalfWidth),
+      kTypographyGuideWidthMin, kTypographyGuideWidthMax));
+  hebrewTypographyConfig_.guideGap = static_cast<uint8_t>(clampIntSetting(
+      preferences_.getUChar(kPrefHebGuideGap, hebrewTypographyConfig_.guideGap),
+      kTypographyGuideGapMin, kTypographyGuideGapMax));
 }
 
 void App::cycleBrightness(uint32_t nowMs) {
@@ -3598,6 +3645,13 @@ bool App::navigateBackInMenu(uint32_t nowMs) {
       renderSettings();
       return true;
 
+    case MenuScreen::HebrewTypographyTuning:
+      typographyTuningSelectedIndex_ = TypographyTuningHebrewSettings;
+      menuScreen_ = MenuScreen::TypographyTuning;
+      display_.setTypographyConfig(effectiveTypographyConfig());
+      renderTypographyTuning();
+      return true;
+
     case MenuScreen::BookPicker:
       if (Board::Config::ENABLE_RESTRUCTURED_MENU && bookPickerArticlesOnly_) {
         menuScreen_ = MenuScreen::Articles;
@@ -3672,6 +3726,9 @@ bool App::moveMenuSelection(int direction, bool wrap) {
   } else if (menuScreen_ == MenuScreen::TypographyTuning) {
     selectedIndex = &typographyTuningSelectedIndex_;
     itemCount = TypographyTuningItemCount;
+  } else if (menuScreen_ == MenuScreen::HebrewTypographyTuning) {
+    selectedIndex = &hebrewTypographyTuningSelectedIndex_;
+    itemCount = HebrewTypographyTuningItemCount;
   } else if (menuScreen_ == MenuScreen::BookPicker) {
     selectedIndex = &bookPickerSelectedIndex_;
     itemCount = bookMenuItems_.size();
@@ -3732,6 +3789,8 @@ bool App::moveMenuSelection(int direction, bool wrap) {
     Serial.printf("[wifi] selected=%s\n", wifiNetworkMenuItems_[wifiNetworkSelectedIndex_].title.c_str());
   } else if (menuScreen_ == MenuScreen::TypographyTuning) {
     Serial.printf("[typography] selected=%s\n", typographyTuningLabel().c_str());
+  } else if (menuScreen_ == MenuScreen::HebrewTypographyTuning) {
+    Serial.printf("[hebrew-typography] selected=%s\n", hebrewTypographyTuningLabel().c_str());
   } else if (menuScreen_ == MenuScreen::BookPicker) {
     Serial.printf("[book-picker] selected=%s\n",
                   bookMenuItems_[bookPickerSelectedIndex_].title.c_str());
@@ -3881,6 +3940,10 @@ void App::selectMenuItem(uint32_t nowMs) {
   }
   if (menuScreen_ == MenuScreen::TypographyTuning) {
     selectTypographyTuningItem(nowMs);
+    return;
+  }
+  if (menuScreen_ == MenuScreen::HebrewTypographyTuning) {
+    selectHebrewTypographyTuningItem(nowMs);
     return;
   }
   if (menuScreen_ == MenuScreen::BookPicker) {
@@ -5458,6 +5521,9 @@ void App::selectTypographyTuningItem(uint32_t nowMs) {
       preferences_.putUChar(kPrefHebrewFont, hebrewFontIndex_);
       display_.setHebrewFontIndex(hebrewFontIndex_);
       break;
+    case TypographyTuningHebrewSettings:
+      openHebrewTypographyTuning();
+      return;
     case TypographyTuningDeviceFont:
       uiFontIndex_ = display_.uiFontCount() > 0
                          ? static_cast<uint8_t>((uiFontIndex_ + 1) % display_.uiFontCount())
@@ -5533,6 +5599,110 @@ void App::cycleTypographyPreviewSample(int direction) {
   }
   typographyPreviewSampleIndex_ = static_cast<size_t>(next);
   renderTypographyTuning();
+}
+
+void App::openHebrewTypographyTuning() {
+  if (hebrewTypographyTuningSelectedIndex_ >= HebrewTypographyTuningItemCount ||
+      hebrewTypographyTuningSelectedIndex_ == HebrewTypographyTuningBack) {
+    hebrewTypographyTuningSelectedIndex_ = HebrewTypographyTuningFontSize;
+  }
+  menuScreen_ = MenuScreen::HebrewTypographyTuning;
+  renderHebrewTypographyTuning();
+}
+
+void App::selectHebrewTypographyTuningItem(uint32_t nowMs) {
+  switch (hebrewTypographyTuningSelectedIndex_) {
+    case HebrewTypographyTuningBack:
+      typographyTuningSelectedIndex_ = TypographyTuningHebrewSettings;
+      menuScreen_ = MenuScreen::TypographyTuning;
+      // Restore the Latin config for the Typography preview that re-uses the shared display config.
+      display_.setTypographyConfig(effectiveTypographyConfig());
+      renderTypographyTuning();
+      return;
+    case HebrewTypographyTuningFontSize:
+      hebrewFontSizeIndex_ = static_cast<uint8_t>((hebrewFontSizeIndex_ + 1) % kReaderFontSizeCount);
+      preferences_.putUChar(kPrefHebFontSize, hebrewFontSizeIndex_);
+      break;
+    case HebrewTypographyTuningPhantomWords:
+      hebrewPhantomWordsEnabled_ = !hebrewPhantomWordsEnabled_;
+      preferences_.putBool(kPrefHebPhantom, hebrewPhantomWordsEnabled_);
+      break;
+    case HebrewTypographyTuningFocusHighlight:
+      hebrewTypographyConfig_.focusHighlight = !hebrewTypographyConfig_.focusHighlight;
+      preferences_.putBool(kPrefHebFocusHighlight, hebrewTypographyConfig_.focusHighlight);
+      break;
+    case HebrewTypographyTuningTracking:
+      hebrewTypographyConfig_.trackingPx = static_cast<int8_t>(nextCyclicSetting(
+          hebrewTypographyConfig_.trackingPx, kTypographyTrackingMin, kTypographyTrackingMax));
+      preferences_.putChar(kPrefHebTracking, hebrewTypographyConfig_.trackingPx);
+      break;
+    case HebrewTypographyTuningAnchor: {
+      const uint8_t anchorMin =
+          (handednessMode_ == HandednessMode::Left) ? kLeftHandAnchorMin : kTypographyAnchorMin;
+      const uint8_t anchorMax =
+          (handednessMode_ == HandednessMode::Left) ? kLeftHandAnchorMax : kTypographyAnchorMax;
+      const uint8_t nextAnchorPercent = static_cast<uint8_t>(
+          nextCyclicSetting(effectiveHebrewAnchorPercent(), anchorMin, anchorMax));
+      hebrewTypographyConfig_.anchorPercent =
+          (handednessMode_ == HandednessMode::Left)
+              ? static_cast<uint8_t>(nextAnchorPercent - kLeftHandAnchorOffset)
+              : nextAnchorPercent;
+      preferences_.putUChar(kPrefHebAnchor, hebrewTypographyConfig_.anchorPercent);
+      break;
+    }
+    case HebrewTypographyTuningGuideWidth:
+      hebrewTypographyConfig_.guideHalfWidth = static_cast<uint8_t>(nextCyclicSetting(
+          hebrewTypographyConfig_.guideHalfWidth, kTypographyGuideWidthMin,
+          kTypographyGuideWidthMax, kTypographyGuideWidthStep));
+      preferences_.putUChar(kPrefHebGuideWidth, hebrewTypographyConfig_.guideHalfWidth);
+      break;
+    case HebrewTypographyTuningGuideGap:
+      hebrewTypographyConfig_.guideGap = static_cast<uint8_t>(nextCyclicSetting(
+          hebrewTypographyConfig_.guideGap, kTypographyGuideGapMin, kTypographyGuideGapMax));
+      preferences_.putUChar(kPrefHebGuideGap, hebrewTypographyConfig_.guideGap);
+      break;
+    case HebrewTypographyTuningReset:
+      hebrewTypographyConfig_ = defaultTypographyConfig();
+      hebrewFontSizeIndex_ = 0;
+      hebrewPhantomWordsEnabled_ = true;
+      preferences_.putUChar(kPrefHebFontSize, hebrewFontSizeIndex_);
+      preferences_.putBool(kPrefHebPhantom, hebrewPhantomWordsEnabled_);
+      preferences_.putBool(kPrefHebFocusHighlight, hebrewTypographyConfig_.focusHighlight);
+      preferences_.putChar(kPrefHebTracking, hebrewTypographyConfig_.trackingPx);
+      preferences_.putUChar(kPrefHebAnchor, hebrewTypographyConfig_.anchorPercent);
+      preferences_.putUChar(kPrefHebGuideWidth, hebrewTypographyConfig_.guideHalfWidth);
+      preferences_.putUChar(kPrefHebGuideGap, hebrewTypographyConfig_.guideGap);
+      break;
+    default:
+      return;
+  }
+
+  applyHebrewTypographySettings(nowMs);
+}
+
+void App::applyHebrewTypographySettings(uint32_t nowMs, bool rerender) {
+  Serial.printf("[hebrew-typography] size=%u phantom=%s highlight=%s track=%d anchor=%u "
+                "guideWidth=%u guideGap=%u\n",
+                static_cast<unsigned int>(hebrewFontSizeIndex_),
+                hebrewPhantomWordsEnabled_ ? "on" : "off",
+                hebrewTypographyConfig_.focusHighlight ? "on" : "off",
+                static_cast<int>(hebrewTypographyConfig_.trackingPx),
+                static_cast<unsigned int>(effectiveHebrewAnchorPercent()),
+                static_cast<unsigned int>(hebrewTypographyConfig_.guideHalfWidth),
+                static_cast<unsigned int>(hebrewTypographyConfig_.guideGap));
+
+  if (!rerender) {
+    return;
+  }
+
+  if (menuScreen_ == MenuScreen::HebrewTypographyTuning) {
+    renderHebrewTypographyTuning();
+    return;
+  }
+
+  if (state_ == AppState::Paused || state_ == AppState::Playing) {
+    renderActiveReader(nowMs);
+  }
 }
 
 void App::rebuildSettingsMenuItems() {
@@ -6162,6 +6332,8 @@ String App::typographyTuningLabel() const {
       return uiText(UiText::Typeface);
     case TypographyTuningHebrewFont:
       return "Hebrew font";
+    case TypographyTuningHebrewSettings:
+      return "Hebrew typography";
     case TypographyTuningDeviceFont:
       return "Device font";
     case TypographyTuningPhantomWords:
@@ -6193,6 +6365,8 @@ String App::typographyTuningValueLabel() const {
       return readerTypefaceLabel();
     case TypographyTuningHebrewFont:
       return display_.hebrewFontName(hebrewFontIndex_);
+    case TypographyTuningHebrewSettings:
+      return "Open >";
     case TypographyTuningDeviceFont:
       return display_.uiFontName(uiFontIndex_);
     case TypographyTuningPhantomWords:
@@ -6209,6 +6383,75 @@ String App::typographyTuningValueLabel() const {
     case TypographyTuningGuideGap:
       return String(static_cast<unsigned int>(typographyConfig_.guideGap)) + " px";
     case TypographyTuningReset:
+      return uiText(UiText::TapToReset);
+    default:
+      return "";
+  }
+}
+
+String App::hebrewFontSizeLabel() const {
+  uint8_t levelIndex = hebrewFontSizeIndex_;
+  if (levelIndex >= kReaderFontSizeCount) {
+    levelIndex = 0;
+  }
+  switch (levelIndex) {
+    case 0:
+      return uiText(UiText::Large);
+    case 1:
+      return uiText(UiText::Medium);
+    case 2:
+      return uiText(UiText::Small);
+    case 3:
+    default:
+      return "Extra Large";
+  }
+}
+
+String App::hebrewTypographyTuningLabel() const {
+  switch (hebrewTypographyTuningSelectedIndex_) {
+    case HebrewTypographyTuningBack:
+      return uiText(UiText::Back);
+    case HebrewTypographyTuningFontSize:
+      return uiText(UiText::FontSize);
+    case HebrewTypographyTuningPhantomWords:
+      return uiText(UiText::PhantomWords);
+    case HebrewTypographyTuningFocusHighlight:
+      return "Highlight";
+    case HebrewTypographyTuningTracking:
+      return uiText(UiText::Tracking);
+    case HebrewTypographyTuningAnchor:
+      return uiText(UiText::Anchor);
+    case HebrewTypographyTuningGuideWidth:
+      return uiText(UiText::GuideWidth);
+    case HebrewTypographyTuningGuideGap:
+      return uiText(UiText::GuideGap);
+    case HebrewTypographyTuningReset:
+      return uiText(UiText::Reset);
+    default:
+      return "Hebrew typography";
+  }
+}
+
+String App::hebrewTypographyTuningValueLabel() const {
+  switch (hebrewTypographyTuningSelectedIndex_) {
+    case HebrewTypographyTuningBack:
+      return uiText(UiText::TapToExit);
+    case HebrewTypographyTuningFontSize:
+      return hebrewFontSizeLabel();
+    case HebrewTypographyTuningPhantomWords:
+      return onOffLabel(hebrewPhantomWordsEnabled_);
+    case HebrewTypographyTuningFocusHighlight:
+      return onOffLabel(hebrewTypographyConfig_.focusHighlight);
+    case HebrewTypographyTuningTracking:
+      return String(hebrewTypographyConfig_.trackingPx >= 0 ? "+" : "") +
+             String(static_cast<int>(hebrewTypographyConfig_.trackingPx)) + " px";
+    case HebrewTypographyTuningAnchor:
+      return String(static_cast<unsigned int>(effectiveHebrewAnchorPercent())) + "%";
+    case HebrewTypographyTuningGuideWidth:
+      return String(static_cast<unsigned int>(hebrewTypographyConfig_.guideHalfWidth)) + " px";
+    case HebrewTypographyTuningGuideGap:
+      return String(static_cast<unsigned int>(hebrewTypographyConfig_.guideGap)) + " px";
+    case HebrewTypographyTuningReset:
       return uiText(UiText::TapToReset);
     default:
       return "";
@@ -7451,6 +7694,8 @@ void App::renderMenu() {
     renderTextEntry();
   } else if (menuScreen_ == MenuScreen::TypographyTuning) {
     renderTypographyTuning();
+  } else if (menuScreen_ == MenuScreen::HebrewTypographyTuning) {
+    renderHebrewTypographyTuning();
   } else if (menuScreen_ == MenuScreen::BookPicker) {
     renderBookPicker();
   } else if (menuScreen_ == MenuScreen::ChapterPicker) {
@@ -7538,6 +7783,10 @@ void App::renderTypographyTuning() {
     typographyTuningSelectedIndex_ = TypographyTuningFontSize;
   }
 
+  // The reader now swaps the active display config per word (Latin vs Hebrew), so force the Latin
+  // config here so this preview always reflects the English typography settings being edited.
+  display_.setTypographyConfig(effectiveTypographyConfig());
+
   const size_t index = typographyPreviewSampleIndex_;
   const size_t beforeIndex =
       index == 0 ? kTypographyPreviewWordCount - 1 : index - 1;
@@ -7572,9 +7821,44 @@ void App::renderTypographyTuning() {
     line2 = uiText(UiText::TapCycleSample);
   } else if (typographyTuningSelectedIndex_ == TypographyTuningReset) {
     line2 = uiText(UiText::TapToReset);
+  } else if (typographyTuningSelectedIndex_ == TypographyTuningHebrewSettings) {
+    line2 = "Tap to open";
   }
 
   display_.renderTypographyPreview(beforeText, currentWord, afterText, readerFontSizeIndex_, title,
+                                   line1, line2);
+}
+
+void App::renderHebrewTypographyTuning() {
+  if (hebrewTypographyTuningSelectedIndex_ >= HebrewTypographyTuningItemCount) {
+    hebrewTypographyTuningSelectedIndex_ = HebrewTypographyTuningFontSize;
+  }
+
+  // Preview with the Hebrew overrides active so the chosen anchor / tracking / highlight / size are
+  // visible on real Hebrew words.
+  display_.setTypographyConfig(effectiveHebrewTypographyConfig());
+
+  const String currentWord = String("\xD7\xA9\xD7\x9C\xD7\x95\xD7\x9D");           // שלום
+  const String beforeText =
+      hebrewPhantomWordsEnabled_ ? String("\xD7\xA1\xD7\xA4\xD7\xA8") : String("");  // ספר
+  const String afterText =
+      hebrewPhantomWordsEnabled_ ? String("\xD7\xA2\xD7\x95\xD7\x9C\xD7\x9D") : String("");  // עולם
+
+  const String line1 = hebrewTypographyTuningLabel() + ": " + hebrewTypographyTuningValueLabel();
+  const String title = "Hebrew typography";
+  String line2 = uiText(UiText::TapChangeSample);
+  if (hebrewTypographyTuningSelectedIndex_ == HebrewTypographyTuningBack) {
+    line2 = uiText(UiText::TapExitSample);
+  } else if (hebrewTypographyTuningSelectedIndex_ == HebrewTypographyTuningPhantomWords ||
+             hebrewTypographyTuningSelectedIndex_ == HebrewTypographyTuningFocusHighlight) {
+    line2 = uiText(UiText::TapToggleSample);
+  } else if (hebrewTypographyTuningSelectedIndex_ == HebrewTypographyTuningFontSize) {
+    line2 = uiText(UiText::TapCycleSample);
+  } else if (hebrewTypographyTuningSelectedIndex_ == HebrewTypographyTuningReset) {
+    line2 = uiText(UiText::TapToReset);
+  }
+
+  display_.renderTypographyPreview(beforeText, currentWord, afterText, hebrewFontSizeIndex_, title,
                                    line1, line2);
 }
 
@@ -8456,12 +8740,44 @@ DisplayManager::TypographyConfig App::effectiveTypographyConfig() const {
   return config;
 }
 
+uint8_t App::effectiveHebrewAnchorPercent() const {
+  return handednessMode_ == HandednessMode::Left
+             ? static_cast<uint8_t>(hebrewTypographyConfig_.anchorPercent + kLeftHandAnchorOffset)
+             : hebrewTypographyConfig_.anchorPercent;
+}
+
+DisplayManager::TypographyConfig App::effectiveHebrewTypographyConfig() const {
+  // Keep the reader typeface from the Latin config (Hebrew has its own embedded face selected
+  // separately); only the layout knobs are Hebrew-specific.
+  DisplayManager::TypographyConfig config = hebrewTypographyConfig_;
+  config.typeface = typographyConfig_.typeface;
+  config.anchorPercent = effectiveHebrewAnchorPercent();
+  return config;
+}
+
+bool App::currentReaderWordIsHebrew() const {
+  return DisplayManager::textIsHebrew(reader_.currentWord());
+}
+
+uint8_t App::effectiveReaderFontSizeIndex() const {
+  return currentReaderWordIsHebrew() ? hebrewFontSizeIndex_ : readerFontSizeIndex_;
+}
+
+bool App::effectiveReaderPhantomEnabled() const {
+  return currentReaderWordIsHebrew() ? hebrewPhantomWordsEnabled_ : phantomWordsEnabled_;
+}
+
+void App::applyReaderTypographyForCurrentWord() {
+  display_.setTypographyConfig(currentReaderWordIsHebrew() ? effectiveHebrewTypographyConfig()
+                                                           : effectiveTypographyConfig());
+}
+
 uint32_t App::currentReaderContentToken() const {
   return hashBookPath(currentBookPath_.isEmpty() ? String("__demo__") : currentBookPath_);
 }
 
 size_t App::phantomBeforeCharTarget() const {
-  uint8_t levelIndex = readerFontSizeIndex_;
+  uint8_t levelIndex = effectiveReaderFontSizeIndex();
   if (levelIndex >= kReaderFontSizeCount) {
     levelIndex = 0;
   }
@@ -8469,7 +8785,7 @@ size_t App::phantomBeforeCharTarget() const {
 }
 
 size_t App::phantomAfterCharTarget() const {
-  uint8_t levelIndex = readerFontSizeIndex_;
+  uint8_t levelIndex = effectiveReaderFontSizeIndex();
   if (levelIndex >= kReaderFontSizeCount) {
     levelIndex = 0;
   }
@@ -8567,6 +8883,9 @@ void App::renderActiveReader(uint32_t nowMs) {
   }
 
   applyReaderUiOrientation();
+  // Pick the English vs Hebrew typography overrides based on the word currently on screen, so the
+  // anchor guide / tracking / highlight match the script being read.
+  applyReaderTypographyForCurrentWord();
   if (scrollModeEnabled()) {
     if (wpmFeedbackVisible_) {
       renderScrollReader(nowMs, String(reader_.wpm()) + " WPM");
@@ -8626,9 +8945,12 @@ void App::handleCurrentBookReadFailure(uint32_t nowMs, const char *detail) {
 
 void App::renderReaderWord() {
   applyReaderUiOrientation();
+  applyReaderTypographyForCurrentWord();
   contextViewVisible_ = false;
-  const String beforeText = phantomWordsEnabled_ ? phantomBeforeText() : "";
-  const String afterText = phantomWordsEnabled_ ? phantomAfterText() : "";
+  const bool phantom = effectiveReaderPhantomEnabled();
+  const uint8_t fontSizeIndex = effectiveReaderFontSizeIndex();
+  const String beforeText = phantom ? phantomBeforeText() : "";
+  const String afterText = phantom ? phantomAfterText() : "";
   const DisplayManager::ReaderChrome chrome = readerChrome();
   const bool showReaderFooter = readerFooterVisible();
   const String footerMetricLabel = readerFooterStatusLabel();
@@ -8636,13 +8958,13 @@ void App::renderReaderWord() {
   // for a moment so the new reading speed is visible without pausing.
   if (wpmFeedbackVisible_ && millis() < wpmFeedbackUntilMs_) {
     display_.renderPhantomRsvpWordWithWpm(beforeText, reader_.currentWord(), afterText,
-                                          readerFontSizeIndex_, reader_.wpm(),
+                                          fontSizeIndex, reader_.wpm(),
                                           currentChapterLabel(), readingProgressPercent(),
                                           showReaderFooter, footerMetricLabel, chrome);
     return;
   }
   display_.renderPhantomRsvpWord(beforeText, reader_.currentWord(), afterText,
-                                 readerFontSizeIndex_, currentChapterLabel(),
+                                 fontSizeIndex, currentChapterLabel(),
                                  readingProgressPercent(), showReaderFooter, footerMetricLabel,
                                  chrome);
 }
@@ -8799,12 +9121,14 @@ void App::renderWpmFeedback(uint32_t nowMs) {
   }
 
   contextViewVisible_ = false;
-  const String beforeText = phantomWordsEnabled_ ? phantomBeforeText() : "";
-  const String afterText = phantomWordsEnabled_ ? phantomAfterText() : "";
+  applyReaderTypographyForCurrentWord();
+  const bool phantom = effectiveReaderPhantomEnabled();
+  const String beforeText = phantom ? phantomBeforeText() : "";
+  const String afterText = phantom ? phantomAfterText() : "";
   const DisplayManager::ReaderChrome chrome = readerChrome();
   const String footerMetricLabel = readerFooterStatusLabel();
   display_.renderPhantomRsvpWordWithWpm(beforeText, reader_.currentWord(), afterText,
-                                        readerFontSizeIndex_, reader_.wpm(),
+                                        effectiveReaderFontSizeIndex(), reader_.wpm(),
                                         currentChapterLabel(), readingProgressPercent(),
                                         readerFooterVisible(), footerMetricLabel, chrome);
 }
