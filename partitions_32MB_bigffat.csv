@@ -1,0 +1,8 @@
+# Partition table for the Waveshare AMOLED 1.75C (ships a 32 MB GD25Q256 flash), USB-updated so the
+# second OTA app slot is dropped and the entire remaining flash becomes one large FAT library
+# partition (~27 MB) for big books plus their word indexes. ffat ends exactly at 32 MB.
+# Name,     Type, SubType,  Offset,    Size,      Flags
+nvs,        data, nvs,      0x9000,    0x5000,
+otadata,    data, ota,      0xe000,    0x2000,
+app0,       app,  ota_0,    0x10000,   0x500000,
+ffat,       data, fat,      0x510000,  0x1AF0000,
