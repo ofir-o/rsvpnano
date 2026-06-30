@@ -52,8 +52,19 @@ bool writeRegisters(uint8_t reg, const uint8_t *buffer, uint8_t count) {
 }  // namespace
 
 bool begin() {
-  Wire.beginTransmission(kAddress);
-  return Wire.endTransmission(true) == 0;
+  // The RTC shares the I2C bus with the touch controller and PMU, which are all initialised around
+  // the same time at boot (and the PMU briefly cold-boots the peripheral rails). A single probe can
+  // catch the bus mid-contention or the RTC a few ms before its rail has fully settled, which then
+  // latches a spurious "no RTC". Retry a handful of times with a short settle delay before giving up
+  // -- this only ever issues an address probe, so it cannot disturb the bus or any rail.
+  for (uint8_t attempt = 0; attempt < 5; ++attempt) {
+    Wire.beginTransmission(kAddress);
+    if (Wire.endTransmission(true) == 0) {
+      return true;
+    }
+    delay(20);
+  }
+  return false;
 }
 
 bool read(DateTime &out, bool *oscillatorStopped) {
