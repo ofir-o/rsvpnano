@@ -110,6 +110,7 @@ class App {
     WifiNetworks,
     TextEntry,
     TypographyTuning,
+    HebrewTypographyTuning,
     BookPicker,
     ChapterPicker,
     RestartConfirm,
@@ -305,6 +306,10 @@ class App {
   void selectWifiSettingsItem(uint32_t nowMs);
   void openTypographyTuning();
   void selectTypographyTuningItem(uint32_t nowMs);
+  void openHebrewTypographyTuning();
+  void selectHebrewTypographyTuningItem(uint32_t nowMs);
+  void applyHebrewTypographySettings(uint32_t nowMs, bool rerender = true);
+  void loadHebrewTypographyPreferences();
   void cycleTypographyPreviewSample(int direction);
   void rebuildSettingsMenuItems();
   void applyPacingSettings();
@@ -353,6 +358,9 @@ class App {
   String readerTypefaceLabel() const;
   String typographyTuningLabel() const;
   String typographyTuningValueLabel() const;
+  String hebrewTypographyTuningLabel() const;
+  String hebrewTypographyTuningValueLabel() const;
+  String hebrewFontSizeLabel() const;
   String uiText(UiText key) const;
   void openBookPicker(bool articlesOnly = false);
   void selectBookPickerItem(uint32_t nowMs);
@@ -431,6 +439,7 @@ class App {
   void renderArticlesMenu();
   void renderSettings();
   void renderTypographyTuning();
+  void renderHebrewTypographyTuning();
   void renderBookPicker();
   void renderChapterPicker();
   void renderRestartConfirm();
@@ -509,6 +518,14 @@ class App {
   bool uiRotated180() const;
   uint8_t effectiveAnchorPercent() const;
   DisplayManager::TypographyConfig effectiveTypographyConfig() const;
+  // Hebrew typography overrides: when the current reader word is Hebrew, the reader uses these
+  // values instead of the English/Latin ones so the two scripts can be tuned independently.
+  uint8_t effectiveHebrewAnchorPercent() const;
+  DisplayManager::TypographyConfig effectiveHebrewTypographyConfig() const;
+  bool currentReaderWordIsHebrew() const;
+  uint8_t effectiveReaderFontSizeIndex() const;
+  bool effectiveReaderPhantomEnabled() const;
+  void applyReaderTypographyForCurrentWord();
   uint32_t currentReaderContentToken() const;
   String formatFocusTimerDuration(uint32_t durationMs) const;
   String formatFocusTimerRemaining(uint32_t nowMs) const;
@@ -607,6 +624,7 @@ class App {
   uint16_t pacingComplexWordDelayMs_ = 200;
   uint16_t pacingPunctuationDelayMs_ = 200;
   size_t typographyTuningSelectedIndex_ = 1;
+  size_t hebrewTypographyTuningSelectedIndex_ = 1;
   size_t typographyPreviewSampleIndex_ = 0;
   MenuScreen menuScreen_ = MenuScreen::Main;
   MenuScreen restartConfirmReturnScreen_ = MenuScreen::Main;
@@ -706,6 +724,8 @@ class App {
   bool batteryRuntimeEstimateReady_ = false;
   uint8_t batteryCriticalSampleCount_ = 0;
   bool phantomWordsEnabled_ = true;
+  bool hebrewPhantomWordsEnabled_ = true;  // Hebrew-specific phantom toggle (Hebrew typography)
+  uint8_t hebrewFontSizeIndex_ = 0;        // Hebrew-specific reader font size (Hebrew typography)
   // Hidden while the words are running (matches the book-progress label), for a clean reading view.
   // Re-enable via Settings -> Display -> "Reading battery".
   bool readerBatteryVisibleWhilePlaying_ = false;
@@ -733,4 +753,5 @@ class App {
   bool autoRotateActive_ = false;
   Board::Config::UiOrientation autoRotateOrientation_ = Board::Config::DEFAULT_UI_ORIENTATION;
   DisplayManager::TypographyConfig typographyConfig_;
+  DisplayManager::TypographyConfig hebrewTypographyConfig_;
 };
