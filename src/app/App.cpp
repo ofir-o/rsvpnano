@@ -319,6 +319,7 @@ constexpr size_t kSettingsPacingRestructuredLongWordsIndex = 3;
 constexpr size_t kSettingsPacingRestructuredComplexityIndex = 4;
 constexpr size_t kSettingsPacingRestructuredPunctuationIndex = 5;
 constexpr size_t kSettingsPacingRestructuredResetIndex = 6;
+constexpr size_t kSettingsPacingRestructuredGoalIndex = 7;  // Poopik daily word goal
 constexpr size_t kWifiSettingsNetworkIndex = 1;
 constexpr size_t kWifiSettingsChooseIndex = 2;
 constexpr size_t kWifiSettingsAutoUpdateIndex = 3;
@@ -3196,8 +3197,9 @@ void App::applyMenuTouchGesture(const TouchEvent &event, uint32_t nowMs) {
 
   // The pet screen is not a scrolling list, so handle it directly: the generic menu treats finger
   // movement as a list-scroll and swallows it, which is why rubbing Poopik did nothing. Wait for
-  // release, then a strong downward swipe closes the pet, a clear horizontal swipe cycles the daily
-  // goal, and anything else (a tap OR a rub) pets him -> he purrs, or bites if he's been neglected.
+  // release, then a strong downward swipe closes the pet and ANY other touch (a tap OR a rub, in any
+  // direction) pets him -> he purrs, or bites if he's been neglected. (The daily goal now lives in
+  // Settings > Word pacing > Daily goal, so a swipe here no longer changes it.)
   if (menuScreen_ == MenuScreen::Shuli) {
     if (event.phase != TouchPhase::End) {
       return;
@@ -3208,15 +3210,6 @@ void App::applyMenuTouchGesture(const TouchEvent &event, uint32_t nowMs) {
                             absDeltaY > absDeltaX + static_cast<int>(kAxisBiasPx);
     if (strongDown) {
       navigateBackInMenu(nowMs);
-      return;
-    }
-    if (absDeltaX >= static_cast<int>(kSwipeThresholdPx) &&
-        absDeltaX > absDeltaY + static_cast<int>(kAxisBiasPx)) {
-      shuli_.cycleGoal(deltaX > 0 ? 1 : -1);
-      shuli_.flush();
-      petInteractionActive_ = false;
-      poopikFrame_ = 0;
-      renderShuliView();
       return;
     }
     selectMenuItem(nowMs);
@@ -4792,6 +4785,12 @@ void App::selectRestructuredSettingsItem(uint32_t nowMs) {
         preferences_.putUShort(kPrefPacingPunctuationMs, pacingPunctuationDelayMs_);
         pacingConfigChanged = true;
         break;
+      case kSettingsPacingRestructuredGoalIndex:
+        shuli_.cycleGoal(1);  // step through the preset daily word goals (Poopik)
+        shuli_.flush();
+        rebuildSettingsMenuItems();
+        renderSettings();
+        return;
       default:
         return;
     }
@@ -5586,6 +5585,7 @@ void App::rebuildSettingsMenuItems() {
       settingsMenuItems_.push_back(uiText(UiText::Punctuation) + ": " +
                                    pacingDelayLabel(pacingPunctuationDelayMs_));
       settingsMenuItems_.push_back(uiText(UiText::ResetPacing));
+      settingsMenuItems_.push_back("Daily goal: " + shuli_.goalLabel());
     } else if (menuScreen_ == MenuScreen::WifiSettings) {
       settingsMenuItems_.push_back(uiText(UiText::Back));
       settingsMenuItems_.push_back("Network: " +
@@ -6167,7 +6167,7 @@ String App::typographyTuningLabel() const {
     case TypographyTuningPhantomWords:
       return uiText(UiText::PhantomWords);
     case TypographyTuningFocusHighlight:
-      return uiText(UiText::RedHighlight);
+      return "Highlight";
     case TypographyTuningTracking:
       return uiText(UiText::Tracking);
     case TypographyTuningAnchor:
