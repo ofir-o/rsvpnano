@@ -653,8 +653,11 @@ class App {
   uint8_t batteryDisplayedPercent_ = 0;
   uint8_t batteryRuntimeAnchorPercent_ = 0;
   uint32_t batteryRuntimeMinutesRemaining_ = 0;
-  uint32_t cpuMhzPlay_ = 160;
-  uint32_t cpuMhzScroll_ = 160;
+  // Reading/scrolling at full clock: the per-word pixel remap + QSPI flush is CPU-bound, so 160 MHz
+  // could not keep up at higher WPM (words felt laggy) or hit the 60 fps scroll cadence (jerky page
+  // glide). 240 MHz gives the render the headroom it needs; idle/menu states still drop to 80.
+  uint32_t cpuMhzPlay_ = 240;
+  uint32_t cpuMhzScroll_ = 240;
   uint32_t cpuMhzPaused_ = 80;
   uint32_t cpuMhzMenu_ = 80;
   uint32_t cpuMhzStandby_ = 80;
