@@ -79,6 +79,11 @@ class DisplayManager {
   void setBatteryLabel(const String &label);
   void setBatteryCharging(bool charging);
   void setClockLabel(const String &label);
+  // Hebrew face selection (Settings > Typography > Hebrew font).
+  void setHebrewFontIndex(uint8_t index);
+  uint8_t hebrewFontIndex() const;
+  uint8_t hebrewFontCount() const;
+  const char *hebrewFontName(uint8_t index) const;
   void setBrightnessOverlay(const String &text);
   void setBrightnessPercent(uint8_t percent);
   void setDarkMode(bool darkMode);

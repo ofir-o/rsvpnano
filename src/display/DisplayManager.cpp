@@ -715,10 +715,20 @@ uint8_t tinyHebrewScalePercent(int scale) {
   return static_cast<uint8_t>(std::max(8, std::min(60, pct)));
 }
 
+// The Hebrew face the reader currently uses (index into kEmbeddedHebrewFonts). Settable at runtime
+// from Settings > Typography > Hebrew font.
+uint8_t gHebrewFontIndex = 0;
+
+const EmbeddedHebrewFont &currentHebrewFont() {
+  const uint8_t idx = gHebrewFontIndex < kEmbeddedHebrewFontCount ? gHebrewFontIndex : 0;
+  return kEmbeddedHebrewFonts[idx];
+}
+
 ReaderGlyph hebrewGlyphForCodepoint(uint32_t cp) {
   const uint32_t index = cp - kEmbeddedHebrewFirstCodepoint;
-  const EmbeddedHebrewGlyph &glyph = kEmbeddedHebrewGlyphs[index];
-  return {kEmbeddedHebrewBitmaps + glyph.bitmapOffset, glyph.xOffset, glyph.width, glyph.xAdvance,
+  const EmbeddedHebrewFont &face = currentHebrewFont();
+  const EmbeddedHebrewGlyph &glyph = face.glyphs[index];
+  return {face.bitmaps + glyph.bitmapOffset, glyph.xOffset, glyph.width, glyph.xAdvance,
           kEmbeddedHebrewHeight};
 }
 
@@ -1175,6 +1185,29 @@ void DisplayManager::setClockLabel(const String &label) {
   clockLabel_ = label;
   tickerPlaybackFrameActive_ = false;
   lastRenderKey_ = "";
+}
+
+void DisplayManager::setHebrewFontIndex(uint8_t index) {
+  if (index >= kEmbeddedHebrewFontCount) {
+    index = 0;
+  }
+  if (gHebrewFontIndex == index) {
+    return;
+  }
+  gHebrewFontIndex = index;
+  tickerPlaybackFrameActive_ = false;
+  lastRenderKey_ = "";  // force a redraw so the new face shows immediately
+}
+
+uint8_t DisplayManager::hebrewFontIndex() const { return gHebrewFontIndex; }
+
+uint8_t DisplayManager::hebrewFontCount() const { return kEmbeddedHebrewFontCount; }
+
+const char *DisplayManager::hebrewFontName(uint8_t index) const {
+  if (index >= kEmbeddedHebrewFontCount) {
+    index = 0;
+  }
+  return kEmbeddedHebrewFonts[index].name;
 }
 
 void DisplayManager::setBrightnessOverlay(const String &text) {

@@ -201,6 +201,7 @@ enum TypographyTuningItem : size_t {
   TypographyTuningBack,
   TypographyTuningFontSize,
   TypographyTuningTypeface,
+  TypographyTuningHebrewFont,
   TypographyTuningPhantomWords,
   TypographyTuningFocusHighlight,
   TypographyTuningTracking,
@@ -869,6 +870,11 @@ void App::begin() {
   if (readerFontSizeIndex_ >= kReaderFontSizeCount) {
     readerFontSizeIndex_ = 0;
   }
+  hebrewFontIndex_ = preferences_.getUChar(kPrefHebrewFont, hebrewFontIndex_);
+  if (hebrewFontIndex_ >= display_.hebrewFontCount()) {
+    hebrewFontIndex_ = 0;
+  }
+  display_.setHebrewFontIndex(hebrewFontIndex_);
   menuRepeatDelayMs_ = MenuRepeat::sanitizeDelayMs(
       preferences_.getUShort(kPrefMenuRepeatMs, MenuRepeat::kDefaultDelayMs));
   standbyTimerIndex_ = preferences_.getUChar(kPrefStandbyTimer, standbyTimerIndex_);
@@ -1899,6 +1905,11 @@ void App::reloadRuntimePreferences(uint32_t nowMs, bool rerender) {
   if (readerFontSizeIndex_ >= kReaderFontSizeCount) {
     readerFontSizeIndex_ = 0;
   }
+  hebrewFontIndex_ = preferences_.getUChar(kPrefHebrewFont, hebrewFontIndex_);
+  if (hebrewFontIndex_ >= display_.hebrewFontCount()) {
+    hebrewFontIndex_ = 0;
+  }
+  display_.setHebrewFontIndex(hebrewFontIndex_);
   menuRepeatDelayMs_ = MenuRepeat::sanitizeDelayMs(
       preferences_.getUShort(kPrefMenuRepeatMs, MenuRepeat::kDefaultDelayMs));
   standbyTimerIndex_ = preferences_.getUChar(kPrefStandbyTimer, standbyTimerIndex_);
@@ -5432,6 +5443,13 @@ void App::selectTypographyTuningItem(uint32_t nowMs) {
       typographyConfig_.typeface = nextReaderTypeface(typographyConfig_.typeface);
       preferences_.putUChar(kPrefReaderTypeface, static_cast<uint8_t>(typographyConfig_.typeface));
       break;
+    case TypographyTuningHebrewFont:
+      hebrewFontIndex_ = display_.hebrewFontCount() > 0
+                             ? static_cast<uint8_t>((hebrewFontIndex_ + 1) % display_.hebrewFontCount())
+                             : 0;
+      preferences_.putUChar(kPrefHebrewFont, hebrewFontIndex_);
+      display_.setHebrewFontIndex(hebrewFontIndex_);
+      break;
     case TypographyTuningPhantomWords:
       togglePhantomWords(nowMs);
       return;
@@ -6124,6 +6142,8 @@ String App::typographyTuningLabel() const {
       return uiText(UiText::FontSize);
     case TypographyTuningTypeface:
       return uiText(UiText::Typeface);
+    case TypographyTuningHebrewFont:
+      return "Hebrew font";
     case TypographyTuningPhantomWords:
       return uiText(UiText::PhantomWords);
     case TypographyTuningFocusHighlight:
@@ -6151,6 +6171,8 @@ String App::typographyTuningValueLabel() const {
       return readerFontSizeLabel();
     case TypographyTuningTypeface:
       return readerTypefaceLabel();
+    case TypographyTuningHebrewFont:
+      return display_.hebrewFontName(hebrewFontIndex_);
     case TypographyTuningPhantomWords:
       return phantomWordsLabel();
     case TypographyTuningFocusHighlight:
@@ -7499,8 +7521,18 @@ void App::renderTypographyTuning() {
       index == 0 ? kTypographyPreviewWordCount - 1 : index - 1;
   const size_t afterIndex =
       (index + 1 >= kTypographyPreviewWordCount) ? 0 : index + 1;
-  const String beforeText = phantomWordsEnabled_ ? kTypographyPreviewWords[beforeIndex] : "";
-  const String afterText = phantomWordsEnabled_ ? kTypographyPreviewWords[afterIndex] : "";
+  // On the Hebrew-font row, preview with Hebrew words so the chosen face is actually visible.
+  const bool hebrewPreview = typographyTuningSelectedIndex_ == TypographyTuningHebrewFont;
+  const String currentWord = hebrewPreview ? String("\xD7\xA9\xD7\x9C\xD7\x95\xD7\x9D")  // שלום
+                                           : String(kTypographyPreviewWords[index]);
+  const String beforeText =
+      !phantomWordsEnabled_ ? String("")
+      : hebrewPreview       ? String("\xD7\xA1\xD7\xA4\xD7\xA8")              // ספר
+                            : String(kTypographyPreviewWords[beforeIndex]);
+  const String afterText =
+      !phantomWordsEnabled_ ? String("")
+      : hebrewPreview       ? String("\xD7\xA2\xD7\x95\xD7\x9C\xD7\x9D")      // עולם
+                            : String(kTypographyPreviewWords[afterIndex]);
   const String line1 = typographyTuningLabel() + ": " + typographyTuningValueLabel();
   const String title =
       uiText(UiText::Typography) + " " + String(static_cast<unsigned int>(index + 1)) + "/" +
@@ -7512,16 +7544,15 @@ void App::renderTypographyTuning() {
              typographyTuningSelectedIndex_ == TypographyTuningFocusHighlight) {
     line2 = uiText(UiText::TapToggleSample);
   } else if (typographyTuningSelectedIndex_ == TypographyTuningFontSize ||
-             typographyTuningSelectedIndex_ == TypographyTuningTypeface) {
+             typographyTuningSelectedIndex_ == TypographyTuningTypeface ||
+             typographyTuningSelectedIndex_ == TypographyTuningHebrewFont) {
     line2 = uiText(UiText::TapCycleSample);
   } else if (typographyTuningSelectedIndex_ == TypographyTuningReset) {
     line2 = uiText(UiText::TapToReset);
   }
 
-  display_.renderTypographyPreview(beforeText,
-                                   kTypographyPreviewWords[index],
-                                   afterText,
-                                   readerFontSizeIndex_, title, line1, line2);
+  display_.renderTypographyPreview(beforeText, currentWord, afterText, readerFontSizeIndex_, title,
+                                   line1, line2);
 }
 
 void App::renderBookPicker() {
