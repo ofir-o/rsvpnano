@@ -21,6 +21,7 @@ FONT_ROOT = pathlib.Path("/tmp/claude-0/-home-user-rsvpnano/"
 FIRST_CHAR = 32
 LAST_CHAR = 126
 TARGET_FULL_HEIGHT = 62        # match the serif reader cell so line heights line up
+TARGET_UI_HEIGHT = 18         # small UI/menu variant, rendered 1:1 (crisp); fits the 22px menu row
 ALPHA_THRESHOLD = 16
 CANVAS_W = 200
 CANVAS_H = 200
@@ -50,7 +51,7 @@ def vertical_extent(font):
 
 def fit_point_size(path, target_height):
     best, err = 40, 10**9
-    for size in range(24, 110):
+    for size in range(8, 110):
         t, b = vertical_extent(ImageFont.truetype(path, size))
         e = abs((b - t + 1) - target_height)
         if e < err:
@@ -127,36 +128,39 @@ def main() -> None:
         "",
     ]
 
-    faces = []  # (ident, full_height, seventy_height)
+    faces = []  # (ident, full_height, seventy_height, ui_height)
     names = []
     for name, path, ident in FONTS:
         full_pt = fit_point_size(str(path), TARGET_FULL_HEIGHT)
         seventy_pt = max(12, int(round(full_pt * 0.7)))
+        ui_pt = fit_point_size(str(path), TARGET_UI_HEIGHT)
         fh, fbytes, fglyphs = build_variant(str(path), full_pt)
         sh, sbytes, sglyphs = build_variant(str(path), seventy_pt)
+        uh, ubytes, uglyphs = build_variant(str(path), ui_pt)
         print(f"{name}: full {full_pt}pt h{fh} ({len(fbytes)//1024}KB), "
-              f"70 {seventy_pt}pt h{sh} ({len(sbytes)//1024}KB)")
-        emit_array(lines, f"kExtraBitmaps_{ident}_full", fbytes)
-        lines.append(f"static const ExtraGlyph kExtraGlyphs_{ident}_full[] PROGMEM = {{")
-        lines.extend(fglyphs)
-        lines.append("};")
-        emit_array(lines, f"kExtraBitmaps_{ident}_s70", sbytes)
-        lines.append(f"static const ExtraGlyph kExtraGlyphs_{ident}_s70[] PROGMEM = {{")
-        lines.extend(sglyphs)
-        lines.append("};")
+              f"70 {seventy_pt}pt h{sh} ({len(sbytes)//1024}KB), ui {ui_pt}pt h{uh}")
+        for suffix, data, glyphs in (("full", fbytes, fglyphs), ("s70", sbytes, sglyphs),
+                                     ("ui", ubytes, uglyphs)):
+            emit_array(lines, f"kExtraBitmaps_{ident}_{suffix}", data)
+            lines.append(f"static const ExtraGlyph kExtraGlyphs_{ident}_{suffix}[] PROGMEM = {{")
+            lines.extend(glyphs)
+            lines.append("};")
         lines.append("")
-        faces.append((ident, fh, sh))
+        faces.append((ident, fh, sh, uh))
         names.append(name)
 
-    lines.append("// [font][0 = full, 1 = ~70%]")
-    lines.append("static const ExtraFontFace kExtraFontFaces[][2] = {")
-    for ident, fh, sh in faces:
+    lines.append("// [font][0 = full, 1 = ~70%, 2 = small UI (rendered 1:1)]")
+    lines.append("static const ExtraFontFace kExtraFontFaces[][3] = {")
+    for ident, fh, sh, uh in faces:
         lines.append(
             f"    {{{{kExtraBitmaps_{ident}_full, kExtraGlyphs_{ident}_full, kExtraFontFirstChar, "
             f"kExtraFontLastChar, {fh}}},")
         lines.append(
             f"     {{kExtraBitmaps_{ident}_s70, kExtraGlyphs_{ident}_s70, kExtraFontFirstChar, "
-            f"kExtraFontLastChar, {sh}}}}},")
+            f"kExtraFontLastChar, {sh}}},")
+        lines.append(
+            f"     {{kExtraBitmaps_{ident}_ui, kExtraGlyphs_{ident}_ui, kExtraFontFirstChar, "
+            f"kExtraFontLastChar, {uh}}}}},")
     lines.append("};")
     lines.append(f"constexpr uint8_t kExtraFontCount = {len(FONTS)};")
     lines.append("static const char *const kExtraFontNames[] = {")

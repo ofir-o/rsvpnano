@@ -2880,6 +2880,13 @@ void App::applyPausedTouchGesture(const TouchEvent &event, uint32_t nowMs) {
                         absDeltaY <= static_cast<int>(kReaderQuickTapSlopPx);
   const bool sustainedDrag = pressDurationMs > kReaderQuickTapMaxMs;
   const bool previewBrowseMode = contextViewVisible_ && !scrollModeEnabled();
+  // A press that never grew into a deliberate swipe (stayed under the scrub/speed threshold) is a
+  // tap, no matter how long it was held or how far the finger wobbled. Without this, a normal tap
+  // that drifts 27-39px (> kTapSlopPx) and lingers past 200ms (so not a quickTap) falls into a dead
+  // zone between "tap" and "swipe" and does nothing -- the "tapping once won't run the words" bug.
+  const bool tapToggle = tapLike || quickTap ||
+                         (absDeltaX < static_cast<int>(kSwipeThresholdPx) &&
+                          absDeltaY < static_cast<int>(kSwipeThresholdPx));
 
   if (handleTopEdgeMenuSwipe(event, nowMs, deltaX, deltaY, ended)) {
     return;
@@ -2911,7 +2918,7 @@ void App::applyPausedTouchGesture(const TouchEvent &event, uint32_t nowMs) {
           return;
         }
         // A plain tap on the reading screen pauses reading.
-        if (tapLike || quickTap) {
+        if (tapToggle) {
           setState(AppState::Paused, nowMs);
         }
       }
@@ -2989,7 +2996,7 @@ void App::applyPausedTouchGesture(const TouchEvent &event, uint32_t nowMs) {
       return;
     }
     // A plain tap on the reading screen resumes reading.
-    if (tapLike || quickTap) {
+    if (tapToggle) {
       setState(AppState::Playing, nowMs);
     }
   }
