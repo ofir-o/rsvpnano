@@ -87,6 +87,11 @@ constexpr uint16_t kFocusTimerCancelHoldMaxDriftPx = 20;
 constexpr int kMaxScrubStepsPerGesture = 96;
 constexpr uint32_t kBrowseMinWordsPerSecondPermille = 4000;
 constexpr uint32_t kBrowseMaxWordsPerSecondPermille = 72000;
+// Hold-to-rewind: a stationary press held this long on the reading screen runs the words backward
+// continuously while held (the touchscreen is the "big button"; the physical reader button's hold
+// runs forward). The threshold sits well above a normal tap so casual taps still toggle play/pause.
+constexpr uint32_t kHoldRewindMs = 500;
+constexpr uint32_t kHoldRewindWordsPerSecondPermille = 6000;
 constexpr uint32_t kFocusTimerCancelHoldMs = 850;
 constexpr size_t kContextPreviewWindowWords = 288;
 constexpr size_t kContextPreviewAnchorLeadWords = 112;
@@ -2952,7 +2957,17 @@ void App::applyPausedTouchGesture(const TouchEvent &event, uint32_t nowMs) {
         absDeltaY > absDeltaX + static_cast<int>(kAxisBiasPx)) {
       pausedTouchIntent_ = TouchIntent::Wpm;
     }
-    if (pausedTouchIntent_ != TouchIntent::Wpm) {
+    // A stationary long hold runs the words backward while held. Pause the forward loop first so the
+    // rewind owns the position; the shared HoldRewind handler below drives it.
+    if (pausedTouchIntent_ == TouchIntent::None && !previewBrowseMode && !ended && tapLike &&
+        pressDurationMs >= kHoldRewindMs) {
+      pausedTouchIntent_ = TouchIntent::HoldRewind;
+      setState(AppState::Paused, nowMs);
+      pausedTouch_.startWordIndex = reader_.currentIndex();
+      pausedTouch_.browseOffsetPermille = 0;
+    }
+    if (pausedTouchIntent_ != TouchIntent::Wpm &&
+        pausedTouchIntent_ != TouchIntent::HoldRewind) {
       if (ended) {
         pausedTouch_.active = false;
         pausedTouchIntent_ = TouchIntent::None;
@@ -2987,7 +3002,22 @@ void App::applyPausedTouchGesture(const TouchEvent &event, uint32_t nowMs) {
     } else if (!previewBrowseMode && absDeltaY >= static_cast<int>(kSwipeThresholdPx) &&
                absDeltaY > absDeltaX + static_cast<int>(kAxisBiasPx)) {
       pausedTouchIntent_ = TouchIntent::Wpm;
+    } else if (!previewBrowseMode && !ended && tapLike && pressDurationMs >= kHoldRewindMs) {
+      // Stationary long hold while paused: rewind the words continuously while held.
+      pausedTouchIntent_ = TouchIntent::HoldRewind;
+      pausedTouch_.startWordIndex = reader_.currentIndex();
+      pausedTouch_.browseOffsetPermille = 0;
     }
+  }
+
+  if (pausedTouchIntent_ == TouchIntent::HoldRewind) {
+    applyHoldRewind(elapsedSinceLastEventMs, nowMs);
+    if (ended) {
+      pausedTouch_.active = false;
+      pausedTouchIntent_ = TouchIntent::None;
+      saveReadingPosition(true);
+    }
+    return;
   }
 
   if (pausedTouchIntent_ == TouchIntent::Scrub) {
@@ -3210,6 +3240,35 @@ void App::applyBrowseHoldScroll(uint16_t y, uint32_t elapsedMs, uint32_t nowMs) 
                              static_cast<uint16_t>(remainderPermille));
   Serial.printf("[app] browse hold target=%d progress=%ld word=%s\n", targetWords,
                 static_cast<long>(remainderPermille), reader_.currentWord().c_str());
+}
+
+void App::applyHoldRewind(uint32_t elapsedMs, uint32_t nowMs) {
+  if (elapsedMs == 0) {
+    return;
+  }
+
+  // Accumulate backward word steps at a steady rate while the finger is held. browseOffsetPermille is
+  // re-used as the fractional accumulator (negative = backward from where the hold began).
+  pausedTouch_.browseOffsetPermille -=
+      (static_cast<int32_t>(kHoldRewindWordsPerSecondPermille) * static_cast<int32_t>(elapsedMs)) /
+      1000;
+
+  int targetWords = pausedTouch_.browseOffsetPermille / 1000;
+  int32_t remainderPermille = pausedTouch_.browseOffsetPermille % 1000;
+  if (remainderPermille < 0) {
+    remainderPermille += 1000;
+    --targetWords;
+  }
+
+  reader_.seekRelative(pausedTouch_.startWordIndex, targetWords);
+  if (!ensureCurrentBookWordAvailable(nowMs)) {
+    return;
+  }
+  pausedTouch_.gestureStepsApplied = targetWords;
+  // Show the plain RSVP word view so the words visibly run backward as you hold.
+  contextViewVisible_ = false;
+  wpmFeedbackVisible_ = false;
+  renderActiveReader(nowMs);
 }
 
 void App::applyMenuTouchGesture(const TouchEvent &event, uint32_t nowMs) {
