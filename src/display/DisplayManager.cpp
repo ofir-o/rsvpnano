@@ -765,7 +765,7 @@ const ExtraFontFace *currentUiFace() {
   if (gUiFontIndex == 0 || gUiFontIndex > kExtraFontCount) {
     return nullptr;
   }
-  return &kExtraFontFaces[gUiFontIndex - 1][1];  // the ~70% variant is lighter to scale down
+  return &kExtraFontFaces[gUiFontIndex - 1][2];  // the small UI variant, rendered ~1:1 (crisp)
 }
 
 const ExtraGlyph &uiFaceGlyph(const ExtraFontFace &face, uint8_t value) {
@@ -2203,9 +2203,10 @@ bool DisplayManager::drawUiFontText(const String &text, int x, int y, uint16_t c
   if (face == nullptr || face->height == 0) {
     return false;
   }
-  const int target = kTinyGlyphHeight * std::max(1, scale);  // match the bitmap font's pixel height
+  // The UI variant is generated at the menu pixel size, so draw it ~1:1 (crisp). At the standard
+  // tiny scale that is 100%; only the rare half-size tiny text scales it down.
   const uint8_t pct =
-      static_cast<uint8_t>(std::max(8, std::min(100, target * 100 / face->height)));
+      static_cast<uint8_t>(std::max(8, std::min(100, 100 * std::max(1, scale) / kTinyScale)));
   int cursorX = x;
   for (size_t i = 0; i < text.length(); ++i) {
     const ExtraGlyph &g = uiFaceGlyph(*face, LatinText::byteValue(text[i]));
@@ -2243,9 +2244,8 @@ int DisplayManager::measureUiFontWidth(const String &text, int scale) const {
   if (face == nullptr || face->height == 0) {
     return 0;
   }
-  const int target = kTinyGlyphHeight * std::max(1, scale);
   const uint8_t pct =
-      static_cast<uint8_t>(std::max(8, std::min(100, target * 100 / face->height)));
+      static_cast<uint8_t>(std::max(8, std::min(100, 100 * std::max(1, scale) / kTinyScale)));
   int width = 0;
   for (size_t i = 0; i < text.length(); ++i) {
     const ExtraGlyph &g = uiFaceGlyph(*face, LatinText::byteValue(text[i]));
