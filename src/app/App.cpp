@@ -3175,6 +3175,35 @@ void App::applyMenuTouchGesture(const TouchEvent &event, uint32_t nowMs) {
   const int absDeltaX = abs(deltaX);
   const int absDeltaY = abs(deltaY);
 
+  // The pet screen is not a scrolling list, so handle it directly: the generic menu treats finger
+  // movement as a list-scroll and swallows it, which is why rubbing Poopik did nothing. Wait for
+  // release, then a strong downward swipe closes the pet, a clear horizontal swipe cycles the daily
+  // goal, and anything else (a tap OR a rub) pets him -> he purrs, or bites if he's been neglected.
+  if (menuScreen_ == MenuScreen::Shuli) {
+    if (event.phase != TouchPhase::End) {
+      return;
+    }
+    pausedTouch_.active = false;
+    menuRepeatDirection_ = 0;
+    const bool strongDown = deltaY >= static_cast<int>(kMenuSwipeTriggerPx) &&
+                            absDeltaY > absDeltaX + static_cast<int>(kAxisBiasPx);
+    if (strongDown) {
+      navigateBackInMenu(nowMs);
+      return;
+    }
+    if (absDeltaX >= static_cast<int>(kSwipeThresholdPx) &&
+        absDeltaX > absDeltaY + static_cast<int>(kAxisBiasPx)) {
+      shuli_.cycleGoal(deltaX > 0 ? 1 : -1);
+      shuli_.flush();
+      petInteractionActive_ = false;
+      poopikFrame_ = 0;
+      renderShuliView();
+      return;
+    }
+    selectMenuItem(nowMs);
+    return;
+  }
+
   if (event.phase != TouchPhase::End) {
     if (menuScreen_ == MenuScreen::TextEntry || menuRepeatDelayMs_ == 0) {
       return;
@@ -3257,25 +3286,6 @@ void App::applyMenuTouchGesture(const TouchEvent &event, uint32_t nowMs) {
       stepTheme(dir, nowMs);
       return;
     }
-  }
-
-  // Pet-screen gestures. A horizontal swipe (either direction) adjusts Poopik's daily word goal in
-  // place -- right/forward steps up a preset, left/back steps down -- and never exits, so a swipe
-  // can't accidentally drop you to the reader. To leave the pet, swipe down (handled above). Any
-  // other touch (a tap or a rub) pets him: he purrs, or bites if he's been neglected.
-  if (menuScreen_ == MenuScreen::Shuli) {
-    if (absDeltaX >= static_cast<int>(kSwipeThresholdPx) &&
-        absDeltaX > absDeltaY + static_cast<int>(kAxisBiasPx)) {
-      shuli_.cycleGoal(deltaX > 0 ? 1 : -1);
-      shuli_.flush();
-      petInteractionActive_ = false;
-      poopikFrame_ = 0;
-      renderShuliView();
-      return;
-    }
-    // Tap or rub -> pet him (the pet interaction lives in selectMenuItem's Shuli case).
-    selectMenuItem(nowMs);
-    return;
   }
 
   if (MenuRepeat::isRightSwipe(deltaX, deltaY, kSwipeThresholdPx, kAxisBiasPx)) {
