@@ -1008,9 +1008,10 @@ ReaderTextStyle readerTextStyle(uint8_t fontSizeLevel) {
       {100, kPhantomCurrentGapLarge, kPhantomAlphaLarge},
       {70, kPhantomCurrentGapMedium, kPhantomAlphaMedium},
       {50, kPhantomCurrentGapSmall, kPhantomAlphaSmall},
-      // Index 3: "Extra Large" -- bigger than the previous max. Routed through the scale-aware
-      // default render path (it is not index 1 or 2), so it renders at 120% with the large layout.
-      {120, kPhantomCurrentGapLarge, kPhantomAlphaLarge},
+      // Index 3: "Extra Large" -- noticeably bigger than Large (index 0, 100%). Routed through the
+      // scale-aware default render path (it is not index 1 or 2), so the glyphs themselves render at
+      // 145% (area-sampled), not just with wider spacing.
+      {145, kPhantomCurrentGapLarge, kPhantomAlphaLarge},
   };
 
   const size_t styleCount = sizeof(kStyles) / sizeof(kStyles[0]);
