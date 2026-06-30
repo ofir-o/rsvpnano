@@ -678,8 +678,12 @@ class App {
   // glide). 240 MHz gives the render the headroom it needs; idle/menu states still drop to 80.
   uint32_t cpuMhzPlay_ = 240;
   uint32_t cpuMhzScroll_ = 240;
-  uint32_t cpuMhzPaused_ = 80;
-  uint32_t cpuMhzMenu_ = 80;
+  // Paused is not just "idle": browse-scrub, hold-to-rewind and the WPM gesture all render their
+  // full-frame scroll/preview here, and the menu state drives the chapter/book pickers. 80 MHz made
+  // those feel chunky (the per-frame remap+flush is CPU-bound), so default both to 160. Standby
+  // (screen off) stays at 80 for battery.
+  uint32_t cpuMhzPaused_ = 160;
+  uint32_t cpuMhzMenu_ = 160;
   uint32_t cpuMhzStandby_ = 80;
   uint8_t autoDimBrightnessPercent_ = 10;
   uint32_t autoDimDelayMs_ = 60000;
