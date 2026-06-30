@@ -3073,8 +3073,15 @@ void App::applyPausedTouchGesture(const TouchEvent &event, uint32_t nowMs) {
       renderActiveReader(nowMs);
       return;
     }
-    // A plain tap on the reading screen resumes reading.
+    // A plain tap on the reading screen resumes reading. playLocked_ must be set here: updateState()
+    // re-derives the play/pause state from it every loop, so without it the very next loop would
+    // revert straight back to Paused and the words would never advance -- the recurring "tapping once
+    // won't run the words" bug. (The physical-button play paths already set it; the touch tap missed
+    // it.)
     if (tapToggle) {
+      playLocked_ = true;
+      pauseAtSentenceEndRequested_ = false;
+      wpmFeedbackVisible_ = false;
       setState(AppState::Playing, nowMs);
     }
   }
