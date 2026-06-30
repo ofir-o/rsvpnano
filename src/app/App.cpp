@@ -202,6 +202,7 @@ enum TypographyTuningItem : size_t {
   TypographyTuningFontSize,
   TypographyTuningTypeface,
   TypographyTuningHebrewFont,
+  TypographyTuningDeviceFont,
   TypographyTuningPhantomWords,
   TypographyTuningFocusHighlight,
   TypographyTuningTracking,
@@ -567,28 +568,6 @@ bool sdCardFolderRepairNeeded(const StorageManager::DiagnosticResult &result) {
           !result.articleFilesDirectory || !result.configDirectory);
 }
 
-DisplayManager::ReaderTypeface readerTypefaceFromSetting(uint8_t value) {
-  switch (static_cast<DisplayManager::ReaderTypeface>(value)) {
-    case DisplayManager::ReaderTypeface::Standard:
-    case DisplayManager::ReaderTypeface::OpenDyslexic:
-    case DisplayManager::ReaderTypeface::AtkinsonHyperlegible:
-      return static_cast<DisplayManager::ReaderTypeface>(value);
-  }
-  return DisplayManager::ReaderTypeface::Standard;
-}
-
-DisplayManager::ReaderTypeface nextReaderTypeface(DisplayManager::ReaderTypeface current) {
-  switch (readerTypefaceFromSetting(static_cast<uint8_t>(current))) {
-    case DisplayManager::ReaderTypeface::Standard:
-      return DisplayManager::ReaderTypeface::AtkinsonHyperlegible;
-    case DisplayManager::ReaderTypeface::AtkinsonHyperlegible:
-      return DisplayManager::ReaderTypeface::OpenDyslexic;
-    case DisplayManager::ReaderTypeface::OpenDyslexic:
-    default:
-      return DisplayManager::ReaderTypeface::Standard;
-  }
-}
-
 App::ReaderMode readerModeFromSetting(uint8_t value) {
   switch (value) {
     case static_cast<uint8_t>(App::ReaderMode::Scroll):
@@ -875,6 +854,11 @@ void App::begin() {
     hebrewFontIndex_ = 0;
   }
   display_.setHebrewFontIndex(hebrewFontIndex_);
+  uiFontIndex_ = preferences_.getUChar(kPrefUiFont, uiFontIndex_);
+  if (uiFontIndex_ >= display_.uiFontCount()) {
+    uiFontIndex_ = 0;
+  }
+  display_.setUiFontIndex(uiFontIndex_);
   menuRepeatDelayMs_ = MenuRepeat::sanitizeDelayMs(
       preferences_.getUShort(kPrefMenuRepeatMs, MenuRepeat::kDefaultDelayMs));
   standbyTimerIndex_ = preferences_.getUChar(kPrefStandbyTimer, standbyTimerIndex_);
@@ -955,8 +939,14 @@ void App::begin() {
       loadPacingDelayMs(preferences_, kPrefPacingPunctuationMs, kPrefLegacyPacingPunctuation);
   accurateTimeEstimateEnabled_ = true;
   typographyConfig_ = defaultTypographyConfig();
-  typographyConfig_.typeface = readerTypefaceFromSetting(
-      preferences_.getUChar(kPrefReaderTypeface, static_cast<uint8_t>(typographyConfig_.typeface)));
+  {
+    uint8_t tfv =
+        preferences_.getUChar(kPrefReaderTypeface, static_cast<uint8_t>(typographyConfig_.typeface));
+    if (tfv >= display_.readerTypefaceCount()) {
+      tfv = 0;
+    }
+    typographyConfig_.typeface = static_cast<DisplayManager::ReaderTypeface>(tfv);
+  }
   typographyConfig_.focusHighlight =
       preferences_.getBool(kPrefTypographyFocusHighlight, typographyConfig_.focusHighlight);
   typographyConfig_.trackingPx = static_cast<int8_t>(clampIntSetting(
@@ -1910,6 +1900,11 @@ void App::reloadRuntimePreferences(uint32_t nowMs, bool rerender) {
     hebrewFontIndex_ = 0;
   }
   display_.setHebrewFontIndex(hebrewFontIndex_);
+  uiFontIndex_ = preferences_.getUChar(kPrefUiFont, uiFontIndex_);
+  if (uiFontIndex_ >= display_.uiFontCount()) {
+    uiFontIndex_ = 0;
+  }
+  display_.setUiFontIndex(uiFontIndex_);
   menuRepeatDelayMs_ = MenuRepeat::sanitizeDelayMs(
       preferences_.getUShort(kPrefMenuRepeatMs, MenuRepeat::kDefaultDelayMs));
   standbyTimerIndex_ = preferences_.getUChar(kPrefStandbyTimer, standbyTimerIndex_);
@@ -1995,8 +1990,14 @@ void App::reloadRuntimePreferences(uint32_t nowMs, bool rerender) {
   accurateTimeEstimateEnabled_ = true;
 
   typographyConfig_ = defaultTypographyConfig();
-  typographyConfig_.typeface = readerTypefaceFromSetting(
-      preferences_.getUChar(kPrefReaderTypeface, static_cast<uint8_t>(typographyConfig_.typeface)));
+  {
+    uint8_t tfv =
+        preferences_.getUChar(kPrefReaderTypeface, static_cast<uint8_t>(typographyConfig_.typeface));
+    if (tfv >= display_.readerTypefaceCount()) {
+      tfv = 0;
+    }
+    typographyConfig_.typeface = static_cast<DisplayManager::ReaderTypeface>(tfv);
+  }
   typographyConfig_.focusHighlight =
       preferences_.getBool(kPrefTypographyFocusHighlight, typographyConfig_.focusHighlight);
   typographyConfig_.trackingPx = static_cast<int8_t>(clampIntSetting(
@@ -5440,7 +5441,8 @@ void App::selectTypographyTuningItem(uint32_t nowMs) {
       cycleReaderFontSize(nowMs);
       return;
     case TypographyTuningTypeface:
-      typographyConfig_.typeface = nextReaderTypeface(typographyConfig_.typeface);
+      typographyConfig_.typeface = static_cast<DisplayManager::ReaderTypeface>(
+          (static_cast<uint8_t>(typographyConfig_.typeface) + 1) % display_.readerTypefaceCount());
       preferences_.putUChar(kPrefReaderTypeface, static_cast<uint8_t>(typographyConfig_.typeface));
       break;
     case TypographyTuningHebrewFont:
@@ -5449,6 +5451,13 @@ void App::selectTypographyTuningItem(uint32_t nowMs) {
                              : 0;
       preferences_.putUChar(kPrefHebrewFont, hebrewFontIndex_);
       display_.setHebrewFontIndex(hebrewFontIndex_);
+      break;
+    case TypographyTuningDeviceFont:
+      uiFontIndex_ = display_.uiFontCount() > 0
+                         ? static_cast<uint8_t>((uiFontIndex_ + 1) % display_.uiFontCount())
+                         : 0;
+      preferences_.putUChar(kPrefUiFont, uiFontIndex_);
+      display_.setUiFontIndex(uiFontIndex_);
       break;
     case TypographyTuningPhantomWords:
       togglePhantomWords(nowMs);
@@ -6129,8 +6138,10 @@ String App::readerTypefaceLabel() const {
     case DisplayManager::ReaderTypeface::OpenDyslexic:
       return "OpenDyslexic";
     case DisplayManager::ReaderTypeface::Standard:
-    default:
       return uiText(UiText::Standard);
+    default:
+      // Extra embedded faces (value >= 3) report their own name.
+      return display_.extraReaderFontName(static_cast<uint8_t>(typographyConfig_.typeface));
   }
 }
 
@@ -6144,6 +6155,8 @@ String App::typographyTuningLabel() const {
       return uiText(UiText::Typeface);
     case TypographyTuningHebrewFont:
       return "Hebrew font";
+    case TypographyTuningDeviceFont:
+      return "Device font";
     case TypographyTuningPhantomWords:
       return uiText(UiText::PhantomWords);
     case TypographyTuningFocusHighlight:
@@ -6173,6 +6186,8 @@ String App::typographyTuningValueLabel() const {
       return readerTypefaceLabel();
     case TypographyTuningHebrewFont:
       return display_.hebrewFontName(hebrewFontIndex_);
+    case TypographyTuningDeviceFont:
+      return display_.uiFontName(uiFontIndex_);
     case TypographyTuningPhantomWords:
       return phantomWordsLabel();
     case TypographyTuningFocusHighlight:
@@ -7545,7 +7560,8 @@ void App::renderTypographyTuning() {
     line2 = uiText(UiText::TapToggleSample);
   } else if (typographyTuningSelectedIndex_ == TypographyTuningFontSize ||
              typographyTuningSelectedIndex_ == TypographyTuningTypeface ||
-             typographyTuningSelectedIndex_ == TypographyTuningHebrewFont) {
+             typographyTuningSelectedIndex_ == TypographyTuningHebrewFont ||
+             typographyTuningSelectedIndex_ == TypographyTuningDeviceFont) {
     line2 = uiText(UiText::TapCycleSample);
   } else if (typographyTuningSelectedIndex_ == TypographyTuningReset) {
     line2 = uiText(UiText::TapToReset);

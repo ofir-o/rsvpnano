@@ -11,6 +11,7 @@
 #include "board/BoardConfig.h"
 #include "display/EmbeddedAtkinsonFont.h"
 #include "display/EmbeddedAtkinsonFont70.h"
+#include "display/EmbeddedExtraFonts.h"
 #include "display/EmbeddedOpenDyslexicFont.h"
 #include "display/EmbeddedOpenDyslexicFont70.h"
 #include "display/EmbeddedHebrewFont.h"
@@ -321,7 +322,19 @@ String readerChromeKey(const DisplayManager::ReaderChrome &chrome) {
          String(chrome.swapPreviousSentenceAndBattery ? 1 : 0);
 }
 
+constexpr uint8_t kBuiltinTypefaceCount = 3;  // Standard, OpenDyslexic, Atkinson
+
+// Extra embedded faces (EmbeddedExtraFonts.h) occupy typeface values >= kBuiltinTypefaceCount.
+int extraFontIndexForTypeface(DisplayManager::ReaderTypeface typeface) {
+  const int idx = static_cast<int>(typeface) - kBuiltinTypefaceCount;
+  return (idx >= 0 && idx < kExtraFontCount) ? idx : -1;
+}
+
 int baseGlyphHeightForTypeface(DisplayManager::ReaderTypeface typeface) {
+  const int extraIdx = extraFontIndexForTypeface(typeface);
+  if (extraIdx >= 0) {
+    return kExtraFontFaces[extraIdx][0].height;
+  }
   switch (typeface) {
     case DisplayManager::ReaderTypeface::OpenDyslexic:
       return kEmbeddedOpenDyslexicHeight;
@@ -338,6 +351,10 @@ int baseGlyphHeight() {
 }
 
 int mediumGlyphHeightForTypeface(DisplayManager::ReaderTypeface typeface) {
+  const int extraIdx = extraFontIndexForTypeface(typeface);
+  if (extraIdx >= 0) {
+    return kExtraFontFaces[extraIdx][1].height;
+  }
   switch (typeface) {
     case DisplayManager::ReaderTypeface::OpenDyslexic:
       return kEmbeddedOpenDyslexic70Height;
@@ -437,10 +454,26 @@ ReaderGlyph serif70GlyphForByte(uint8_t value) {
           glyph.xAdvance, kEmbeddedSerif70Height};
 }
 
+ReaderGlyph extraGlyphForByte(const ExtraFontFace &face, uint8_t value) {
+  if (value < face.firstChar || value > face.lastChar) {
+    value = LatinText::fallbackAsciiByte(value);
+    if (value < face.firstChar || value > face.lastChar) {
+      value = static_cast<uint8_t>('?');
+    }
+  }
+  const ExtraGlyph &g = face.glyphs[value - face.firstChar];
+  return {face.bitmaps + g.bitmapOffset, g.xOffset, g.width, g.xAdvance, face.height};
+}
+
 ReaderGlyph glyphFor(char c, DisplayManager::ReaderTypeface typeface) {
   const uint8_t value = LatinText::byteValue(c);
   uint8_t baseValue = 0;
   const uint8_t lookupValue = invertedPunctuationBaseByte(value, baseValue) ? baseValue : value;
+
+  const int extraIdx = extraFontIndexForTypeface(typeface);
+  if (extraIdx >= 0) {
+    return extraGlyphForByte(kExtraFontFaces[extraIdx][0], lookupValue);
+  }
 
   switch (typeface) {
     case DisplayManager::ReaderTypeface::OpenDyslexic: {
@@ -476,6 +509,11 @@ ReaderGlyph glyph70For(char c, DisplayManager::ReaderTypeface typeface) {
   const uint8_t value = LatinText::byteValue(c);
   uint8_t baseValue = 0;
   const uint8_t lookupValue = invertedPunctuationBaseByte(value, baseValue) ? baseValue : value;
+
+  const int extraIdx = extraFontIndexForTypeface(typeface);
+  if (extraIdx >= 0) {
+    return extraGlyphForByte(kExtraFontFaces[extraIdx][1], lookupValue);
+  }
 
   switch (typeface) {
     case DisplayManager::ReaderTypeface::OpenDyslexic: {
@@ -718,6 +756,27 @@ uint8_t tinyHebrewScalePercent(int scale) {
 // The Hebrew face the reader currently uses (index into kEmbeddedHebrewFonts). Settable at runtime
 // from Settings > Typography > Hebrew font.
 uint8_t gHebrewFontIndex = 0;
+
+// General UI font for menus/status. 0 = the built-in 5x7 bitmap font; 1..kExtraFontCount select an
+// extra embedded face (kExtraFontFaces[gUiFontIndex - 1]) rendered scaled down to tiny height.
+uint8_t gUiFontIndex = 0;
+
+const ExtraFontFace *currentUiFace() {
+  if (gUiFontIndex == 0 || gUiFontIndex > kExtraFontCount) {
+    return nullptr;
+  }
+  return &kExtraFontFaces[gUiFontIndex - 1][1];  // the ~70% variant is lighter to scale down
+}
+
+const ExtraGlyph &uiFaceGlyph(const ExtraFontFace &face, uint8_t value) {
+  if (value < face.firstChar || value > face.lastChar) {
+    value = LatinText::fallbackAsciiByte(value);
+    if (value < face.firstChar || value > face.lastChar) {
+      value = static_cast<uint8_t>('?');
+    }
+  }
+  return face.glyphs[value - face.firstChar];
+}
 
 const EmbeddedHebrewFont &currentHebrewFont() {
   const uint8_t idx = gHebrewFontIndex < kEmbeddedHebrewFontCount ? gHebrewFontIndex : 0;
@@ -1210,6 +1269,41 @@ const char *DisplayManager::hebrewFontName(uint8_t index) const {
   return kEmbeddedHebrewFonts[index].name;
 }
 
+uint8_t DisplayManager::readerTypefaceCount() const {
+  return static_cast<uint8_t>(kBuiltinTypefaceCount + kExtraFontCount);
+}
+
+const char *DisplayManager::extraReaderFontName(uint8_t typefaceValue) const {
+  const int idx = static_cast<int>(typefaceValue) - kBuiltinTypefaceCount;
+  return (idx >= 0 && idx < kExtraFontCount) ? kExtraFontNames[idx] : "";
+}
+
+void DisplayManager::setUiFontIndex(uint8_t index) {
+  if (index > kExtraFontCount) {
+    index = 0;
+  }
+  if (gUiFontIndex == index) {
+    return;
+  }
+  gUiFontIndex = index;
+  tickerPlaybackFrameActive_ = false;
+  lastRenderKey_ = "";
+}
+
+uint8_t DisplayManager::uiFontIndex() const { return gUiFontIndex; }
+
+uint8_t DisplayManager::uiFontCount() const {
+  return static_cast<uint8_t>(1 + kExtraFontCount);  // built-in bitmap + extra faces
+}
+
+const char *DisplayManager::uiFontName(uint8_t index) const {
+  if (index == 0) {
+    return "Default";
+  }
+  const int idx = static_cast<int>(index) - 1;
+  return (idx >= 0 && idx < kExtraFontCount) ? kExtraFontNames[idx] : "Default";
+}
+
 void DisplayManager::setBrightnessOverlay(const String &text) {
   if (brightnessOverlayText_ == text) {
     return;
@@ -1609,6 +1703,9 @@ int DisplayManager::measureTinyTextWidth(const String &text, int scale) const {
   // (each Hebrew letter is two UTF-8 bytes, which the byte count would over-count).
   if (wordIsHebrew(text)) {
     return textLayoutWidth(layoutHebrewWord(text, tinyHebrewScalePercent(scale)).metrics);
+  }
+  if (currentUiFace() != nullptr) {
+    return measureUiFontWidth(text, scale);
   }
   return static_cast<int>(text.length()) * (kTinyGlyphWidth + kTinyGlyphSpacing) * scale -
          kTinyGlyphSpacing * scale;
@@ -2101,12 +2198,72 @@ void DisplayManager::drawTinyTextAt180(const String &text, int x, int y, uint16_
   }
 }
 
+bool DisplayManager::drawUiFontText(const String &text, int x, int y, uint16_t color, int scale) {
+  const ExtraFontFace *face = currentUiFace();
+  if (face == nullptr || face->height == 0) {
+    return false;
+  }
+  const int target = kTinyGlyphHeight * std::max(1, scale);  // match the bitmap font's pixel height
+  const uint8_t pct =
+      static_cast<uint8_t>(std::max(8, std::min(100, target * 100 / face->height)));
+  int cursorX = x;
+  for (size_t i = 0; i < text.length(); ++i) {
+    const ExtraGlyph &g = uiFaceGlyph(*face, LatinText::byteValue(text[i]));
+    const int scaledW = g.width == 0 ? 0 : std::max(1, scaledPercentDimension(g.width, pct));
+    const int scaledH = std::max(1, scaledPercentDimension(face->height, pct));
+    const int left = cursorX + scaledSignedPercent(g.xOffset, pct);
+    for (int dy = 0; dy < scaledH && g.width > 0; ++dy) {
+      const int dstY = y + dy;
+      if (dstY < 0 || dstY >= kVirtualBufferHeight) continue;
+      const int sy0 = (dy * face->height) / scaledH;
+      const int sy1 = std::min<int>(face->height, ((dy + 1) * face->height + scaledH - 1) / scaledH);
+      for (int dx = 0; dx < scaledW; ++dx) {
+        const int dstX = left + dx;
+        if (dstX < 0 || dstX >= kVirtualBufferWidth) continue;
+        const int sx0 = (dx * g.width) / scaledW;
+        const int sx1 = std::min<int>(g.width, ((dx + 1) * g.width + scaledW - 1) / scaledW);
+        uint32_t sum = 0, n = 0;
+        for (int sy = sy0; sy < sy1; ++sy)
+          for (int sx = sx0; sx < sx1; ++sx) {
+            sum += face->bitmaps[g.bitmapOffset + sy * g.width + sx];
+            ++n;
+          }
+        const uint8_t a = n == 0 ? 0 : static_cast<uint8_t>(sum / n);
+        if (a < kGlyphAlphaThreshold) continue;
+        virtualFrame_[dstY * kVirtualBufferWidth + dstX] = panelColor(blendOverBackground(color, a));
+      }
+    }
+    cursorX += std::max(1, scaledPercentDimension(g.xAdvance, pct));
+  }
+  return true;
+}
+
+int DisplayManager::measureUiFontWidth(const String &text, int scale) const {
+  const ExtraFontFace *face = currentUiFace();
+  if (face == nullptr || face->height == 0) {
+    return 0;
+  }
+  const int target = kTinyGlyphHeight * std::max(1, scale);
+  const uint8_t pct =
+      static_cast<uint8_t>(std::max(8, std::min(100, target * 100 / face->height)));
+  int width = 0;
+  for (size_t i = 0; i < text.length(); ++i) {
+    const ExtraGlyph &g = uiFaceGlyph(*face, LatinText::byteValue(text[i]));
+    width += std::max(1, scaledPercentDimension(g.xAdvance, pct));
+  }
+  return width;
+}
+
 void DisplayManager::drawTinyTextAt(const String &text, int x, int y, uint16_t color, int scale) {
   // Hebrew (menus, book titles, badges): render the real right-to-left letters from the reader's
   // Hebrew font scaled down to tiny height, instead of the ASCII-only bitmap font (which would
   // print Latin gibberish for the UTF-8 bytes).
   if (wordIsHebrew(text)) {
     drawHebrewWordVisual(text, x, y, tinyHebrewScalePercent(scale), color);
+    return;
+  }
+  // A chosen general UI font replaces the built-in bitmap font for Latin menu/status text.
+  if (drawUiFontText(text, x, y, color, scale)) {
     return;
   }
   int cursorX = x;

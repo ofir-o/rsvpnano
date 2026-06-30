@@ -11,6 +11,8 @@ class DisplayManager {
     Standard = 0,
     OpenDyslexic = 1,
     AtkinsonHyperlegible = 2,
+    // Values >= 3 select an extra embedded face (kExtraFontFaces[value - 3]); see EmbeddedExtraFonts.h.
+    ExtraFirst = 3,
   };
 
   // Optional pastel reading palettes. When set to anything other than None, the
@@ -84,6 +86,14 @@ class DisplayManager {
   uint8_t hebrewFontIndex() const;
   uint8_t hebrewFontCount() const;
   const char *hebrewFontName(uint8_t index) const;
+  // Book (reader) typeface count incl. extra embedded faces; name for an extra face value (>=3).
+  uint8_t readerTypefaceCount() const;
+  const char *extraReaderFontName(uint8_t typefaceValue) const;
+  // General UI font (menus/status). 0 = built-in bitmap font; 1..kExtraFontCount = an extra face.
+  void setUiFontIndex(uint8_t index);
+  uint8_t uiFontIndex() const;
+  uint8_t uiFontCount() const;
+  const char *uiFontName(uint8_t index) const;
   void setBrightnessOverlay(const String &text);
   void setBrightnessPercent(uint8_t percent);
   void setDarkMode(bool darkMode);
@@ -195,6 +205,10 @@ class DisplayManager {
   // its left edge at x. scalePercent 100 == native Hebrew glyph size.
   void drawHebrewWordVisual(const String &word, int x, int y, uint8_t scalePercent, uint16_t color,
                             int focusOrdinal = -1, uint16_t focusColor = 0);
+  // Renders tiny (menu/status) text in the selected general UI font (gUiFontIndex > 0), scaling the
+  // extra face down to the bitmap-font's pixel height. Returns false when no UI font is selected.
+  bool drawUiFontText(const String &text, int x, int y, uint16_t color, int scale);
+  int measureUiFontWidth(const String &text, int scale) const;
   void fillVirtualRect(int x, int y, int width, int height, uint16_t color);
   void drawSerifTextAt(const String &text, int x, int y, uint16_t color, int divisor);
   void drawSerif70TextAt(const String &text, int x, int y, uint16_t color);

@@ -601,6 +601,7 @@ class App {
   uint8_t brightnessLevelIndex_ = 4;
   uint8_t readerFontSizeIndex_ = 0;
   uint8_t hebrewFontIndex_ = 0;  // Settings > Typography > Hebrew font
+  uint8_t uiFontIndex_ = 0;      // Settings > Typography > Device font (general UI font)
   uint16_t menuRepeatDelayMs_ = MenuRepeat::kDefaultDelayMs;
   uint16_t pacingLongWordDelayMs_ = 200;
   uint16_t pacingComplexWordDelayMs_ = 200;
